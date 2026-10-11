@@ -52,7 +52,7 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 
 ## Safety
 
-- Never read or print `.env` files or secrets, and never put secrets or personal data in code, logs or fixtures.
+- Never read or print secrets or `.env` files other than `.env.example`, and never put secrets or personal data in code, logs or fixtures.
 - Ask before adding a dependency or installing anything, and never install skills, plugins or MCP servers from outside this repository.
 - Red-team payloads are stored escaped and are decoded only inside tests.
 
