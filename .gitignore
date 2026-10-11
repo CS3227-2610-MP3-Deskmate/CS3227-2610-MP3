@@ -1,0 +1,17 @@
+.env
+.env.*
+!.env.example
+__pycache__/
+.pytest_cache/
+.venv/
+venv/
+db.sqlite3
+.coverage
+htmlcov/
+staticfiles/
+media/
+node_modules/
+test-results/
+playwright-report/
+.claude/settings.local.json
+.claude/worktrees/
