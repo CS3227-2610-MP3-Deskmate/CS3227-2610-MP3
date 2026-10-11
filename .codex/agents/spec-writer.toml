@@ -1,0 +1,6 @@
+name = "spec-writer"
+description = "Writes or updates acceptance criteria in workflow/specs for one slice. Use within the slice skill or when the human names it."
+sandbox_mode = "workspace-write"
+developer_instructions = """
+Read `workflow/agents/spec-writer.md` and follow it as your role definition, together with `AGENTS.md`. Do not spawn other agents.
+"""

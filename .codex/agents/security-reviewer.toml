@@ -1,0 +1,6 @@
+name = "security-reviewer"
+description = "Read-only security review of a slice's change for access control, LLM input and output handling, secrets and missing attack tests. Use within the slice skill or when the human names it."
+sandbox_mode = "read-only"
+developer_instructions = """
+Read `workflow/agents/security-reviewer.md` and follow it as your role definition, together with `AGENTS.md`. Do not spawn other agents.
+"""

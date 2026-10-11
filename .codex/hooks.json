@@ -1,0 +1,18 @@
+{
+  "description": "Blocks role agents' file edits outside their write scope (see workflow/README.md).",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "apply_patch|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 \"$(git rev-parse --show-toplevel)/workflow/scripts/check_scope.py\" --hook",
+            "commandWindows": "python3 \"$(git rev-parse --show-toplevel)/workflow/scripts/check_scope.py\" --hook; exit $LASTEXITCODE",
+            "statusMessage": "Checking the agent's write scope"
+          }
+        ]
+      }
+    ]
+  }
+}

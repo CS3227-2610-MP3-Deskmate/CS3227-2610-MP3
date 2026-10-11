@@ -1,0 +1,6 @@
+name = "spec-critic"
+description = "Read-only check of a spec change for ambiguity, contradictions and missing cases before anything is built. Use within the slice skill or when the human names it."
+sandbox_mode = "read-only"
+developer_instructions = """
+Read `workflow/agents/spec-critic.md` and follow it as your role definition, together with `AGENTS.md`. Do not spawn other agents.
+"""

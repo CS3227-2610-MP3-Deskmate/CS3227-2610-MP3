@@ -1,0 +1,6 @@
+name = "reviewer"
+description = "Read-only review of a slice's change against its spec, tests, design and User Guide. Use within the slice skill or when the human names it."
+sandbox_mode = "read-only"
+developer_instructions = """
+Read `workflow/agents/reviewer.md` and follow it as your role definition, together with `AGENTS.md`. Do not spawn other agents.
+"""
