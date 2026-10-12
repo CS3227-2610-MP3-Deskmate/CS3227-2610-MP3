@@ -9,8 +9,8 @@ Agree the tier with the human before starting:
 | Tier | Use for | Steps |
 | --- | --- | --- |
 | High | AI features and LLM calls, login and passwords, access control, deployment | 1–8 |
-| Standard | Other behaviour changes, including bug fixes | 1–8, without spec-critic or security-reviewer |
-| Fast lane | Changes that leave every acceptance criterion as it is | 1; one implementer run without a plan, or `maintain-docs` for documents other than the User Guide; the verify command; one commit; 7 with the reviewer only; 8 |
+| Standard | Other behaviour changes, including bug fixes | 1–8, without spec-critic, and without security-reviewer unless devops changed files |
+| Fast lane | Changes that leave every acceptance criterion as it is | 1; one implementer or devops run without a plan, or `maintain-docs` for documents other than the User Guide; the verify command; one commit; 7 with the reviewer, plus security-reviewer if devops changed files; 8 |
 
 1. **Branch.** Fetch, then create or reuse the branch `<issue>-<short-name>` from the default branch. Use a separate worktree if another slice is in progress in this one. Start only from a clean working tree; otherwise ask the human.
 2. **Spec.** Skip steps 2–3 for a bug that breaks an existing criterion. Otherwise run spec-writer and commit as `spec:` with the `Why:` line. For High, run spec-critic on that commit's diff; if it has findings, run spec-writer once more with them and commit again. Carry anything unresolved to the checkpoint.

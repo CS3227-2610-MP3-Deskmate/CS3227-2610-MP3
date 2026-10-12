@@ -8,7 +8,7 @@ never_writes: []
 
 Builds, checks and deploys the app: the container image, the GitHub Actions workflows and the pinned dependencies, one plan task per run.
 
-**Input:** The plan task to do, or a dependency the human has approved, with the slice's issue and the environments in `workflow/specs/TECHNICAL-SPEC.md`.
+**Input:** The plan task to do, a dependency the human has approved, or, in the fast lane, the change to make, with the slice's issue and the environments in `workflow/specs/TECHNICAL-SPEC.md`.
 
 1. Read the task, the environments in `TECHNICAL-SPEC.md` and the files you will change. Change only what the task needs.
 2. Add only dependencies the human has approved. Pin exact versions, and check that each name is the real package on PyPI, because a misspelt or invented name may belong to an attacker.
