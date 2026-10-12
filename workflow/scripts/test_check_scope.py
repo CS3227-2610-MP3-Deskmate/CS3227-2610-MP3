@@ -64,10 +64,24 @@ class RoleScopeTest(unittest.TestCase):
     def test_test_writer_only_tests_allowed(self):
         scope = load_scope("test-writer")
         for path in ["src/tickets/tests/test_views.py", "src/tickets/tests/factories.py", "src/tickets/tests.py",
-                     "src/tickets/views_test.py", "src/e2e/test_submit.py"]:
+                     "src/tickets/views_test.py", "src/e2e/test_submit.py", "pytest.ini"]:
             self.assertTrue(in_scope(path, scope), path)
         self.assertFalse(in_scope("src/tickets/views.py", scope))
         self.assertFalse(in_scope("workflow/specs/PRODUCT-SPEC.md", scope))
+        self.assertFalse(in_scope("requirements.txt", scope))
+
+    def test_devops_build_and_deploy_files_allowed(self):
+        scope = load_scope("devops")
+        for path in ["Dockerfile", ".dockerignore", "compose.yaml", ".github/workflows/ci.yml",
+                     "requirements.txt", "requirements-dev.txt", ".env.example", "workflow/plans/1-skeleton.md"]:
+            self.assertTrue(in_scope(path, scope), path)
+
+    def test_devops_code_tests_specs_and_secrets_blocked(self):
+        scope = load_scope("devops")
+        for path in ["src/deskmate/settings.py", "src/Dockerfile", "src/requirements.txt",
+                     "src/tickets/tests/test_views.py", "pytest.ini", ".env", ".env.production", "AGENTS.md",
+                     "workflow/specs/TECHNICAL-SPEC.md", "workflow/agents/devops.md", ".github/pull_request_template.md"]:
+            self.assertFalse(in_scope(path, scope), path)
 
     def test_spec_writer_only_specs_allowed(self):
         scope = load_scope("spec-writer")

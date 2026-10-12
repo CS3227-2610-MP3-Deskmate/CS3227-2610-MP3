@@ -17,8 +17,8 @@ Agree the tier with the human before starting:
 3. **Checkpoint.** Show the human the criteria diff and every open question. Continue only once they agree.
 4. **Tests.** Run test-writer for the new, changed or removed criteria, or for the bug, and check that new tests fail for the reason it gives. Commit as `test:`.
 5. **Plan.** Run implementer to write the plan. Commit as `plan:`.
-6. **Build.** For each plan task, run implementer for that task only, run the verify command, then commit as `feat:`, or `docs:` for the User Guide task.
-7. **Review.** Run the verify command, then run reviewer and, for High, security-reviewer in parallel, giving them the slice's diff from where the branch left the default branch, and the results. Send code findings to implementer (commit as `fix:`) and missing or wrong tests to test-writer (commit as `test:`), then review again. After two rounds, or for a finding that needs a spec change, stop and ask the human.
+6. **Build.** For each plan task, run the role it names, implementer or devops, for that task only, run the verify command, then commit as `feat:`, as `docs:` for the User Guide task, or as `ci:` for a devops task. If implementer stops because it needs a dependency, ask the human, then run devops to add it.
+7. **Review.** Run the verify command, then run reviewer and, for High or whenever devops changed files, security-reviewer in parallel, giving them the slice's diff from where the branch left the default branch, and the results. Send code findings to the role that owns the file, implementer or devops (commit as `fix:`), and missing or wrong tests to test-writer (commit as `test:`), then review again. After two rounds, or for a finding that needs a spec change, stop and ask the human.
 8. **Deliver.** Follow `workflow/skills/log.md`, then `workflow/skills/create-pull-request.md`.
 
 For every role agent run:
