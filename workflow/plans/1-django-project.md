@@ -13,7 +13,7 @@ Goal: Deskmate runs as a Django project under `src/` that meets PLT-1.1–1.4, 1
   - copies `src/` without its tests or caches; runs as a non-root user;
   - its default command runs `python manage.py check` and exits, so no web server serves the image until #2.
   - No new tests; `docker build .` must succeed.
-- [ ] **devops**: Add `.github/workflows/ci.yml` per TECHNICAL-SPEC "Environments" and `devops.md` step 3: runs on pull requests and on pushes to `main`, with `contents: read`, SHA-pinned actions and `ubuntu-24.04`.
+- [x] **devops**: Add `.github/workflows/ci.yml` per TECHNICAL-SPEC "Environments" and `devops.md` step 3: runs on pull requests and on pushes to `main`, with `contents: read`, SHA-pinned actions and `ubuntu-24.04`.
   - Job `verify`: Python 3.14.2, a `.venv` installed from `requirements-dev.txt`, and a PostgreSQL service on port 5432 using `compose.yaml`'s image and digest and `.env.example`'s throwaway database values. It then runs the verify command unchanged, which runs every test.
   - Job `image`: `docker build .`, without pushing.
 - [ ] **implementer**: Create `docs/UserGuide.md` (`README.md` already links to it): what a visitor sees at `/`, in the page's exact words, and nothing else. No tests.
