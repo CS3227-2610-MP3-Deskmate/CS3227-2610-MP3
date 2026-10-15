@@ -31,7 +31,8 @@ AGENTS_DIR = ROOT / "workflow" / "agents"
 SCOPE_KEYS = ("writes", "never_writes")
 FLAGS = re.IGNORECASE if os.name == "nt" else 0
 PATCH_PATH = re.compile(
-    r"^\s*\*\*\*\s*(?:Add File|Update File|Delete File|Move to)\s*:\s*(.+?)\s*$", re.MULTILINE
+    r"^\s*\*\*\*\s*(?:Add File|Update File|Delete File|Move to)\s*:\s*(.+?)\s*$",
+    re.MULTILINE,
 )
 
 
@@ -57,6 +58,7 @@ def load_scope(role):
 
 
 def glob_to_regex(pattern):
+    """Compile a scope pattern into a regular expression."""
     parts = []
     i = 0
     while i < len(pattern):
@@ -79,6 +81,7 @@ def glob_to_regex(pattern):
 
 
 def matches(path, patterns):
+    """Return whether the path matches any of the patterns."""
     return any(glob_to_regex(pattern).fullmatch(path) for pattern in patterns)
 
 
@@ -90,7 +93,9 @@ def in_scope(path, scope):
 def relative_to_root(path, root=ROOT):
     """Return the path relative to the repository root, or None if outside it."""
     try:
-        rel = os.path.relpath(os.path.normcase(os.path.abspath(path)), os.path.normcase(root))
+        rel = os.path.relpath(
+            os.path.normcase(os.path.abspath(path)), os.path.normcase(root)
+        )
     except ValueError:  # another drive on Windows
         return None
     rel = rel.replace("\\", "/")
@@ -98,8 +103,12 @@ def relative_to_root(path, root=ROOT):
 
 
 def git(root, *args):
+    """Run git in root and return its output, raising if it fails."""
     return subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, check=True,
+        ["git", *args],
+        cwd=root,
+        capture_output=True,
+        check=True,
     ).stdout.decode("utf-8", errors="replace")
 
 
@@ -107,8 +116,16 @@ def changed_paths(base=None, root=ROOT):
     """Return changed paths, including both sides of a rename and untracked files."""
     paths = []
     if base:
-        paths += [p for p in git(root, "diff", "--name-only", "--no-renames", "-z", base).split("\0") if p]
-    entries = git(root, "status", "--porcelain=v1", "-z", "--untracked-files=all").split("\0")
+        paths += [
+            p
+            for p in git(root, "diff", "--name-only", "--no-renames", "-z", base).split(
+                "\0"
+            )
+            if p
+        ]
+    entries = git(
+        root, "status", "--porcelain=v1", "-z", "--untracked-files=all"
+    ).split("\0")
     i = 0
     while i < len(entries):
         entry = entries[i]
@@ -125,13 +142,23 @@ def changed_paths(base=None, root=ROOT):
 
 
 def check_working_tree(role, base=None, root=ROOT):
+    """Report out-of-scope changes and a moved HEAD, and return the exit code."""
     scope = load_scope(role)
     if scope is None:
         print(f"Unknown role '{role}': no workflow/agents/{role}.md", file=sys.stderr)
         return 2
-    problems = [f"  {path}" for path in changed_paths(base, root) if not in_scope(path, scope)]
-    if base and git(root, "rev-parse", "HEAD").strip() != git(root, "rev-parse", base).strip():
-        problems.append(f"  HEAD has moved from {base}: role agents must not commit or switch branches")
+    problems = [
+        f"  {path}" for path in changed_paths(base, root) if not in_scope(path, scope)
+    ]
+    if (
+        base
+        and git(root, "rev-parse", "HEAD").strip()
+        != git(root, "rev-parse", base).strip()
+    ):
+        problems.append(
+            f"  HEAD has moved from {base}: "
+            "role agents must not commit or switch branches"
+        )
     if problems:
         print(f"Outside the {role} scope:")
         print("\n".join(problems))
@@ -141,6 +168,7 @@ def check_working_tree(role, base=None, root=ROOT):
 
 
 def check_hook_call():
+    """Handle a hook call from stdin, returning 2 to block an out-of-scope edit."""
     try:
         event = json.load(sys.stdin)
     except ValueError:
@@ -158,7 +186,10 @@ def check_hook_call():
         return 0
     targets = edited_paths(event.get("tool_input") or {})
     if not targets:
-        print(f"Blocked: cannot tell which files this {role} edit writes.", file=sys.stderr)
+        print(
+            f"Blocked: cannot tell which files this {role} edit writes.",
+            file=sys.stderr,
+        )
         return 2
     for target in targets:
         if not os.path.isabs(target):
@@ -166,9 +197,9 @@ def check_hook_call():
         rel = relative_to_root(target)
         if rel is None or not in_scope(rel, scope):
             print(
-                f"Blocked: {role} may not write {rel or target}. It is outside the scope in "
-                f"workflow/agents/{role.replace('_', '-')}.md. Do not work around this; "
-                "report it in your handoff.",
+                f"Blocked: {role} may not write {rel or target}. It is outside "
+                f"the scope in workflow/agents/{role.replace('_', '-')}.md. "
+                "Do not work around this; report it in your handoff.",
                 file=sys.stderr,
             )
             return 2
@@ -180,11 +211,17 @@ def edited_paths(tool_input):
     target = tool_input.get("file_path") or tool_input.get("notebook_path")
     if target:
         return [target]
-    patch = tool_input.get("command") or tool_input.get("input") or tool_input.get("patch") or ""
+    patch = (
+        tool_input.get("command")
+        or tool_input.get("input")
+        or tool_input.get("patch")
+        or ""
+    )
     return PATCH_PATH.findall(patch) if isinstance(patch, str) else []
 
 
 def main(args):
+    """Run the command in the usage above and return its exit code."""
     if args == ["--hook"]:
         return check_hook_call()
     if len(args) == 1 and not args[0].startswith("-"):

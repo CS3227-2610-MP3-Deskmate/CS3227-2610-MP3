@@ -20,7 +20,7 @@ def front_matter(path):
     lines = path.read_text(encoding="utf-8").splitlines()
     assert lines[0] == "---", f"{path} has no front matter"
     fields = {}
-    for line in lines[1:lines.index("---", 1)]:
+    for line in lines[1 : lines.index("---", 1)]:
         key, _, value = line.partition(":")
         fields[key.strip()] = value.strip()
     return fields
@@ -40,13 +40,21 @@ class AdapterTest(unittest.TestCase):
             self.assertEqual(codex["name"], role)
             self.assertEqual(claude["description"], codex["description"], role)
             self.assertLessEqual(set(codex), CODEX_AGENT_KEYS, role)
-            self.assertIn(f"workflow/agents/{role}.md", body(ROOT / ".claude" / "agents" / f"{role}.md"))
+            self.assertIn(
+                f"workflow/agents/{role}.md",
+                body(ROOT / ".claude" / "agents" / f"{role}.md"),
+            )
             self.assertIn(f"workflow/agents/{role}.md", codex["developer_instructions"])
 
     def test_read_only_roles_cannot_write_in_either_tool(self):
         for role in ROLES:
             read_only = not load_scope(role)["writes"]
-            tools = {tool.strip() for tool in front_matter(ROOT / ".claude" / "agents" / f"{role}.md")["tools"].split(",")}
+            tools = {
+                tool.strip()
+                for tool in front_matter(ROOT / ".claude" / "agents" / f"{role}.md")[
+                    "tools"
+                ].split(",")
+            }
             with open(ROOT / ".codex" / "agents" / f"{role}.toml", "rb") as file:
                 sandbox = tomllib.load(file)["sandbox_mode"]
             self.assertEqual(read_only, not tools & WRITE_TOOLS, role)
@@ -65,31 +73,62 @@ class AdapterTest(unittest.TestCase):
                 self.assertIn(f"workflow/skills/{skill}.md", body(path))
 
     def test_no_orphan_adapters(self):
-        self.assertEqual(sorted(p.stem for p in (ROOT / ".claude" / "agents").glob("*.md")), ROLES)
-        self.assertEqual(sorted(p.stem for p in (ROOT / ".codex" / "agents").glob("*.toml")), ROLES)
+        self.assertEqual(
+            sorted(p.stem for p in (ROOT / ".claude" / "agents").glob("*.md")), ROLES
+        )
+        self.assertEqual(
+            sorted(p.stem for p in (ROOT / ".codex" / "agents").glob("*.toml")), ROLES
+        )
         for root in (".claude", ".codex"):
-            self.assertEqual(sorted(p.parent.name for p in (ROOT / root / "skills").glob("*/SKILL.md")), SKILLS)
+            self.assertEqual(
+                sorted(
+                    p.parent.name for p in (ROOT / root / "skills").glob("*/SKILL.md")
+                ),
+                SKILLS,
+            )
 
     def test_hooks_run_check_scope_on_edits_in_both_tools(self):
-        claude = json.loads((ROOT / ".claude" / "settings.json").read_text(encoding="utf-8"))
+        claude = json.loads(
+            (ROOT / ".claude" / "settings.json").read_text(encoding="utf-8")
+        )
         codex = json.loads((ROOT / ".codex" / "hooks.json").read_text(encoding="utf-8"))
-        self.assertLessEqual(set(codex), {"hooks", "description"})  # Codex skips the file otherwise
-        for config, tools in [(claude, {"Edit", "Write"}), (codex, {"apply_patch", "Edit", "Write"})]:
+        self.assertLessEqual(
+            set(codex), {"hooks", "description"}
+        )  # Codex skips the file otherwise
+        for config, tools in [
+            (claude, {"Edit", "Write"}),
+            (codex, {"apply_patch", "Edit", "Write"}),
+        ]:
             group = config["hooks"]["PreToolUse"][0]
             self.assertLessEqual(tools, set(group["matcher"].split("|")))
             handler = group["hooks"][0]
             for key in [key for key in ("command", "commandWindows") if key in handler]:
-                self.assertIn("workflow/scripts/check_scope.py\" --hook", handler[key])
-        self.assertTrue(codex["hooks"]["PreToolUse"][0]["hooks"][0]["commandWindows"].endswith("; exit $LASTEXITCODE"))
+                self.assertIn('workflow/scripts/check_scope.py" --hook', handler[key])
+        self.assertTrue(
+            codex["hooks"]["PreToolUse"][0]["hooks"][0]["commandWindows"].endswith(
+                "; exit $LASTEXITCODE"
+            )
+        )
 
     def test_slice_is_user_invoked_only_in_both_tools(self):
-        self.assertEqual(front_matter(ROOT / ".claude" / "skills" / "slice" / "SKILL.md")["disable-model-invocation"], "true")
-        policy = (ROOT / ".codex" / "skills" / "slice" / "agents" / "openai.yaml").read_text(encoding="utf-8")
+        self.assertEqual(
+            front_matter(ROOT / ".claude" / "skills" / "slice" / "SKILL.md")[
+                "disable-model-invocation"
+            ],
+            "true",
+        )
+        policy = (
+            ROOT / ".codex" / "skills" / "slice" / "agents" / "openai.yaml"
+        ).read_text(encoding="utf-8")
         self.assertIn("allow_implicit_invocation: false", policy)
 
     def test_descriptions_are_plain_yaml(self):
         paths = [ROOT / ".claude" / "agents" / f"{role}.md" for role in ROLES]
-        paths += [ROOT / root / "skills" / skill / "SKILL.md" for root in (".claude", ".codex") for skill in SKILLS]
+        paths += [
+            ROOT / root / "skills" / skill / "SKILL.md"
+            for root in (".claude", ".codex")
+            for skill in SKILLS
+        ]
         for path in paths:
             description = front_matter(path)["description"]
             self.assertNotIn(": ", description, path)

@@ -1,0 +1,20 @@
+[tool.ruff]
+# Django generates migrations; they are not hand-written code. Markdown is
+# excluded so the formatter leaves code blocks in docs, plans and logs alone.
+extend-exclude = ["migrations", "*.md"]
+
+[tool.ruff.lint]
+# As in MP2's Checkstyle, public classes, methods and functions need a docstring.
+# Ruff skips names starting with "_" and methods marked @typing.override.
+# E501 enforces the 88-character line length, which Ruff does not check by default.
+extend-select = ["D101", "D102", "D103", "E501"]
+# Django puts lists on classes by design, such as Meta.fields and list_display.
+ignore = ["RUF012"]
+
+[tool.ruff.lint.per-file-ignores]
+# Test files need no docstrings, as MP2 exempted *Test.java.
+"**/test_*.py" = ["D"]
+"**/*_test.py" = ["D"]
+"**/tests.py" = ["D"]
+# Django's generated settings hold dotted paths too long to wrap.
+"**/settings.py" = ["E501"]
