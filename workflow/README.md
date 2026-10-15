@@ -2,7 +2,7 @@
 
 How we build Deskmate with AI agents: spec-driven, in small slices, using role agents that can each write only their own part of the repository. This page is for people; the rules agents follow are in [`AGENTS.md`](../AGENTS.md).
 
-One GitHub issue is one slice, one pull request and about half a day of work. The [`slice`](skills/slice.md) skill runs a slice from spec to pull request, and its tier table decides how much review the slice gets.
+One GitHub issue is one slice and one pull request, small enough to review in one sitting. The [`slice`](skills/slice.md) skill runs a slice from spec to pull request; its tier table decides how much review the slice gets, and its size budget stops a slice that grows too large.
 
 ## Files
 
