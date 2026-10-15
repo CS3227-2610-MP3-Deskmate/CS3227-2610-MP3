@@ -17,6 +17,10 @@ from deskmate.tests.helpers import internal_details, run_probe
 ADMIN_PATH = "/admin"
 INJECTED_PATH = "/%3Cscript%3Ealert(1)%3C/script%3E/"
 UNMATCHED_PATHS = [ADMIN_PATH, ADMIN_PATH + "/", INJECTED_PATH]
+# Unmatched paths that a browser would read as another site's address if it
+# were sent there, with and without the trailing slash.
+OFFSITE_PATH = "//evil.example"
+OFFSITE_PATHS = [OFFSITE_PATH, OFFSITE_PATH + "/"]
 FAILING_URLCONF = "deskmate.tests.failing_urls"
 
 
@@ -25,6 +29,17 @@ def failure_details():
         "the exception's message": FAILURE_MESSAGE,
         "the exception's type": SyntheticFailureError.__name__,
     }
+
+
+def get_path_as_sent(client, path):
+    """GET `path` exactly as a server receives it.
+
+    The test client reads a leading "//" as a host name and would request "/",
+    so the path is set directly and checked to be the one requested.
+    """
+    response = client.get("/", PATH_INFO=path)
+    assert response.wsgi_request.path_info == path
+    return response
 
 
 @pytest.fixture
@@ -52,6 +67,20 @@ def test_errors_injected_path_is_not_reflected(client, debug_off):
     body = client.get(INJECTED_PATH).content.decode("utf-8", "replace")
     injected_markup = unquote(INJECTED_PATH).strip("/")
     assert injected_markup not in body
+
+
+@pytest.mark.ac("PLT-1.4")
+@pytest.mark.parametrize("path", OFFSITE_PATHS)
+def test_errors_offsite_path_returns_404(client, debug_off, path):
+    assert get_path_as_sent(client, path).status_code == 404
+
+
+@pytest.mark.ac("PLT-1.4")
+@pytest.mark.parametrize("path", OFFSITE_PATHS)
+def test_errors_offsite_path_does_not_redirect(client, debug_off, path):
+    response = get_path_as_sent(client, path)
+    assert not 300 <= response.status_code < 400
+    assert "Location" not in response
 
 
 @pytest.mark.ac("PLT-1.4")
