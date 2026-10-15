@@ -1,5 +1,33 @@
 # Developer Guide
 
+## Setup
+
+Deskmate's architecture, routes, configuration and environments are in [`TECHNICAL-SPEC.md`](../workflow/specs/TECHNICAL-SPEC.md). To run it locally you need Python 3.14, Docker Desktop and Git Bash or PowerShell.
+
+1. Create the virtual environment and install the pinned dependencies:
+
+   ```bash
+   python3 -m venv .venv
+   source .venv/Scripts/activate      # PowerShell: .venv\Scripts\Activate.ps1
+   pip install -r requirements-dev.txt
+   ```
+
+2. Copy `.env.example` to `.env`, or add its lines to an existing `.env`. Keep its database values: the tests connect with them.
+3. Start PostgreSQL with `docker compose up -d db`. `docker compose down` stops it and keeps the data; `docker compose down -v` deletes the data too.
+4. Run the [verify command](../AGENTS.md#commands) from the repository root.
+5. Load `.env` into the shell, then start the app and open `http://localhost:8000/`:
+
+   ```bash
+   set -a; source <(tr -d '\r' < .env); set +a
+   python src/manage.py runserver
+   ```
+
+   In PowerShell, load `.env` with:
+
+   ```powershell
+   Get-Content .env | ForEach-Object { if ($_ -match '^\s*([^#=\s][^=]*)=(.*)$') { Set-Item "env:$($matches[1].Trim())" $matches[2] } }
+   ```
+
 ## Development workflow
 
 How we work, and what each file in `workflow/` is for, is in [`workflow/README.md`](../workflow/README.md).
