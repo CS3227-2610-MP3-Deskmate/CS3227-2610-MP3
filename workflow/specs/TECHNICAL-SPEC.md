@@ -19,6 +19,8 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 
 ## Configuration
 
+Every variable's name starts with `DJANGO_` or `POSTGRES_`, so the tests can drop all of them from the developer's shell ([Environments](#environments)).
+
 | Variable | Meaning | Required | Valid values | Criteria |
 | --- | --- | --- | --- | --- |
 | `POSTGRES_HOST` | The database server's host name or IP address | Always | Any but the empty string | PLT-1.7 |
