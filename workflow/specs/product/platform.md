@@ -1,0 +1,17 @@
+# Platform
+
+What every feature relies on: the app runs, reports its health, fails without exposing its internals, and starts only when it is safely configured.
+
+### PLT-1 Run a safe placeholder site
+Why: Developers and hosts need a running app whose health they can check, and no visitor may see its internals.
+- PLT-1.1 (happy) Given the app is running, when anyone requests `GET /`, then the response is `200` with an HTML page whose title and only heading are `Deskmate` and whose text is `Deskmate is under construction.`
+- PLT-1.2 (happy) Given the database answers, when anyone requests `GET /health/`, then the response is `200` with content type `application/json` and a body that is exactly the JSON object `{"status": "ok"}`.
+- PLT-1.3 (failure) Given the app is running and the database refuses connections, or accepts them but never answers, when anyone requests `GET /health/`, then within 5 seconds the response is `503` with content type `application/json` and a body that is exactly the JSON object `{"status": "error"}`.
+- PLT-1.4 (failure) Given debug is off, when anyone requests a path that matches no route in [`TECHNICAL-SPEC.md`](../TECHNICAL-SPEC.md#routes), even with a trailing slash added, such as `/admin/` or `/%3Cscript%3Ealert(1)%3C/script%3E/`, then the response is `404` with an HTML page whose title and heading are `Page not found`, with the text `There is no page at this address.` and a link `Go to the home page` to `/`. The page shows no internal details (a traceback, an exception message, a file path, a setting's name or value, or the list of routes) and does not repeat the requested path.
+- PLT-1.5 (failure) Given debug is off, when a request causes an unexpected server error, then the response is `500` with an HTML page whose title and heading are `Something went wrong`, with the text `Deskmate hit a problem. Please try again later.` and a link `Go to the home page` to `/`, showing no internal details; the error and its traceback are written to standard error.
+- PLT-1.6 (ambiguous) Given `DJANGO_DEBUG` is unset or is anything other than exactly `true`, including `True`, `1`, `yes` and the empty string, when the app starts, then debug is off, so unknown paths and server errors get the pages in PLT-1.4 and PLT-1.5. Only `DJANGO_DEBUG=true` turns debug on.
+- PLT-1.7 (failure) Given `DATABASE_URL` is unset or is not a `postgres://` or `postgresql://` URL, or debug is off and either `DJANGO_SECRET_KEY` is unset or shorter than 50 characters or `DJANGO_ALLOWED_HOSTS` is unset or empty, when the web server or any management command starts, then it exits with a non-zero status without serving a request or running the command, and standard error contains `Deskmate cannot start: <NAME> is not set or is invalid.` for each such variable, but never any variable's value. With debug on, the app starts without `DJANGO_SECRET_KEY` and `DJANGO_ALLOWED_HOSTS`.
+- PLT-1.8 (adversarial) Given debug is off, when a request names a host that `DJANGO_ALLOWED_HOSTS` does not list, such as `Host: attacker.example`, then the response is `400` with an HTML page whose title and heading are `Bad request`, with the text `Deskmate could not handle this request.`, showing no internal details and not repeating the host.
+Out of scope: The Django admin site and any page other than `/` and `/health/`; styling; HTTPS settings and security headers; publishing the image and deploying it.
+
+Retired: none

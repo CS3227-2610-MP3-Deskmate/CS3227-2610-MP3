@@ -1,0 +1,18 @@
+# Product spec
+
+Deskmate is a service desk web app: Requesters raise tickets, Support Officers resolve them, and each role has an AI feature. How it is built is in [`TECHNICAL-SPEC.md`](TECHNICAL-SPEC.md), and its threats and controls are in [`SECURITY-SPEC.md`](SECURITY-SPEC.md).
+
+## Roles
+
+- **Requester:** raises tickets.
+- **Support Officer:** resolves tickets.
+
+## Areas
+
+| Prefix | Area | File |
+| --- | --- | --- |
+| `PLT` | Platform: the home page, health check, error pages and startup checks that every feature relies on | [`product/platform.md`](product/platform.md) |
+
+## Requirements
+
+Each area's file holds its requirements in the form set in [`spec-writer.md`](../agents/spec-writer.md). A requirement's ID is its area's prefix and a number, such as `PLT-1`; each acceptance criterion adds a second number, such as `PLT-1.2`, and the tests that check a criterion are marked with its ID.
