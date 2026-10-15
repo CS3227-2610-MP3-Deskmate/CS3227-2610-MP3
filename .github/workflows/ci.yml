@@ -1,0 +1,78 @@
+# Deskmate's CI (TECHNICAL-SPEC "Environments"): runs the verify command from
+# AGENTS.md against a throwaway PostgreSQL and, as a separate check, builds the
+# app image and runs Django's checks in it. It uses no stored secrets
+# (SECURITY-SPEC "CI and dependencies").
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+# Both jobs only read the repository.
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      # compose.yaml's image, with .env.example's throwaway database values,
+      # which the tests' committed configuration also uses.
+      db:
+        image: postgres:18.6-trixie@sha256:74935e72241653ca55e0414067e6d8763aceb8a810eb51b452253ec3dcfc4336
+        env:
+          POSTGRES_DB: deskmate
+          POSTGRES_USER: deskmate
+          POSTGRES_PASSWORD: deskmate
+        ports:
+          - "5432:5432"
+        # The job's steps start only once this check passes. It checks over TCP,
+        # which the server only opens once initialisation is done.
+        options: >-
+          --health-cmd "pg_isready -h 127.0.0.1 -U deskmate -d deskmate"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+          --health-start-period 30s
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.2"
+      - name: Install the dependencies into .venv
+        run: |
+          python -m venv .venv
+          .venv/bin/python -m pip install --requirement requirements-dev.txt
+      # The verify command from AGENTS.md, unchanged. The workflow's own tests
+      # in workflow/scripts run Git, which the runner image has, and give it
+      # their own identity.
+      - name: Verify
+        run: |
+          source .venv/bin/activate
+          ruff check . && ruff format --check . && pytest
+
+  image:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      # Builds the image on the runner: nothing is pushed and no registry is
+      # logged in to.
+      - name: Build the image
+        run: docker build --tag deskmate:ci .
+      # Runs Django's checks, database ones too, with .env.example's throwaway
+      # values. They load the database driver without connecting, so this fails
+      # if requirements.txt lacks a package the app or its database code imports.
+      - name: Run the image
+        run: docker run --rm --env-file .env.example deskmate:ci python manage.py check --database default

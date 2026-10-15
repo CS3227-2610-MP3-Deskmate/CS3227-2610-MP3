@@ -12,6 +12,8 @@ Summarises a working session in `logs/` so its author can check it and the team 
 
    Slice: #<issue> or none · Tool: <tool and model> · Date: <YYYY-MM-DD>
 
+   Cost: <wall time, number of agent runs, and tokens or cost if known>
+
    ## Requests
 
    ## Agent runs
@@ -22,6 +24,7 @@ Summarises a working session in `logs/` so its author can check it and the team 
    ```
 
 3. Fill in the sections:
+   - **Cost:** what the session took, saying what was not counted.
    - **Requests:** the human's requests and later corrections.
    - **Agent runs:** one line per run, giving the role, its role file's version (`git log -1 --format=%h -- workflow/agents/<role>.md`), its status, what changed, and the checks with their results.
    - **Decisions and corrections:** what the human decided or corrected, and why.

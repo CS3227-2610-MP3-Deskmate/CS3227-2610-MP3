@@ -12,9 +12,5 @@ Closes #
 **Manual test steps:**
 1.
 
-**Cost:** <!-- wall time, number of agent runs, and tokens or cost if known -->
-
-**Reflection note (author's own words, optional):**
-
 - [ ] Author: I read and corrected the logs in this pull request.
 - [ ] Reviewer: I ran the manual test steps on this branch.

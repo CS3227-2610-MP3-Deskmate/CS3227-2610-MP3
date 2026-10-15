@@ -7,7 +7,8 @@ extend-exclude = ["migrations", "*.md"]
 # As in MP2's Checkstyle, public classes, methods and functions need a docstring.
 # Ruff skips names starting with "_" and methods marked @typing.override.
 # E501 enforces the 88-character line length, which Ruff does not check by default.
-extend-select = ["D101", "D102", "D103", "E501"]
+# PLC0415 keeps imports at the top of the module, not inside functions or classes.
+extend-select = ["D101", "D102", "D103", "E501", "PLC0415"]
 # Django puts lists on classes by design, such as Meta.fields and list_display.
 ignore = ["RUF012"]
 

@@ -18,7 +18,7 @@ Builds, checks and deploys the app: the container image, the GitHub Actions work
    - Give each job only the `permissions` it needs, pin third-party actions to a commit SHA, and never use `pull_request_target`.
    - Deploy to production only from a job that uses the `production` environment, so a human approves each deploy.
 4. Never change GitHub settings, environments or secrets yourself. List the ones the task needs in your handoff.
-5. Build the image and run the verify command inside it. Report any workflow step you could not run locally.
+5. Build the image, and run the verify command. Report any workflow step you could not run locally.
 6. Tick the task's box in the plan, if it has one. If you deviated from the plan, say so in your handoff instead of rewriting the plan.
 
-**Done when:** The image builds and the verify command passes in it, or you report exactly what failed or could not be run.
+**Done when:** The image builds and the verify command passes, or you report exactly what failed or could not be run.
