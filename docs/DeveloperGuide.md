@@ -2,15 +2,9 @@
 
 ## Setup
 
-Deskmate's architecture, routes, configuration and environments are in [`TECHNICAL-SPEC.md`](../workflow/specs/TECHNICAL-SPEC.md). To run it locally you need Python 3.14, Docker Desktop and Git Bash or PowerShell.
+Deskmate's architecture, routes, configuration and environments are in [`TECHNICAL-SPEC.md`](../workflow/specs/TECHNICAL-SPEC.md). To run it locally you need Python 3.14, Docker Desktop, and bash (Git Bash on Windows) or PowerShell.
 
-1. Create the virtual environment and install the pinned dependencies:
-
-   ```bash
-   python3 -m venv .venv
-   source .venv/Scripts/activate      # PowerShell: .venv\Scripts\Activate.ps1; macOS or Linux: source .venv/bin/activate
-   pip install -r requirements-dev.txt
-   ```
+1. Create the virtual environment with `python3 -m venv .venv` and activate it: `source .venv/Scripts/activate` in Git Bash, `.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on macOS or Linux. Then install the pinned dependencies with `pip install -r requirements-dev.txt`.
 
 2. Copy `.env.example` to `.env`, or add its lines to an existing `.env`. Keep its database values: the tests connect with them.
 3. Start PostgreSQL with `docker compose up -d db`. `docker compose down` stops it and keeps the data; `docker compose down -v` deletes the data too.
