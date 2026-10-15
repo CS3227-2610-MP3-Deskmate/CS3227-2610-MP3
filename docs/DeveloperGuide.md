@@ -8,7 +8,7 @@ Deskmate's architecture, routes, configuration and environments are in [`TECHNIC
 
    ```bash
    python3 -m venv .venv
-   source .venv/Scripts/activate      # PowerShell: .venv\Scripts\Activate.ps1
+   source .venv/Scripts/activate      # PowerShell: .venv\Scripts\Activate.ps1; macOS or Linux: source .venv/bin/activate
    pip install -r requirements-dev.txt
    ```
 
