@@ -29,7 +29,7 @@ One GitHub issue is one slice and one pull request, small enough to review in on
 | Read-only roles | No edit or shell tools | `sandbox_mode = "read-only"` |
 | Edits outside a role's scope | Blocked by the hook in `.claude/settings.json` | Blocked by the hook in `.codex/hooks.json`, once you trust it in `/hooks` |
 
-Both tools load `AGENTS.md`; Codex loads `.codex/` agents and hooks only in a trusted project. Codex's documentation names `.agents/skills/` for skills, but it also reads `.codex/skills/`, which keeps all Codex files in one folder. If skills stop appearing in Codex, move them to `.agents/skills/` and update `test_adapters.py`. The hooks need `python3` on the PATH: in Git Bash for Claude Code, and in PowerShell for Codex on Windows. If `python3` is missing, the hook fails open.
+Both tools load `AGENTS.md`; Codex loads `.codex/` agents and hooks only in a trusted project. Codex's documentation names `.agents/skills/` for skills, but it also reads `.codex/skills/`, which keeps all Codex files in one folder. If skills stop appearing in Codex, move them to `.agents/skills/` and update `test_adapters.py`. The hooks need `python3` on the PATH: in Git Bash for Claude Code, and in PowerShell for Codex on Windows. If `python3` is missing, the hook fails open. Codex's Windows sandbox blocks pytest's temp folder, so approve the verify command to run outside it.
 
 ## How scope is enforced
 

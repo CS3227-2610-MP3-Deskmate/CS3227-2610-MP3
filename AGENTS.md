@@ -38,6 +38,7 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 ## Commands
 
 - Verify: `ruff check . && ruff format --check . && pytest`, from the repository root with `.venv` active and the local database up (see [environments](workflow/specs/TECHNICAL-SPEC.md#environments)). Run it before saying a code task is done. If it fails, report the exact failure and don't claim success.
+- On Windows, run it in Git Bash, because Windows PowerShell cannot run `&&`. From PowerShell, use `& 'C:\Program Files\Git\bin\bash.exe' -c 'source .venv/Scripts/activate && <verify command>'`.
 
 ## Git
 
