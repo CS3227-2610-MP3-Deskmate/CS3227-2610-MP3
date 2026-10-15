@@ -2,7 +2,7 @@
 
 Goal: Deskmate runs as a Django project under `src/` that meets PLT-1.1–1.4, 1.6 and 1.7, with every dependency pinned, an app image, and CI that runs the verify command.
 
-- [ ] **implementer**: Create the project package. Makes every test in `src/deskmate/tests/` pass (PLT-1.1–1.4, 1.6, 1.7). It is one task because every test fails until the settings, routes and views all exist.
+- [x] **implementer**: Create the project package. Makes every test in `src/deskmate/tests/` pass (PLT-1.1–1.4, 1.6, 1.7). It is one task because every test fails until the settings, routes and views all exist.
   - `src/manage.py`, defaulting `DJANGO_SETTINGS_MODULE` to `deskmate.settings`, and `src/deskmate/__init__.py`.
   - `src/deskmate/settings.py`: when imported, reads each variable in the TECHNICAL-SPEC Configuration table, checks it against its row, collects the PLT-1.7 message for each invalid one, then raises `SystemExit` with all of them. Use `SystemExit` rather than `ImproperlyConfigured`, because `manage.py` catches that while it loads settings.
   - Same file: debug is on only if `DJANGO_DEBUG` is exactly `true`; with debug on and no key, make a random key on each start; PostgreSQL with `connect_timeout` 5; `INSTALLED_APPS = ["deskmate"]`, only `CommonMiddleware`, no context processors; `LOGGING` sends `django.request` errors, with their tracebacks, to standard error in both debug modes.
