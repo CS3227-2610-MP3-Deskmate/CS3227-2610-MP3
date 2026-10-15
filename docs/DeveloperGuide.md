@@ -2,9 +2,9 @@
 
 ## Setup
 
-Deskmate's architecture, routes, configuration and environments are in [`TECHNICAL-SPEC.md`](../workflow/specs/TECHNICAL-SPEC.md). To run it locally you need Python 3.14, Docker Desktop, and bash (Git Bash on Windows) or PowerShell.
+Deskmate's architecture, routes, configuration and environments are in [`TECHNICAL-SPEC.md`](../workflow/specs/TECHNICAL-SPEC.md). These steps are for Windows, run in Git Bash. You need Python 3.14, Docker Desktop and Git Bash.
 
-1. Create the virtual environment with `python3 -m venv .venv` and activate it: `source .venv/Scripts/activate` in Git Bash, `.venv\Scripts\Activate.ps1` in PowerShell, or `source .venv/bin/activate` on macOS or Linux. Then install the pinned dependencies with `pip install -r requirements-dev.txt`.
+1. Create the virtual environment with `python3 -m venv .venv` and activate it with `source .venv/Scripts/activate`. Then install the pinned dependencies with `pip install -r requirements-dev.txt`.
 
 2. Copy `.env.example` to `.env`, or add its lines to an existing `.env`. Keep its database values: the tests connect with them.
 3. Start PostgreSQL with `docker compose up -d db`. `docker compose down` stops it and keeps the data; `docker compose down -v` deletes the data too.
@@ -14,12 +14,6 @@ Deskmate's architecture, routes, configuration and environments are in [`TECHNIC
    ```bash
    set -a; source <(tr -d '\r' < .env); set +a
    python src/manage.py runserver
-   ```
-
-   In PowerShell, load `.env` with:
-
-   ```powershell
-   Get-Content .env | ForEach-Object { if ($_ -match '^\s*([^#=\s][^=]*)=(.*)$') { Set-Item "env:$($matches[1].Trim())" $matches[2] } }
    ```
 
 ## Development workflow
