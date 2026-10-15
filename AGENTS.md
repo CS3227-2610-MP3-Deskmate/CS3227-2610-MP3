@@ -37,7 +37,7 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 
 ## Commands
 
-- Verify: `TODO: set when the Django skeleton lands`. Run it before saying a code task is done. If it fails, report the exact failure and don't claim success.
+- Verify: `ruff check . && ruff format --check . && pytest`, from the repository root with `.venv` active and the local database up (see [environments](workflow/specs/TECHNICAL-SPEC.md#environments)). Run it before saying a code task is done. If it fails, report the exact failure and don't claim success.
 
 ## Git
 
