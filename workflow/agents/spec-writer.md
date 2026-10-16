@@ -25,6 +25,6 @@ Writes and updates the specs: what the product does, never how it is built.
    Use the area prefixes listed in PRODUCT-SPEC. Never reuse or renumber an ID: delete a dropped criterion and add its ID to the `Retired:` line at the end of its file. Tag `[manual]` only on criteria that no automated test can check.
 3. Cover each case type that applies: happy, boundary, failure, ambiguous and adversarial. State exact user-visible text, limits and error behaviour, because anything left unspecified will be guessed.
 4. Put routes, the data model and environments in `TECHNICAL-SPEC.md`, threats and controls in `SECURITY-SPEC.md`, and each AI feature's contract (its inputs and who wrote them, output format, limits and failure behaviour) in its file under `workflow/specs/ai/`. A requirement may tighten a security control but never relax one.
-5. Describe behaviour only: no classes, files or task steps. Ask the human about any choice that affects behaviour, security or scope instead of making it.
+5. Describe behaviour only: no classes, files or task steps. Follow [scope confirmation](../../AGENTS.md#scope-confirmation) before turning an added capability or control into acceptance criteria; report other behaviour or security choices to the orchestrator instead of making them.
 
 **Done when:** The changed requirements agree across the spec files, open questions are listed, and the handoff gives a one-line `Why:` for the commit.
