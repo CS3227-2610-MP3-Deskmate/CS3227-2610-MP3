@@ -1,8 +1,9 @@
 """Admit a production submission using fresh CI and complete Actions history.
 
 The CLI consumes the workflow's GitHub identity, CHECKED_SHA, RELEASE_CI_RUN_ID,
-RELEASE_RECOVERY_BASELINE, RELEASE_JOB_DEADLINE and read-only GITHUB_TOKEN.
-It never reads provider credentials or acknowledges recovery itself.
+RELEASE_JOB_DEADLINE and separate read-only GITHUB_TOKEN and
+RECOVERY_ENVIRONMENT_READ_TOKEN credentials. Only the protected production
+environment record supplies recovery acknowledgement; inherited values do not.
 """
 
 import json
@@ -94,31 +95,45 @@ class _Gate:
         self.run_id, self.number, self.attempt, self.ci_id = numbers
         self.sha = os.environ["CHECKED_SHA"]
         _require(re.fullmatch(r"[0-9a-f]{40}", self.sha))
-        baseline = os.environ["RELEASE_RECOVERY_BASELINE"]
-        _require(re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", baseline))
-        self.baseline = tuple(map(int, baseline.split(":")))
         self.token = os.environ["GITHUB_TOKEN"]
-        _require(
-            self.token.strip() and "\r" not in self.token and "\n" not in self.token
-        )
+        self.environment_token = os.environ["RECOVERY_ENVIRONMENT_READ_TOKEN"]
+        for token in (self.token, self.environment_token):
+            _require(token.strip() and "\r" not in token and "\n" not in token)
+        _require(self.token != self.environment_token)
         self.deadline = float(os.environ["RELEASE_JOB_DEADLINE"])
         _require(math.isfinite(self.deadline) and time.monotonic() < self.deadline)
         self.reads = 0
 
-    def _api(self, path):
+    def _read(self, path, token):
         # Round the deadline down so subtraction cannot extend the request budget.
         remaining = math.nextafter(self.deadline, -math.inf) - time.monotonic()
         self.reads += 1
         _require(remaining > 0 and self.reads <= 10000)
         status, _, body = request(
-            f"https://api.github.com/repos/{self.repository}/actions/{path}",
-            self.token,
+            f"https://api.github.com/repos/{self.repository}/{path}",
+            token,
             timeout=min(10, remaining),
         )
         _require(time.monotonic() < self.deadline and status == 200)
         document = json.loads(body)
         _require(isinstance(document, dict))
         return document
+
+    def _api(self, path):
+        return self._read(f"actions/{path}", self.token)
+
+    def _baseline(self):
+        record = self._read(
+            "environments/production/variables/RELEASE_RECOVERY_BASELINE",
+            self.environment_token,
+        )
+        value = record.get("value")
+        _require(
+            record.get("name") == "RELEASE_RECOVERY_BASELINE"
+            and isinstance(value, str)
+            and re.fullmatch(r"[1-9][0-9]*:[1-9][0-9]*", value)
+        )
+        return tuple(map(int, value.split(":")))
 
     def _list(self, path, key):
         # Construct pages locally; never use response Link destinations.
@@ -179,6 +194,7 @@ class _Gate:
         return jobs
 
     def _admit(self):
+        baseline_identity = self._baseline()
         ci = self._api(f"runs/{self.ci_id}")
         workflow = self._workflow("ci.yml", "CI")
         _require(self._run(ci, workflow, "ci.yml", "CI")[0] == self.ci_id)
@@ -203,6 +219,7 @@ class _Gate:
         _require(indexed and len(indexed) == max(indexed))
         _require(indexed.get(self.number) == (self.run_id, self.attempt))
         attempts = {}
+        current_started = None
         for run in runs:
             identity, number, latest = self._run(run, workflow, "deploy.yml", "Deploy")
             for attempt in range(1, latest + 1):
@@ -216,27 +233,24 @@ class _Gate:
                         detail.get("status") == "in_progress"
                         and detail.get("conclusion") is None
                     )
+                    current_started = _timestamp(detail.get("run_started_at"))
                     continue
                 jobs = self._jobs(identity, attempt)
                 attempts[identity, attempt] = (detail, jobs)
-        _require(self.baseline in attempts)
-        baseline, jobs = attempts[self.baseline]
-        _require(
-            baseline["run_number"] < self.number
-            or (
-                baseline["run_number"] == self.number
-                and baseline["run_attempt"] < self.attempt
-            )
-        )
+        _require(baseline_identity in attempts)
+        baseline, jobs = attempts[baseline_identity]
         boundary = _completion(baseline, jobs)
+        _require(current_started is not None and boundary < current_started)
         for identity, (run, jobs) in attempts.items():
-            if identity == self.baseline:
+            if identity == baseline_identity:
                 continue
-            if run["run_number"] > self.number and run.get("status") == "queued":
+            # With this attempt holding the lock, waiting attempts cannot submit.
+            # Inspect every attempt independently, including older-numbered reruns.
+            if run.get("status") in ("pending", "queued"):
                 _require(
                     run.get("conclusion") is None
                     and all(
-                        job.get("status") == "queued"
+                        job.get("status") in ("pending", "queued")
                         and job.get("started_at") is None
                         and job.get("completed_at") is None
                         and job.get("conclusion") is None
