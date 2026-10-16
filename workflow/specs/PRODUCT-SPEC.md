@@ -11,7 +11,7 @@ Deskmate is a service desk web app: Requesters raise tickets, Support Officers r
 
 | Prefix | Area | File |
 | --- | --- | --- |
-| `PLT` | Platform: the home page, health check, error pages and startup checks that every feature relies on | [`product/platform.md`](product/platform.md) |
+| `PLT` | Platform: the home page, health check, error pages, startup checks and releases that every feature relies on | [`product/platform.md`](product/platform.md) |
 
 ## Requirements
 

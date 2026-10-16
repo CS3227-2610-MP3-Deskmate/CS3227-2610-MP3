@@ -103,15 +103,17 @@ def run_manage(arguments, environment, timeout=TIMEOUT_SECONDS):
     return run_python([str(MANAGE_PY), *arguments], environment, timeout)
 
 
-def run_probe(path, environment, urlconf=None):
+def run_probe(path, environment, urlconf=None, host=None):
     """Start Deskmate in a new process configured by `environment`, request `path`.
 
     `urlconf` replaces Deskmate's routes for that request. Returns the finished
     process and the probe's result: whether debug is on, the status and body.
     """
     arguments = ["-m", "deskmate.tests.probe", path]
-    if urlconf:
-        arguments.append(urlconf)
+    if urlconf or host:
+        arguments.append(urlconf or "")
+    if host:
+        arguments.append(host)
     environment = {**environment, "DJANGO_SETTINGS_MODULE": SETTINGS_MODULE}
     process = run_python(arguments, environment)
     if process.returncode != 0 or not process.stdout.strip():
