@@ -16,7 +16,7 @@ Builds, checks and deploys the app: the container image, the GitHub Actions work
    - Run the verify command from `AGENTS.md` unchanged. Never skip, filter or allow failures in the tests it runs.
    - Read secrets only from GitHub secrets, and give them only to the steps that need them. Never print them.
    - Give each job only the `permissions` it needs, pin third-party actions to a commit SHA, and never use `pull_request_target`.
-   - Deploy to production only from a job that uses the `production` environment, so a human approves each deploy.
+   - Deploy to production only from a job that uses the `production` environment and satisfies the [release controls](../specs/SECURITY-SPEC.md#release-access-and-provenance).
 4. Never change GitHub settings, environments or secrets yourself. List the ones the task needs in your handoff.
 5. Build the image, and run the verify command. Report any workflow step you could not run locally.
 6. Tick the task's box in the plan, if it has one. If you deviated from the plan, say so in your handoff instead of rewriting the plan.
