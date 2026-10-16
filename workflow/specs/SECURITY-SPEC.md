@@ -25,6 +25,19 @@ Threat: an error response reveals internals that help an attacker, or reflects a
 - The health check reveals only `ok` or `error` (PLT-1.2, PLT-1.3).
 - Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies.
 
+## Sign-in and access control
+
+Threat: a visitor opens a role's pages without signing in or with the other role, learns which usernames exist, steals, fixes or reuses a session, makes a signed-in browser sign in or out without its user meaning to, or uses the sign-in redirect to send users to another site.
+
+- The server decides access on every request from the signed-in user's stored account: a signed-out visitor is redirected to the sign-in page and the other role gets `403`. Nothing the client sends but the session cookie affects the decision (ACC-1.4, ACC-1.5).
+- Passwords are stored only as Django's salted hashes ([data model](TECHNICAL-SPEC.md#data-model)) and are never shown or logged.
+- A failed sign-in shows one message whatever was wrong, and does not reveal whether the username exists (ACC-1.3).
+- Sign-in always leads to the user's own role's page and ignores any `next` parameter, so it cannot redirect anywhere else (ACC-1.8).
+- Signing in and out accept only `POST` with a valid CSRF token (ACC-1.2, ACC-1.8).
+- Sessions are stored on the server. Sign-in replaces the session ID, sign-out ends the session on the server, and a session has a fixed lifetime and ends when the browser closes (ACC-1.2, ACC-1.6, ACC-1.8).
+- With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.8).
+- Gap: sign-in attempts have no rate limit or lockout, so nothing slows online password guessing.
+
 ## Container image
 
 Threat: a tampered base image, a secret baked into an image layer, or a compromised app taking over its container.
