@@ -4,7 +4,15 @@ These source checks cover only committed workflow declarations. They do not prov
 GitHub environment protections, Vercel account configuration or token scope.
 """
 
+import os
 import re
+import secrets
+import shutil
+import subprocess
+import sys
+import textwrap
+import time
+from pathlib import Path
 
 import pytest
 
@@ -81,3 +89,122 @@ def test_deployment_uses_checked_source_serial_job_and_official_cli_once():
     assert not re.search(r"\bvercel (?:promote|rollback)\b", source)
     assert not re.search(r"\bmanage.py\s+migrate\b", source)
     assert not re.search(r"docker\s+(?:build|push|login)\b", source)
+
+
+def deployment_script():
+    source = (REPO_ROOT / ".github/workflows/deploy.yml").read_text(encoding="utf-8")
+    step = source.split(
+        "      - name: Deploy current main and verify the public release\n", 1
+    )[1]
+    body = step.split("        run: |\n", 1)[1]
+    lines = []
+    for line in body.splitlines():
+        if line.strip() and not line.startswith("          "):
+            break
+        lines.append(line[10:])
+    return "\n".join(lines)
+
+
+def run_deployment_script(script, tmp_path, current=True, git=0, deploy=0, verify=0):
+    bash = (
+        Path("C:/Program Files/Git/bin/bash.exe")
+        if os.name == "nt"
+        else shutil.which("bash")
+    )
+    assert bash and Path(bash).is_file(), (
+        "The deployment tests require Git Bash or Bash"
+    )
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name.upper() in {"PATH", "SYSTEMROOT", "WINDIR", "TEMP", "TMP"}
+    }
+    token = secrets.token_urlsafe(24)
+    environment.update(
+        RUNNER_TEMP=tmp_path.as_posix(),
+        RELEASE_SOURCE=tmp_path.as_posix(),
+        RELEASE_JOB_DEADLINE=str(time.monotonic() + 60),
+        VERCEL_TOKEN=token,
+        CHECKED_SHA="a" * 40,
+        TEST_CURRENT_SHA=("a" if current else "b") * 40,
+        TEST_GIT_STATUS=str(git),
+        TEST_DEPLOY_STATUS=str(deploy),
+        TEST_VERIFY_STATUS=str(verify),
+        TEST_PYTHON=Path(sys.executable).as_posix(),
+    )
+    # Functions intercept external effects; Python still runs the real timing code.
+    fakes = textwrap.dedent("""\
+        git() {
+          printf 'lookup\n' >> events
+          printf '%s\trefs/heads/main\n' "$TEST_CURRENT_SHA"
+          printf '%s\n' "$VERCEL_TOKEN" >&2
+          return "$TEST_GIT_STATUS"
+        }
+        vercel() {
+          printf 'deploy\n' >> events
+          printf 'https://deployment-synthetic.vercel.app\n'
+          printf '%s\n' "$VERCEL_TOKEN" >&2
+          return "$TEST_DEPLOY_STATUS"
+        }
+        python() {
+          if [[ "$1" == src/deskmate/release.py ]]; then
+            printf 'verify\n' >> events
+            cat > verifier-input
+            return "$TEST_VERIFY_STATUS"
+          fi
+          "$TEST_PYTHON" "$@"
+        }
+        timeout() { shift 2; "$@"; }
+        """)
+    process = subprocess.run(
+        [
+            str(bash),
+            "--noprofile",
+            "--norc",
+            "-e",
+            "-o",
+            "pipefail",
+            "-c",
+            fakes + script,
+        ],
+        cwd=tmp_path,
+        env=environment,
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert token not in process.stdout + process.stderr
+    events = (tmp_path / "events").read_text().splitlines()
+    if "verify" in events:
+        assert (tmp_path / "verifier-input").read_text().strip() == (
+            "https://deployment-synthetic.vercel.app"
+        )
+    return process, events
+
+
+def assert_deployment_outcome(result, succeeds, events, stage):
+    process, actual_events = result
+    assert (process.returncode == 0) is succeeds, process.stdout + process.stderr
+    assert actual_events == events
+    if stage:
+        assert stage in process.stdout
+
+
+@pytest.mark.ac("PLT-2.2", "PLT-2.4", "PLT-2.6")
+@pytest.mark.parametrize(
+    ("options", "succeeds", "events", "stage"),
+    [
+        ({}, True, ["lookup", "deploy", "verify"], None),
+        ({"current": False}, True, ["lookup"], "current-main: skipped outdated commit"),
+        ({"git": 2}, False, ["lookup"], "current-main: failed"),
+        ({"deploy": 3}, False, ["lookup", "deploy"], "deployment: failed"),
+        ({"verify": 4}, False, ["lookup", "deploy", "verify"], "verification: failed"),
+    ],
+    ids=["current", "stale", "lookup-fails", "deploy-fails", "verification-fails"],
+)
+def test_deployment_driver_obeys_gate_and_propagates_failure_without_retry(
+    tmp_path, options, succeeds, events, stage
+):
+    result = run_deployment_script(deployment_script(), tmp_path, **options)
+    assert_deployment_outcome(result, succeeds, events, stage)

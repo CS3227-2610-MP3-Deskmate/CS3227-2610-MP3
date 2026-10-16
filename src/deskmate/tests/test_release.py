@@ -6,12 +6,14 @@ The official CLI creates deployments; this helper only verifies its returned ID.
 """
 
 import importlib
+import io
 import json
 import secrets
 import ssl
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from threading import Thread
 from types import SimpleNamespace
+from unittest.mock import Mock
 from urllib.error import URLError
 from urllib.parse import urlsplit
 
@@ -21,6 +23,7 @@ DEPLOYMENT = "dpl_synthetic"
 OWNER = "team_synthetic"
 PROJECT = "prj_synthetic"
 HOST = "deskmate-synthetic.vercel.app"
+CLI_HOST = "deployment-synthetic.vercel.app"
 HOME = (
     b"<!doctype html><html><head><title>Deskmate</title></head>"
     b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p></body></html>"
@@ -311,3 +314,127 @@ def test_request_redirect_is_returned_without_fetching_destination(release):
         finally:
             server.shutdown()
             thread.join(timeout=2)
+
+
+@pytest.fixture
+def cli(release, monkeypatch):
+    state = SimpleNamespace(
+        now=1100.0,
+        token=secrets.token_urlsafe(24),
+        document={
+            "id": DEPLOYMENT,
+            "ownerId": OWNER,
+            "projectId": PROJECT,
+            "target": "production",
+            "readyState": "READY",
+        },
+    )
+    for name, value in {
+        "VERCEL_ORG_ID": OWNER,
+        "VERCEL_PROJECT_ID": PROJECT,
+        "VERCEL_PUBLIC_HOSTNAME": HOST,
+        "VERCEL_TOKEN": state.token,
+        "RELEASE_JOB_DEADLINE": "1900",
+        "RELEASE_COMPLETED_AT": "1000",
+    }.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(release.sys, "stdin", io.StringIO(f"https://{CLI_HOST}\n"))
+    monkeypatch.setattr(release.time, "monotonic", lambda: state.now)
+
+    def resolve(*args, **kwargs):
+        state.now += 1
+        return response(state.document)
+
+    state.request = Mock(side_effect=resolve)
+    state.verify = Mock()
+    monkeypatch.setattr(release, "request", state.request)
+    monkeypatch.setattr(release, "verify_release", state.verify)
+    return state
+
+
+@pytest.mark.ac("PLT-2.2", "PLT-2.3", "PLT-2.4")
+@pytest.mark.parametrize(
+    ("ending", "job_deadline", "deadline", "request_timeout"),
+    [("\n", 1900, 1120, 10), ("/\n", 1105, 1105, 5)],
+)
+def test_release_main_resolves_url_and_preserves_shared_deadline(
+    release, cli, monkeypatch, capsys, ending, job_deadline, deadline, request_timeout
+):
+    monkeypatch.setenv("RELEASE_JOB_DEADLINE", str(job_deadline))
+    monkeypatch.setattr(
+        release.sys, "stdin", io.StringIO(f"https://{CLI_HOST}{ending}")
+    )
+    assert release.main() == 0
+    cli.request.assert_called_once_with(
+        f"https://api.vercel.com/v13/deployments/{CLI_HOST}?teamId={OWNER}",
+        cli.token,
+        timeout=request_timeout,
+    )
+    cli.verify.assert_called_once_with(
+        DEPLOYMENT, OWNER, PROJECT, HOST, cli.token, deadline
+    )
+    captured = capsys.readouterr()
+    assert f"deployment={DEPLOYMENT}" in captured.out
+    assert "verification: passed" in captured.out
+    assert captured.err == ""
+    assert cli.token not in captured.out
+
+
+@pytest.mark.ac("PLT-2.3", "PLT-2.4")
+def test_release_main_expired_completion_window_makes_no_provider_request(
+    release, cli, capsys
+):
+    cli.now = 1120
+    assert release.main() == 1
+    cli.request.assert_not_called()
+    cli.verify.assert_not_called()
+    assert capsys.readouterr().err == "deployment: failed\n"
+
+
+@pytest.mark.ac("PLT-2.2", "PLT-2.5")
+@pytest.mark.parametrize(
+    "escaped",
+    [
+        r"https\x3a\x2f\x2fsynthetic.vercel.app.evil.test",
+        r"https\x3a\x2f\x2fsynthetic.vercel.app\x40evil.test",
+        r"https\x3a\x2f\x2fsynthetic.vercel.app\x25\x32\x66.evil.test",
+        r"https\x3a\x2f\x2fsynthetic.vercel.app\u200b",
+    ],
+    ids=["suffix", "userinfo", "encoded-separator", "invisible-unicode"],
+)
+def test_release_main_unsafe_url_is_rejected_before_provider_request(
+    release, cli, monkeypatch, capsys, escaped
+):
+    payload = escaped.encode("ascii").decode("unicode_escape")
+    monkeypatch.setattr(release.sys, "stdin", io.StringIO(payload))
+    assert release.main() == 1
+    cli.request.assert_not_called()
+    cli.verify.assert_not_called()
+    assert capsys.readouterr().err == "deployment: failed\n"
+
+
+@pytest.mark.ac("PLT-2.3", "PLT-2.5")
+def test_release_main_wrong_owner_fails_before_public_verification(
+    release, cli, capsys
+):
+    cli.document["ownerId"] = "team_other"
+    assert release.main() == 1
+    cli.verify.assert_not_called()
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert captured.err == "deployment: failed\n"
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5")
+@pytest.mark.parametrize("failing_call", ["request", "verify"])
+def test_release_main_provider_exception_returns_nonzero_without_sensitive_details(
+    release, cli, capsys, failing_call
+):
+    private_detail = secrets.token_urlsafe(24)
+    getattr(cli, failing_call).side_effect = RuntimeError(private_detail + cli.token)
+    assert release.main() == 1
+    captured = capsys.readouterr()
+    assert captured.err == "verification: failed\n"
+    assert "verification: passed" not in captured.out
+    assert private_detail not in captured.out + captured.err
+    assert cli.token not in captured.out + captured.err
