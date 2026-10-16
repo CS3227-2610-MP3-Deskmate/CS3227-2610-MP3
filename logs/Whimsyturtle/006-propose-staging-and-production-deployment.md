@@ -15,6 +15,7 @@ Cost: twenty-six role-agent runs, including one evidence-only clarification. Wal
 - Provide a revised, simpler plan for review following those clarifications.
 - Clarify that GitHub runs and checks the smoke test; present all eight PLT-2 criteria before implementation.
 - Proceed with the reviewed criteria and keep the implementation simple. The human permitted the pinned dependency/CLI installations and Python 3.14.2 setup without changing PATH.
+- Publish a draft PR for the human to review before requesting a teammate's GitHub review.
 
 ## Agent runs
 
@@ -49,7 +50,7 @@ Cost: twenty-six role-agent runs, including one evidence-only clarification. Wal
 ## Decisions and corrections
 
 - The human selected High, Vercel Hobby and Neon Free, corrected the environments to development and production, then requested implementation after reviewing the eight criteria. The behavior and remaining setup belong in [PLT-2](../../workflow/specs/product/platform.md#plt-2-release-the-placeholder-site-to-production), [TECHNICAL-SPEC](../../workflow/specs/TECHNICAL-SPEC.md#release-verification) and [SECURITY-SPEC](../../workflow/specs/SECURITY-SPEC.md#release-access-and-provenance).
-- Created `2-staging-production` from `origin/main` at `220bf60`; its historical name comes from the original issue title. A later fetch found main unchanged. No branch was pushed, PR created, resources provisioned or live deployment run.
+- Created `2-staging-production` from `origin/main` at `220bf60`; its historical name comes from the original issue title. The fetch before publication found main unchanged. At the implementation handoff the branch was still local; the human subsequently requested a draft PR. Hosting resources have not been provisioned and no live deployment has run.
 - Withdrew the premature paid Render recommendation after the human requested a careful free-tier comparison. Official provider research compared Vercel, Render, Neon and Supabase; the resulting choice and operating limits are in the technical spec. Explained that Vercel hosts Django and Neon supplies PostgreSQL, and that deployment approval is separate from CI success.
 - The human's terminology and semester-project feedback led to the simpler deployment design in `fd38a97` and `8b8f6b0`, replacing the earlier source-readback and separate-promotion proposal. Root supplied only the hosting configuration outside role scopes in `515d5dc`; implementer and devops completed the plan's two tasks.
 - Python 3.14.2 was installed under ignored `venv/python314` from the official python.org installer after checking its valid Python Software Foundation signature. PATH was not changed. Created `.venv` and installed existing pinned requirements. The official Vercel CLI pin was verified from npm/repository metadata and source, then added to CI; no global CLI installation or provider command was run locally.
