@@ -9,6 +9,7 @@ Cost: 21 role-agent runs. Wall time, token usage and monetary cost were not trac
 - Run [slice #8](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/issues/8), then continue the prepared proposal.
 - The user selected High tier and accepted the spec proposal replacing deployment approval with final-revision PR review plus CI, automatic recovery blocking, and the scoped rule/documentation changes.
 - After the first reviews, the user selected a dedicated repository-scoped Environments-read-only token for authoritative production recovery-variable reads. Token provisioning remains manual.
+- The user requested publication of the completed branch and a draft PR using the prepared description.
 
 ## Agent runs
 
@@ -44,7 +45,7 @@ Role-file versions below are the latest commits affecting those files at each ru
 - The first-review findings required a spec decision, so work stopped for the user's token selection. The repaired contract lives in [Recovery admission](../../workflow/specs/TECHNICAL-SPEC.md#recovery-admission); credentials and operator requirements are documented there rather than duplicated here.
 - Root independently ran `ruff check . && ruff format --check . && pytest` unchanged in Git Bash with the existing virtual environment and disposable PostgreSQL at `7d76968`: lint passed, formatting passed for 27 files, and 370 tests passed in 69.80 seconds, exit 0. One pytest cache warning remained. Subsequent changes were the plan and this log only.
 - The cached pinned PostgreSQL image supplied the isolated test database without an installation. Root stopped and removed the disposable database after verification.
-- Both final reviewers reported no actionable findings. The PR description maps every PLT-2 criterion to local checks and pending hosted checks, with human checkboxes unticked. Publication requires a separate user decision.
+- Both final reviewers reported no actionable findings. The PR description maps every PLT-2 criterion to local checks and pending hosted checks, with human checkboxes unticked. The user requested publication of the branch and a draft PR.
 
 ## Problems
 
@@ -54,4 +55,3 @@ Role-file versions below are the latest commits affecting those files at each ru
 - Hosted settings were inspected but not changed. Actual token permissions, final-revision review enforcement, environment admission, provider unlinking, recovery behavior and public deployment checks remain operator work under the [prerequisites](../../workflow/specs/TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites).
 - Cancellation before job start can leave missing job evidence; admission deliberately blocks uncertain history. Hosted API shapes and recovery need integration verification. No hosted deployment was performed.
 - Review diffs, plans, comments and test payloads were treated as data. No suspicious instructions were followed. No private environment file or secret value was read or recorded, and no dependency was added or installed.
-
