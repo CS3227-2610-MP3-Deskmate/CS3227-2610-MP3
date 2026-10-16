@@ -1,0 +1,122 @@
+# Operator prerequisites and recovery: TECHNICAL-SPEC "Release verification".
+name: Deploy
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+# Includes the wait for production approval; every run still needs fresh approval.
+concurrency:
+  group: deskmate-production
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  production:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    environment: production
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+      VERCEL_ORG_ID: ${{ vars.VERCEL_ORG_ID }}
+      VERCEL_PROJECT_ID: ${{ vars.VERCEL_PROJECT_ID }}
+      VERCEL_PUBLIC_HOSTNAME: ${{ vars.VERCEL_PUBLIC_HOSTNAME }}
+    steps:
+      - name: Start the shared job deadline
+        run: |
+          python3 -c 'import time; print(f"RELEASE_JOB_DEADLINE={time.monotonic() + 900}")' >> "$GITHUB_ENV"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          persist-credentials: false
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.14.2"
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "24.18.0"
+          package-manager-cache: false
+      - name: Install the official deployment CLI
+        run: npm install --global vercel@64.3.1
+      - name: Validate configuration and prepare committed inputs
+        run: |
+          python - <<'PY'
+          import os, re, sys
+          valid = all(re.fullmatch(r"[A-Za-z0-9_-]{1,128}", os.environ[name])
+                      for name in ("VERCEL_ORG_ID", "VERCEL_PROJECT_ID"))
+          valid = valid and re.fullmatch(
+              r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app",
+              os.environ["VERCEL_PUBLIC_HOSTNAME"],
+          )
+          if not valid:
+              sys.exit("configuration: failed")
+          PY
+          test "$(git rev-parse HEAD)" = "$CHECKED_SHA"
+          release_source="$(mktemp -d "$RUNNER_TEMP/deskmate-source.XXXXXX")"
+          git archive "$CHECKED_SHA" .python-version vercel.json requirements.txt src \
+            ':(exclude)src/deskmate/tests' ':(glob,exclude)**/.env*' \
+            ':(glob,exclude)**/.git*' | tar -x -C "$release_source"
+          printf 'RELEASE_SOURCE=%s\n' "$release_source" >> "$GITHUB_ENV"
+          printf 'repository=%s commit=%s run=%s attempt=%s\n' \
+            "$GITHUB_REPOSITORY" "$CHECKED_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+      - name: Deploy current main and verify the public release
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+        run: |
+          umask 077
+          deployment_url_file="$(mktemp "$RUNNER_TEMP/deskmate-url.XXXXXX")"
+          provider_log_file="$(mktemp "$RUNNER_TEMP/deskmate-provider.XXXXXX")"
+          stage=configuration
+          finish() {
+            status=$?
+            rm -f "$deployment_url_file" "$provider_log_file"
+            if (( status != 0 )); then
+              printf '%s: failed\n' "$stage"
+              echo 'Before approving another run, check Vercel for any unknown outcome and confirm no earlier operation can complete later.'
+            fi
+          }
+          trap finish EXIT
+          test -n "$VERCEL_TOKEN"
+          remaining() {
+            python - <<'PY'
+          import os, sys, time
+          deadline = float(os.environ["RELEASE_JOB_DEADLINE"])
+          if "RELEASE_COMPLETED_AT" in os.environ:
+              deadline = min(deadline, float(os.environ["RELEASE_COMPLETED_AT"]) + 120)
+          budget = deadline - time.monotonic()
+          if budget <= 0:
+              sys.exit(1)
+          print(budget)
+          PY
+          }
+          stage=current-main
+          budget="$(remaining)"
+          current_main="$(timeout --signal=KILL "$budget" git ls-remote --exit-code origin refs/heads/main 2>"$provider_log_file")"
+          if [[ "${current_main%%$'\t'*}" != "$CHECKED_SHA" ]]; then
+            echo 'current-main: skipped outdated commit'
+            exit 0
+          fi
+          stage=deployment
+          budget="$(remaining)"
+          deployment_status=0
+          timeout --signal=KILL "$budget" vercel deploy --prod --force \
+            --cwd "$RELEASE_SOURCE" --token "$VERCEL_TOKEN" \
+            >"$deployment_url_file" 2>"$provider_log_file" || deployment_status=$?
+          RELEASE_COMPLETED_AT="$(python -c 'import time; print(time.monotonic())')"
+          export RELEASE_COMPLETED_AT
+          test "$deployment_status" -eq 0
+          stage=verification
+          budget="$(remaining)"
+          timeout --signal=KILL "$budget" python src/deskmate/release.py < "$deployment_url_file"

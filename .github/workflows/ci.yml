@@ -1,6 +1,5 @@
 # Deskmate's CI (TECHNICAL-SPEC "Environments"): runs the verify command from
-# AGENTS.md against a throwaway PostgreSQL and, as a separate check, builds the
-# app image and runs Django's checks in it. It uses no stored secrets
+# AGENTS.md against a throwaway PostgreSQL. It uses no stored secrets
 # (SECURITY-SPEC "CI and dependencies").
 name: CI
 
@@ -10,7 +9,7 @@ on:
     branches:
       - main
 
-# Both jobs only read the repository.
+# Verification only reads the repository.
 permissions:
   contents: read
 
@@ -59,20 +58,3 @@ jobs:
         run: |
           source .venv/bin/activate
           ruff check . && ruff format --check . && pytest
-
-  image:
-    runs-on: ubuntu-24.04
-    timeout-minutes: 15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-      # Builds the image on the runner: nothing is pushed and no registry is
-      # logged in to.
-      - name: Build the image
-        run: docker build --tag deskmate:ci .
-      # Runs Django's checks, database ones too, with .env.example's throwaway
-      # values. They load the database driver without connecting, so this fails
-      # if requirements.txt lacks a package the app or its database code imports.
-      - name: Run the image
-        run: docker run --rm --env-file .env.example deskmate:ci python manage.py check --database default

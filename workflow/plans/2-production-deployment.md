@@ -7,7 +7,7 @@ Dependency: the root orchestrator supplies minimal root `.python-version` and `v
   Build a small standard-library verifier and CLI entry point: resolve the returned URL through authenticated deployment lookup, validate identity and alias mapping, then check public pages and redirects under shared deadlines with safe stage-only failures.
   Use `/v13/deployments/{idOrUrl}` and `/v4/aliases/{host}`, default TLS, no redirects, bounded transient retries before body validation, and no raw provider output.
   Make `src/deskmate/tests/test_production_settings.py` and `src/deskmate/tests/test_release.py` pass; retain PLT-1 behaviour. Keep all non-test `src/` changes below 400 inserted/deleted lines, aiming below 350.
-- [ ] **devops** — Change `.github/workflows/ci.yml`; add `.github/workflows/deploy.yml`; remove `Dockerfile` and obsolete `.dockerignore`.
+- [x] **devops** — Change `.github/workflows/ci.yml`; add `.github/workflows/deploy.yml`; remove `Dockerfile` and obsolete `.dockerignore`.
   Keep the unchanged verify command and temporary PostgreSQL; gate the serial 15-minute production job on successful same-repository main-push CI, protected approval, exact-SHA checkout without persisted credentials, and a final current-main check.
   Archive only committed deployment inputs from that checkout, including root hosting configuration, `requirements.txt` and `src/`; exclude local configuration and Git history.
   Pin official Vercel CLI `64.3.1`, Python `3.14.2`, a verified exact Node version and action SHAs; run one normal `vercel deploy --prod --force` against the fixed project with raw streams suppressed.
