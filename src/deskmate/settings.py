@@ -12,6 +12,8 @@ import os
 import re
 import secrets
 
+_LOOPBACK_HOSTS = ("localhost", "127.0.0.1", "::1")
+
 
 def _is_port(value):
     """Return whether `value` is a whole number from 1 to 65535 in digits only."""
@@ -33,6 +35,14 @@ def _host_names(value):
     return [name.strip() for name in value.split(",") if name.strip()]
 
 
+def _production_host(value):
+    """Accept one exact provider hostname, using the existing list syntax."""
+    names = _host_names(value)
+    return len(names) == 1 and re.fullmatch(
+        r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app", names[0]
+    )
+
+
 def _invalid_variables(environ, debug):
     """Return the variables required in this debug mode that are unset or invalid.
 
@@ -46,9 +56,14 @@ def _invalid_variables(environ, debug):
         "POSTGRES_USER": bool,
         "POSTGRES_PASSWORD": bool,
     }
-    if not debug:
+    production = environ.get("VERCEL_ENV") == "production"
+    if not debug or production:
         checks["DJANGO_SECRET_KEY"] = _is_strong_key
         checks["DJANGO_ALLOWED_HOSTS"] = _host_names
+    if production:
+        checks["DJANGO_ALLOWED_HOSTS"] = _production_host
+        checks["DJANGO_DEBUG"] = lambda value: value != "true"
+        checks["POSTGRES_HOST"] = lambda value: value and value not in _LOOPBACK_HOSTS
     return [
         name for name, is_valid in checks.items() if not is_valid(environ.get(name, ""))
     ]
@@ -74,6 +89,7 @@ ALLOWED_HOSTS = _host_names(os.environ.get("DJANGO_ALLOWED_HOSTS", ""))
 INSTALLED_APPS = ["deskmate"]
 MIDDLEWARE = ["django.middleware.common.CommonMiddleware"]
 ROOT_URLCONF = "deskmate.urls"
+WSGI_APPLICATION = "deskmate.wsgi.application"
 
 TEMPLATES = [
     {
@@ -90,10 +106,13 @@ DATABASES = {
         "NAME": os.environ["POSTGRES_DB"],
         "USER": os.environ["POSTGRES_USER"],
         "PASSWORD": os.environ["POSTGRES_PASSWORD"],
+        "CONN_MAX_AGE": 0,
         # Every attempt to connect gives up after 5 seconds (TECHNICAL-SPEC).
         "OPTIONS": {"connect_timeout": 5},
     }
 }
+if os.environ["POSTGRES_HOST"] not in _LOOPBACK_HOSTS:
+    DATABASES["default"]["OPTIONS"].update(sslmode="verify-full", sslrootcert="system")
 
 # Unexpected errors in requests, with their tracebacks, go to standard error
 # whether or not debug is on (PLT-1.4). They do not propagate, so Django's own

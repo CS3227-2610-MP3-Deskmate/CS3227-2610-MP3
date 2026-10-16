@@ -2,7 +2,7 @@ Release the existing placeholder site through the protected Vercel deployment an
 
 Dependency: the root orchestrator supplies minimal root `.python-version` and `vercel.json` hosting configuration separately; neither role owns those paths.
 
-- [ ] **implementer** — Change `src/deskmate/settings.py`; add `src/deskmate/wsgi.py` and `src/deskmate/release.py`.
+- [x] **implementer** — Change `src/deskmate/settings.py`; add `src/deskmate/wsgi.py` and `src/deskmate/release.py`.
   Reuse startup validation for production host/debug/database constraints and fixed database TLS options; expose standard WSGI.
   Build a small standard-library verifier and CLI entry point: resolve the returned URL through authenticated deployment lookup, validate identity and alias mapping, then check public pages and redirects under shared deadlines with safe stage-only failures.
   Use `/v13/deployments/{idOrUrl}` and `/v4/aliases/{host}`, default TLS, no redirects, bounded transient retries before body validation, and no raw provider output.
