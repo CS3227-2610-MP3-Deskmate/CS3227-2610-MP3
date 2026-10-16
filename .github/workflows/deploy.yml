@@ -9,7 +9,7 @@ on:
 permissions:
   contents: read
 
-# Includes the wait for production approval; every run still needs fresh approval.
+# Spans automatic production deployment through final verification.
 concurrency:
   group: deskmate-production
   cancel-in-progress: false
@@ -84,7 +84,7 @@ jobs:
             rm -f "$deployment_url_file" "$provider_log_file"
             if (( status != 0 )); then
               printf '%s: failed\n' "$stage"
-              echo 'Before approving another run, check Vercel for any unknown outcome and confirm no earlier operation can complete later.'
+              echo 'Pause automatic deployments, cancel queued deployment runs, check Vercel and reconcile any unknown outcome, and confirm no earlier operation can complete later before resuming.'
             fi
           }
           trap finish EXIT
