@@ -1,4 +1,4 @@
-"""PLT-2 workflow wiring; hosted approval/access settings still need integration checks.
+"""PLT-2 workflow wiring; hosted review/access settings still need integration checks.
 
 These source checks cover only committed workflow declarations. They do not prove
 GitHub environment protections, Vercel account configuration or token scope.
@@ -208,3 +208,54 @@ def test_deployment_driver_obeys_gate_and_propagates_failure_without_retry(
 ):
     result = run_deployment_script(deployment_script(), tmp_path, **options)
     assert_deployment_outcome(result, succeeds, events, stage)
+
+
+@pytest.mark.ac("PLT-2.1", "PLT-2.4", "PLT-2.5", "PLT-2.6")
+def test_deployment_gate_precedes_submit_with_baseline_and_read_only_token():
+    source = workflow("deploy.yml")
+    assert re.search(r"^\s+actions:\s*read\s*$", source, re.MULTILINE)
+    assert not re.search(r"^\s+[a-z-]+:\s*write\s*$", source, re.MULTILINE)
+    steps = re.split(r"(?m)^      - ", source)[1:]
+    gates = [
+        (index, step) for index, step in enumerate(steps) if "release_gate" in step
+    ]
+    assert len(gates) == 1, "One separate admission step must precede Vercel submission"
+    index, gate = gates[0]
+    submission = next(i for i, step in enumerate(steps) if "vercel deploy" in step)
+    assert index < submission
+    assert "vercel deploy" not in gate
+    assert re.search(
+        r"python(?:3)?\s+(?:src/deskmate/release_gate\.py|-m deskmate\.release_gate)\b",
+        gate,
+    )
+    assert re.search(
+        r"RELEASE_RECOVERY_BASELINE:\s*\$\{\{\s*vars.RELEASE_RECOVERY_BASELINE\s*\}\}",
+        gate,
+    )
+    assert re.search(
+        r"RELEASE_CI_RUN_ID:\s*\$\{\{\s*github.event.workflow_run.id\s*\}\}", gate
+    )
+    assert re.search(
+        r"GITHUB_TOKEN:\s*\$\{\{\s*(?:github.token|secrets.GITHUB_TOKEN)\s*\}\}", gate
+    )
+    assert "VERCEL_TOKEN" not in gate
+    assert "continue-on-error: true" not in gate
+    assert "|| true" not in gate
+    assert "if: always()" not in steps[submission]
+    assert "continue-on-error: true" not in steps[submission]
+    assert source.index("RELEASE_JOB_DEADLINE=") < source.index("release_gate")
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5", "PLT-2.6")
+def test_deployment_gate_and_other_steps_do_not_receive_provider_credentials():
+    source = workflow("deploy.yml")
+    prefix, *steps = re.split(r"(?m)^      - ", source)
+    assert "VERCEL_TOKEN" not in prefix
+    secret_steps = [step for step in steps if "secrets.VERCEL_TOKEN" in step]
+    assert len(secret_steps) == 1
+    assert "vercel deploy" in secret_steps[0]
+    assert "release_gate" not in secret_steps[0]
+    assert "RELEASE_RECOVERY_BASELINE" in source
+    assert not re.search(
+        r"(?:gh\s+(?:variable|api)|curl).*RELEASE_RECOVERY_BASELINE", source
+    )
