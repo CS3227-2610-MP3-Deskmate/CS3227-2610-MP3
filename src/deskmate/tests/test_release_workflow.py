@@ -229,7 +229,7 @@ def test_deployment_gate_precedes_submit_with_baseline_and_read_only_token():
         gate,
     )
     assert re.search(
-        r"RELEASE_RECOVERY_BASELINE:\s*\$\{\{\s*vars.RELEASE_RECOVERY_BASELINE\s*\}\}",
+        r"RECOVERY_ENVIRONMENT_READ_TOKEN:\s*\$\{\{\s*secrets.RECOVERY_ENVIRONMENT_READ_TOKEN\s*\}\}",
         gate,
     )
     assert re.search(
@@ -238,6 +238,7 @@ def test_deployment_gate_precedes_submit_with_baseline_and_read_only_token():
     assert re.search(
         r"GITHUB_TOKEN:\s*\$\{\{\s*(?:github.token|secrets.GITHUB_TOKEN)\s*\}\}", gate
     )
+    assert "vars.RELEASE_RECOVERY_BASELINE" not in source
     assert "VERCEL_TOKEN" not in gate
     assert "continue-on-error: true" not in gate
     assert "|| true" not in gate
@@ -259,3 +260,18 @@ def test_deployment_gate_and_other_steps_do_not_receive_provider_credentials():
     assert not re.search(
         r"(?:gh\s+(?:variable|api)|curl).*RELEASE_RECOVERY_BASELINE", source
     )
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5", "PLT-2.6")
+def test_deployment_environment_read_credential_is_confined_to_gate_step():
+    source = workflow("deploy.yml")
+    prefix, *steps = re.split(r"(?m)^      - ", source)
+    assert "RECOVERY_ENVIRONMENT_READ_TOKEN" not in prefix
+    credential_steps = [
+        step for step in steps if "secrets.RECOVERY_ENVIRONMENT_READ_TOKEN" in step
+    ]
+    assert len(credential_steps) == 1
+    assert "release_gate" in credential_steps[0]
+    assert "GITHUB_TOKEN" in credential_steps[0]
+    assert "VERCEL_TOKEN" not in credential_steps[0]
+    assert "vars.RELEASE_RECOVERY_BASELINE" not in source

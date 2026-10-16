@@ -25,6 +25,8 @@ CI_WORKFLOW_ID = 77
 CI_ID = 9001
 BASELINE_ID = 1002
 CURRENT_ID = 1004
+BASELINE_NAME = "RELEASE_RECOVERY_BASELINE"
+RECORD_PATH = f"/repos/{REPOSITORY}/environments/production/variables/{BASELINE_NAME}"
 ORIGIN = datetime(2026, 1, 1, tzinfo=UTC)
 
 
@@ -71,12 +73,15 @@ def production_job(run, conclusion=None, completed=None):
 
 
 class GitHubHistory:
-    """A bounded, authenticated fake of read-only Actions history endpoints."""
+    """A bounded fake with separate Actions and production-record credentials."""
 
     def __init__(self):
         self.now = 1000.0
         self.deadline = 1900.0
         self.token = secrets.token_urlsafe(24)
+        self.environment_token = secrets.token_urlsafe(24)
+        self.record = {"name": BASELINE_NAME, "value": f"{BASELINE_ID}:1"}
+        self.record_reply = None
         self.calls = []
         self.errors = []
         self.runs = {}
@@ -129,9 +134,6 @@ class GitHubHistory:
         assert parsed.scheme == "https"
         assert parsed.netloc == "api.github.com"
         assert not parsed.fragment
-        assert token == self.token
-        prefix = f"/repos/{REPOSITORY}/actions/"
-        assert parsed.path.startswith(prefix), "Only fixed repository Actions API reads"
         assert 0 < timeout <= min(10, self.deadline - self.now)
         query = parse_qs(parsed.query)
         page = int(query.get("page", [1])[0])
@@ -142,6 +144,16 @@ class GitHubHistory:
         )
         assert len(self.calls) < 2000, "Admission must remain bounded"
         self.now += self.delay
+        if parsed.path == RECORD_PATH:
+            assert token == self.environment_token
+            assert not parsed.query
+            result = self.record_reply
+            if isinstance(result, Exception):
+                raise result
+            return result if result is not None else response(self.record)
+        prefix = f"/repos/{REPOSITORY}/actions/"
+        assert parsed.path.startswith(prefix), "Only fixed repository Actions API reads"
+        assert token == self.token
         key = (parsed.path.removeprefix(prefix), page)
         if key in self.overrides:
             result = self.overrides[key]
@@ -226,7 +238,10 @@ def history(gate, monkeypatch):
         "GITHUB_RUN_ATTEMPT": "1",
         "CHECKED_SHA": SHA,
         "RELEASE_CI_RUN_ID": str(CI_ID),
+        # This syntactically valid inherited value is adversarial input. Only
+        # state.record may acknowledge recovery; a separate test removes it.
         "RELEASE_RECOVERY_BASELINE": f"{BASELINE_ID}:1",
+        "RECOVERY_ENVIRONMENT_READ_TOKEN": state.environment_token,
         "RELEASE_JOB_DEADLINE": str(state.deadline),
         "GITHUB_TOKEN": state.token,
     }
@@ -253,6 +268,7 @@ def assert_blocked(gate, history, capsys):
     captured = capsys.readouterr()
     assert "recovery: blocked" in captured.out + captured.err
     assert history.token not in captured.out + captured.err
+    assert history.environment_token not in captured.out + captured.err
     assert "Traceback" not in captured.out + captured.err
     return captured.out + captured.err
 
@@ -262,6 +278,7 @@ def test_release_gate_valid_ci_and_history_admit_without_vercel_credentials(
     gate, history, capsys
 ):
     assert gate.main() == 0
+    assert any(call.path == RECORD_PATH for call in history.calls)
     assert any(call.path.endswith(f"/runs/{CI_ID}") for call in history.calls)
     assert any(
         call.path.endswith("/runs/1002/attempts/1/jobs") for call in history.calls
@@ -269,6 +286,7 @@ def test_release_gate_valid_ci_and_history_admit_without_vercel_credentials(
     captured = capsys.readouterr()
     assert "recovery: blocked" not in captured.out + captured.err
     assert history.token not in captured.out + captured.err
+    assert history.environment_token not in captured.out + captured.err
 
 
 @pytest.mark.ac("PLT-2.1", "PLT-2.2", "PLT-2.5", "PLT-2.6")
@@ -334,7 +352,7 @@ def test_release_gate_missing_ci_evidence_blocks(gate, history, capsys, field):
         "GITHUB_RUN_ATTEMPT",
         "CHECKED_SHA",
         "RELEASE_CI_RUN_ID",
-        "RELEASE_RECOVERY_BASELINE",
+        "RECOVERY_ENVIRONMENT_READ_TOKEN",
         "RELEASE_JOB_DEADLINE",
         "GITHUB_TOKEN",
     ],
@@ -359,12 +377,10 @@ def test_release_gate_missing_required_input_blocks_without_api_call(
         ("RELEASE_CI_RUN_ID", "not-a-run"),
         ("CHECKED_SHA", "a" * 39),
         ("CHECKED_SHA", "g" * 40),
-        ("RELEASE_RECOVERY_BASELINE", "1002"),
-        ("RELEASE_RECOVERY_BASELINE", "1002:0"),
-        ("RELEASE_RECOVERY_BASELINE", "1002:1:2"),
         ("RELEASE_JOB_DEADLINE", "nan"),
         ("RELEASE_JOB_DEADLINE", "inf"),
         ("GITHUB_TOKEN", ""),
+        ("RECOVERY_ENVIRONMENT_READ_TOKEN", ""),
     ],
 )
 def test_release_gate_invalid_input_blocks_before_any_api_request(
@@ -466,12 +482,12 @@ def test_release_gate_api_exception_and_body_never_enter_logs(gate, history, cap
 @pytest.mark.ac("PLT-2.4", "PLT-2.6")
 @pytest.mark.parametrize("baseline", ["9999:1", "1002:2", "1004:1", "1005:1"])
 def test_release_gate_missing_active_or_future_baseline_cannot_acknowledge_history(
-    gate, history, monkeypatch, capsys, baseline
+    gate, history, capsys, baseline
 ):
     if baseline == "1005:1":
         history.add_attempt(5, status="queued", conclusion=None)
         history.jobs[1005, 1] = []
-    monkeypatch.setenv("RELEASE_RECOVERY_BASELINE", baseline)
+    history.record["value"] = baseline
     assert_blocked(gate, history, capsys)
 
 
@@ -623,9 +639,11 @@ def test_release_gate_acknowledged_rerun_still_rechecks_ci(
     history.jobs[CURRENT_ID, 1][0].update(
         status="completed", conclusion="failure", completed_at=timestamp(40)
     )
-    history.add_attempt(4, 2, status="in_progress", conclusion=None)
+    history.add_attempt(
+        4, 2, status="in_progress", conclusion=None, run_started_at=timestamp(41)
+    )
     monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
-    monkeypatch.setenv("RELEASE_RECOVERY_BASELINE", f"{CURRENT_ID}:1")
+    history.record["value"] = f"{CURRENT_ID}:1"
     assert gate.main() == 0
     history.ci["conclusion"] = "failure"
     assert_blocked(gate, history, capsys)
@@ -823,4 +841,203 @@ def test_release_gate_current_identity_must_match_authenticated_run(
     gate, history, monkeypatch, capsys, name, value
 ):
     monkeypatch.setenv(name, value)
+    assert_blocked(gate, history, capsys)
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5", "PLT-2.6")
+def test_release_gate_missing_protected_record_blocks_valid_inherited_fallback(
+    gate, history, capsys
+):
+    history.record_reply = response({}, 404)
+    # The fixture's inherited process value has valid syntax and identifies a
+    # settled baseline, reproducing a repository/org fallback after deletion.
+    result = gate.main()
+    assert history.errors == []
+    assert result == 1
+    output = capsys.readouterr()
+    assert "recovery: blocked" in output.out + output.err
+    assert history.token not in output.out + output.err
+    assert history.environment_token not in output.out + output.err
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5", "PLT-2.6")
+@pytest.mark.parametrize(
+    "fallback", [None, "1004:1", "invalid"], ids=["absent", "conflicting", "malformed"]
+)
+def test_release_gate_protected_record_is_authoritative_over_process_fallback(
+    gate, history, monkeypatch, capsys, fallback
+):
+    if fallback is None:
+        monkeypatch.delenv(BASELINE_NAME)
+    else:
+        monkeypatch.setenv(BASELINE_NAME, fallback)
+    assert gate.main() == 0
+    assert any(call.path == RECORD_PATH for call in history.calls)
+    output = capsys.readouterr()
+    assert history.token not in output.out + output.err
+    assert history.environment_token not in output.out + output.err
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.5", "PLT-2.6")
+@pytest.mark.parametrize(
+    "problem",
+    [
+        "wrong-name",
+        "missing-name",
+        "missing-value",
+        "non-string-value",
+        "missing-attempt",
+        "zero-attempt",
+        "extra-part",
+        "malformed-json",
+        "non-object",
+        "401",
+        "403",
+        "404",
+        "503",
+        "timeout",
+        "transport",
+        "tls",
+    ],
+)
+def test_release_gate_invalid_or_uncertain_protected_record_blocks_without_leaks(
+    gate, history, capsys, problem
+):
+    private = secrets.token_urlsafe(24)
+    record = {**history.record, "private": private}
+    if problem == "wrong-name":
+        record["name"] = "OTHER_RECOVERY_BASELINE"
+    elif problem in ("missing-name", "missing-value"):
+        record.pop(problem.removeprefix("missing-"))
+    elif problem == "non-string-value":
+        record["value"] = None
+    elif problem in ("missing-attempt", "zero-attempt", "extra-part"):
+        record["value"] = {
+            "missing-attempt": "1002",
+            "zero-attempt": "1002:0",
+            "extra-part": "1002:1:2",
+        }[problem]
+    elif problem == "malformed-json":
+        history.record_reply = response(private.encode())
+    elif problem == "non-object":
+        history.record_reply = response([record])
+    elif problem.isdecimal():
+        history.record_reply = response(record, int(problem))
+    elif problem == "timeout":
+        history.record_reply = TimeoutError(private + history.environment_token)
+    elif problem == "transport":
+        history.record_reply = URLError(private + history.environment_token)
+    else:
+        history.record_reply = ssl.SSLCertVerificationError(
+            private + history.environment_token
+        )
+    history.record = record
+    output = assert_blocked(gate, history, capsys)
+    assert private not in output
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+def test_release_gate_older_run_rerun_after_higher_numbered_baseline_is_admitted(
+    gate, history, monkeypatch
+):
+    history.runs[CURRENT_ID][1].update(status="completed", conclusion="failure")
+    history.jobs[CURRENT_ID, 1][0].update(
+        status="completed", conclusion="failure", completed_at=timestamp(40)
+    )
+    history.add_attempt(
+        4, 2, status="in_progress", conclusion=None, run_started_at=timestamp(60)
+    )
+    history.add_attempt(5)
+    history.record["value"] = "1005:1"
+    # Keep the obsolete input valid and equal so the current implementation
+    # reaches its run-number comparison instead of failing configuration.
+    monkeypatch.setenv(BASELINE_NAME, history.record["value"])
+    monkeypatch.setenv("GITHUB_RUN_ATTEMPT", "2")
+    result = gate.main()
+    assert history.errors == []
+    assert any(call.path.endswith("/runs/1004/attempts/2") for call in history.calls)
+    assert any(
+        call.path.endswith("/runs/1005/attempts/1/jobs") for call in history.calls
+    )
+    assert result == 0
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+@pytest.mark.parametrize(
+    "offset",
+    [-1, 0, 1],
+    ids=["future-boundary", "equal-boundary", "strictly-earlier-boundary"],
+)
+def test_release_gate_baseline_must_end_strictly_before_current_attempt_start(
+    gate, history, capsys, offset
+):
+    history.runs[CURRENT_ID][1].update(
+        created_at=timestamp(18), run_started_at=timestamp(20 + offset / 60)
+    )
+    if offset > 0:
+        assert gate.main() == 0
+    else:
+        assert_blocked(gate, history, capsys)
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+@pytest.mark.parametrize(
+    "started",
+    [None, "missing", "not-a-time", "2026-01-01T00:39:00"],
+    ids=["null", "absent", "malformed", "timezone-unknown"],
+)
+def test_release_gate_uncertain_current_attempt_start_blocks(
+    gate, history, capsys, started
+):
+    if started == "missing":
+        history.runs[CURRENT_ID][1].pop("run_started_at")
+    else:
+        history.runs[CURRENT_ID][1]["run_started_at"] = started
+    assert_blocked(gate, history, capsys)
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+def test_release_gate_future_pending_attempt_without_execution_is_excluded(
+    gate, history
+):
+    history.add_attempt(5, status="pending", conclusion=None, run_started_at=None)
+    history.jobs[1005, 1] = []
+    result = gate.main()
+    assert history.errors == []
+    assert any(
+        call.path.endswith("/runs/1005/attempts/1/jobs") for call in history.calls
+    )
+    assert result == 0
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+def test_release_gate_future_pending_attempt_with_unstarted_production_job_is_excluded(
+    gate, history
+):
+    history.add_attempt(5, status="pending", conclusion=None, run_started_at=None)
+    history.jobs[1005, 1][0].update(
+        status="queued", conclusion=None, started_at=None, completed_at=None
+    )
+    assert gate.main() == 0
+
+
+@pytest.mark.ac("PLT-2.4", "PLT-2.6")
+@pytest.mark.parametrize("problem", ["started-job", "failed-prior-attempt"])
+def test_release_gate_future_pending_status_cannot_hide_executed_attempts(
+    gate, history, capsys, problem
+):
+    if problem == "failed-prior-attempt":
+        history.add_attempt(5, conclusion="failure")
+        history.add_attempt(
+            5, 2, status="pending", conclusion=None, run_started_at=None
+        )
+        history.jobs[1005, 2] = []
+    else:
+        history.add_attempt(5, status="pending", conclusion=None, run_started_at=None)
+        history.jobs[1005, 1][0].update(
+            status="in_progress",
+            conclusion=None,
+            started_at=timestamp(45),
+            completed_at=None,
+        )
     assert_blocked(gate, history, capsys)
