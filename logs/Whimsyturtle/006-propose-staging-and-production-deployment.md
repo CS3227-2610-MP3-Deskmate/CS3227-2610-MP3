@@ -1,32 +1,39 @@
-# Propose staging and production deployment
+# Reconsider the production hosting proposal
 
 Slice: #2 · Tool: Codex (GPT-6) · Date: 2026-10-16
 
-Cost: three role-agent runs, including one spec-writer revision. Wall time was not measured from the start; token usage and monetary cost were unavailable. Hosting estimates are proposed operating costs, not spending incurred in this session.
+Cost: six role-agent runs, including three spec-writer revisions. Wall time was not measured from the start; token usage and monetary cost were unavailable. Hosting estimates are proposed operating costs, not spending incurred in this session.
 
 ## Requests
 
 - Run `/slice 2` using the repository's slice workflow.
 - Use the High tier. No hosting resources were set up; the human asked for a platform proposal.
+- Compare free providers carefully, including Vercel; correct the proposal to development and production only; explain deployment approval and stale releases.
 
 ## Agent runs
 
 - spec-writer (`a58461d`): needs-decision. Proposed PLT-2 and corresponding architecture and security changes in `2653a21`. Scope check and `git diff --check` passed; existing PLT-1 criteria remained unchanged.
 - spec-critic (`a58461d`): needs-decision. Read-only review of `2653a21` found an unspecified publication boundary against modified same-repository PR workflows and ambiguous retry behaviour. Scope check passed; no files changed.
-- spec-writer (`a58461d`), revision: needs-decision. Addressed both findings in `2fcb6c2`. Scope check and `git diff --check` passed. The orchestrator read the revised sections; no second critic run was performed.
+- spec-writer (`a58461d`), revision: needs-decision. Addressed both findings in `2fcb6c2`. Scope check and `git diff --check` passed; the orchestrator read the revised sections.
+- spec-writer (`a58461d`), environment correction: needs-decision. Removed staging and the mandatory paid Render selection in `502e4ab`, preserving eight PLT-2 IDs and marking hosting decisions pending. Scope check and `git diff --check` passed; HEAD remained unchanged during the run.
+- spec-critic (`a58461d`), correction review: done. Found one omitted baseline clause about runner-based tests and separate image checks. Otherwise the environment correction was consistent and hosting questions were openly pending. Read-only scope check and `git diff --check` passed; HEAD remained unchanged.
+- spec-writer (`a58461d`), CI correction: done. Restored that clause in `df34b8e`. Scope check, readback and `git diff --check` passed; only one paragraph changed and HEAD remained unchanged during the run.
 
 ## Decisions and corrections
 
 - The human selected High; hosting, costs and the criteria checkpoint remain undecided. No resources were provisioned, dependencies installed, branches pushed or pull requests created.
-- Created `2-staging-production` from fetched `origin/main` at `220bf60`. The proposed criteria are [PLT-2](../../workflow/specs/product/platform.md#plt-2-release-the-placeholder-site-through-staging-to-production); architecture and limits are in [TECHNICAL-SPEC](../../workflow/specs/TECHNICAL-SPEC.md#release-verification), and access controls are in [SECURITY-SPEC](../../workflow/specs/SECURITY-SPEC.md#release-access-and-provenance).
-- Recommended Render in Singapore with separate paid web services and PostgreSQL databases. The preliminary baseline was approximately US$27/month before tax and usage extras, using one-member workspaces; team access adds US$25/month per Pro workspace. Credential separation and workspace layout still need resolution, so this is not a final quote. Sources: [Render pricing](https://render.com/pricing), [workspace access](https://render.com/docs/team-members).
-- The proposal distinguishes provider readiness rejection from failure after a new deployment is live; the latter blocks promotion without promising automatic rollback. The revision retains an external registry permission boundary and defines retries and unresolved deployment outcomes.
+- Created `2-staging-production` from fetched `origin/main` at `220bf60`; the branch name reflects the original issue title. The proposed criteria are [PLT-2](../../workflow/specs/product/platform.md#plt-2-release-the-placeholder-site-to-production); architecture and limits are in [TECHNICAL-SPEC](../../workflow/specs/TECHNICAL-SPEC.md#release-verification), and access controls are in [SECURITY-SPEC](../../workflow/specs/SECURITY-SPEC.md#release-access-and-provenance).
+- Withdrew the initial paid Render recommendation, approximately US$27/month before extras. It was premature without comparing free providers and wrongly carried staging over from the issue title. The human's development/production correction controls the revised proposal; hosting remains unselected.
+- Checked current official documentation rather than assuming Vercel cannot host Django or Docker. [Vercel's Python runtime](https://vercel.com/docs/functions/runtimes/python) supports Django and Python 3.14; its [container runtime](https://vercel.com/docs/functions/runtimes/container) is beta on all plans. [Hobby](https://vercel.com/docs/plans/hobby) is free for personal non-commercial use, with usage limits and no paid team collaboration features. Compatibility with the proposed exact-image release process still needs resolution.
+- Proposed Render Free with Neon Free as the closest fit to the existing Docker baseline for a student demo, subject to the human accepting cold starts and quotas. [Render Free](https://render.com/docs/free) sleeps after 15 idle minutes and takes about a minute to wake; its own free PostgreSQL expires after 30 days. Render also limits service-initiated external traffic and can bill bandwidth/build overages when a payment method is present. [Neon Free](https://neon.com/docs/introduction/plans) offers 1 GB storage and 100 compute-unit hours per project per month; exhausted compute or transfer allowance suspends compute. [PostgreSQL 18 is generally available](https://neon.com/docs/changelog/2026-05-01). Neon Free requires an authenticated TLS connection over the public network, not assumed private networking. These are research findings, not a selected or provisioned deployment.
+- Explained that GitHub deployment approval is a designated person's separate approval after CI, and that preventing stale releases means preventing an older delayed release from overwriting a newer one. The proposed behaviour lives in PLT-2.3 and PLT-2.6.
+- The corrected proposal retains an external registry permission boundary and defines retries and unresolved deployment outcomes; provider-specific readiness, failure retention and timing remain [open decisions](../../workflow/specs/TECHNICAL-SPEC.md#pending-hosting-and-deployment-decisions).
 - The size check found one new requirement with eight criteria and no changed production lines under `src/`. Application tests, builds and deployments have not run; work stops at the criteria checkpoint before tests and implementation.
 - Read-only GitHub inspection found an existing production environment with required reviewers and self-review prevention, no branch restriction, and no staging environment. No GitHub settings were changed.
 
 ## Problems
 
-- Render's tutorial describes workspace-scoped API keys, while other official material describes access across workspaces. Separate workspace names alone do not prove credential isolation. The proposal requires verified environment-limited deployment access before enabling releases; separate identities may be necessary.
+- The earlier Render proposal encountered inconsistent descriptions of API-key scope. Provider credential scope remains unverified and must be settled after hosting selection; separate workspace names alone are not proof.
 - The proposed GHCR package permissions and protected publication credential need operator setup and proof that a same-repository PR token cannot publish. Existing configuration was not claimed to satisfy that boundary.
 - The checkout has no `.venv`. `python3` was inaccessible inside the sandbox; outside it, Python 3.12.10 ran the required scope checks successfully. The product requires Python 3.14. Docker's version probe could not reach its engine. Build verification and any approved environment setup remain future work.
 - Sandbox restrictions initially blocked GitHub CLI network access and Git writes; connector reads and escalated commands completed the necessary work. An initial CLI issue filter had a quoting error, and the GitHub connector did not support the environments endpoint; filtered CLI metadata reads supplied the missing information. Global Git-ignore permission warnings did not prevent the scope checks or commits.
