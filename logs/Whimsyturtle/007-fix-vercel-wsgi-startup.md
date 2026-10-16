@@ -9,6 +9,7 @@ Cost: Five role-agent runs. Wall time and token usage were not tracked.
 - Explain the branch's remaining hosting setup and give step-by-step instructions.
 - Investigate the [failed deployment job](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/38914587816/job/117018676161).
 - Create a new issue and slice branch for the startup fix; the user selected High tier.
+- Publish the prepared fix branch and open a draft pull request.
 
 ## Agent runs
 
@@ -25,7 +26,7 @@ Cost: Five role-agent runs. Wall time and token usage were not tracked.
 - The deployment command had succeeded, but public HTTPS requests returned `500 FUNCTION_INVOCATION_FAILED`. The supplied runtime traceback and an isolated local reproduction identified the missing source import path. The fix derives that path from the WSGI file rather than the working directory.
 - Root's final `ruff check . && ruff format --check . && pytest`, in Git Bash with `.venv` active and disposable PostgreSQL, passed: lint and formatting clean, 221 tests passed in 68.15 seconds, exit 0.
 - The production-code size check reported three inserted lines. A final fetch confirmed `origin/main` remained at the branch base. The disposable test database was removed after verification.
-- The PR description is prepared from the repository template, with hosted checks marked pending and human checkboxes unticked. Push and PR creation await explicit permission; no deployment was started by this slice.
+- The PR description is prepared from the repository template, with hosted checks marked pending and human checkboxes unticked. The user requested publication of the branch and draft PR; no deployment was started by this slice.
 
 ## Problems
 
