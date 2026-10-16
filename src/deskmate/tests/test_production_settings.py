@@ -1,9 +1,22 @@
-"""PLT-2.8: process-level database transport and production host controls."""
+"""PLT-2: isolated production startup, database transport and host controls."""
+
+import json
+import os
+import subprocess
+import sys
 
 import pytest
+from django.utils.html import strip_tags
+from pytest_django.asserts import assertInHTML
 
-from deskmate.tests.environment import valid_environment
-from deskmate.tests.helpers import run_manage, run_probe
+from deskmate.tests.environment import is_configuration_variable, valid_environment
+from deskmate.tests.helpers import (
+    REPO_ROOT,
+    SRC_DIR,
+    TIMEOUT_SECONDS,
+    run_manage,
+    run_probe,
+)
 
 PUBLIC_HOST = "deskmate-synthetic.vercel.app"
 
@@ -16,6 +29,69 @@ def production_environment(overrides=None):
             "DJANGO_ALLOWED_HOSTS": PUBLIC_HOST,
             **(overrides or {}),
         }
+    )
+
+
+@pytest.mark.ac("PLT-2.7", "PLT-1.1")
+def test_production_wsgi_loaded_by_path_without_src_import_path_serves_home():
+    probe = """
+import importlib.util
+import json
+import sys
+from contextlib import closing
+from unittest.mock import patch
+from wsgiref.util import setup_testing_defaults
+
+spec = importlib.util.spec_from_file_location("vercel_wsgi", sys.argv[1])
+module = importlib.util.module_from_spec(spec)
+result = {}
+
+def start_response(status, headers, exc_info=None):
+    result.update(status=int(status.split()[0]), headers=dict(headers))
+
+environ = {}
+setup_testing_defaults(environ)
+environ.update(HTTP_HOST=sys.argv[2], **{"wsgi.url_scheme": "https"})
+with patch(
+    "django.db.backends.base.base.BaseDatabaseWrapper.ensure_connection",
+    side_effect=AssertionError("The home page must not connect to the database."),
+):
+    spec.loader.exec_module(module)
+    with closing(module.application(environ, start_response)) as response:
+        result["body"] = b"".join(response).decode("utf-8")
+print(json.dumps(result))
+"""
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if not is_configuration_variable(name) and name != "PYTHONPATH"
+    }
+    environment.update(production_environment())
+    process = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-c",
+            probe,
+            str(SRC_DIR / "deskmate" / "wsgi.py"),
+            PUBLIC_HOST,
+        ],
+        env=environment,
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        timeout=TIMEOUT_SECONDS,
+        check=False,
+    )
+    assert process.returncode == 0, process.stderr
+    result = json.loads(process.stdout)
+    assert result["status"] == 200
+    assert result["headers"]["Content-Type"].split(";")[0] == "text/html"
+    assertInHTML("<title>Deskmate</title>", result["body"], count=1)
+    assertInHTML("<h1>Deskmate</h1>", result["body"], count=1)
+    assert " ".join(strip_tags(result["body"]).split()) == (
+        "Deskmate Deskmate Deskmate is under construction."
     )
 
 
