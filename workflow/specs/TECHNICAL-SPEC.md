@@ -34,12 +34,12 @@ Every app configuration variable's name starts with `DJANGO_` or `POSTGRES_`, so
 
 ## Environments
 
-The intended app environments are development and production. Production hosting remains a proposal; CI is temporary verification, not another persistent app environment.
+The intended app environments are development and production. Production web hosting remains undecided; CI is temporary verification, not another persistent app environment.
 
 | Environment | Runs | Database | Configuration |
 | --- | --- | --- | --- |
 | Local development | The app, serving `http://localhost:8000/`, and the [verify command](../../AGENTS.md#commands) run from the developer's `.venv`; docker compose runs only PostgreSQL | A PostgreSQL container whose data survives restarts in a named volume | The developer's own `.env`, copied from `.env.example`, which sets `DJANGO_DEBUG=true` and leaves `DJANGO_SECRET_KEY` empty. Docker compose reads it for the database, and the developer loads it into the shell that runs the app |
-| Production (proposed) | Host, plan and deployment integration pending selection; Python 3.14 and the Docker image baseline remain unchanged | PostgreSQL 18, separate from development and CI; provider and connection controls pending selection | Existing app variables supplied securely; debug off, explicit production hosts, and production-only database credentials and secret key |
+| Production (proposed) | Web host, plan and deployment integration pending selection; Python 3.14 and the Docker image baseline remain unchanged | Neon Free selected for PostgreSQL 18, separate from development and CI; connection controls and integration remain pending | Existing app variables supplied securely; debug off, explicit production hosts, and production-only database credentials and secret key |
 
 CI validation runs in GitHub Actions on every pull request and push to `main`, using throwaway PostgreSQL containers discarded after each run and no stored secrets. The verify command and tests run on the runner; a separate check builds the Docker image and runs Django's checks in it, without running tests inside the app image. The proposed PLT-2.1 image smoke check supplements these checks: debug is off, host names are explicit, and a fresh key is generated for the run. CI success establishes validation only; production deployment needs separate human approval.
 
@@ -68,6 +68,6 @@ Hosting resources, the designated registry package's access controls, environmen
 
 ### Pending hosting and deployment decisions
 
-- Select hosting and a database after evaluating free options, their limits and cold-start behaviour. No provider or paid plan is selected.
+- Select web hosting after evaluating free options, their limits and cold-start behaviour; the database selection is recorded in [Environments](#environments). No web host or paid plan is selected.
 - Confirm support for the existing Docker, Python 3.14 and PostgreSQL 18 baseline, then agree the production server dependency, image runtime configuration, deployment identity/readiness checks, deadlines and previous-release/first-deployment failure behaviour. A runtime change requires a separate human decision.
-- Agree the production host name, HTTPS provision, database network exposure and transport controls, and provider credential scope. Private networking and disabled public database access are not assumed to be available on an unselected provider.
+- Agree the production host name, HTTPS provision, database network exposure and transport controls, and provider credential scope. Private networking and disabled public database access remain unconfirmed integration decisions.
