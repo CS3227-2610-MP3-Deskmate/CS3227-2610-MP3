@@ -1,0 +1,11 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "django",
+  "regions": ["sin1"],
+  "functions": {
+    "src/deskmate/wsgi.py": {
+      "maxDuration": 60,
+      "excludeFiles": "src/deskmate/tests/**"
+    }
+  }
+}
