@@ -7,6 +7,7 @@ Cost: 7 role-agent runs; elapsed time, tokens and monetary cost were not recorde
 ## Requests
 
 - Explain oversized [PR #40](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/40), close it and start a small replacement from main.
+- Publish the replacement branch and create a draft pull request.
 
 ## Agent runs
 
@@ -23,7 +24,7 @@ Cost: 7 role-agent runs; elapsed time, tokens and monetary cost were not recorde
 - Closed #40 using GitHub CLI and confirmed CLOSED. Created `8-auto-deploy-simple` from fetched main at `c5fad96`; previous branches remain intact.
 - Replaced the discarded recovery subsystem with the manual procedure and explicit race limitation in the [release specification](../../workflow/specs/TECHNICAL-SPEC.md#release-verification). No old branch commits were reused.
 - Root ran `ruff check . && ruff format --check . && pytest` unchanged in Git Bash with the existing virtual environment and disposable cached PostgreSQL: lint passed, 25 files already formatted, 221 passed in 85.77 seconds, exit 0. Workflow unit tests also passed: 37 tests. Subsequent changes were documentation only.
-- Prepared a local PR description and publication commands; no push, replacement PR creation, hosted configuration change or deployment was performed. Activation remains [operator work](../../workflow/specs/TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites).
+- Published `8-auto-deploy-simple` and created draft [PR #41](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/41); `git push -u origin 8-auto-deploy-simple` and `gh pr create --draft` succeeded. Human checkboxes remain unticked. Hosted configuration and deployments were not changed; activation remains [operator work](../../workflow/specs/TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites).
 
 ## Problems
 
