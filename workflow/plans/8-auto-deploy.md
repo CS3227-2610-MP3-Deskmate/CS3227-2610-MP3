@@ -1,6 +1,6 @@
 ﻿Deploy reviewed current-main commits automatically after CI, with fail-closed recovery admission under [PLT-2](../specs/product/platform.md#plt-2-release-the-placeholder-site-to-production).
 
-- [ ] **implementer** — Add `src/deskmate/release_gate.py`; reuse `src/deskmate/release.py`'s bounded, TLS-validating, no-redirect request transport without a new dependency.
+- [x] **implementer** — Add `src/deskmate/release_gate.py`; reuse `src/deskmate/release.py`'s bounded, TLS-validating, no-redirect request transport without a new dependency.
   Implement the environment-driven `main()` interface fixed by `src/deskmate/tests/test_release_gate.py`; validate inputs before authenticated reads, re-fetch exact eligible CI, and bind reads to the fixed repository's Actions API.
   Establish complete paginated Deploy run, attempt and job history; validate identities, counters, gaps, duplicates and completion evidence under the existing shared job deadline, with safe `recovery: blocked` failures.
   Apply the administrator baseline, strict per-attempt last-job completion boundary, successful/all-production-skipped settlement and held-lock exclusions exactly as [Recovery admission](../specs/TECHNICAL-SPEC.md#recovery-admission) specifies; inspect prior and older-run reruns.
