@@ -9,7 +9,7 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 - The app reads its configuration only from environment variables.
 - Repository dependencies, CI tooling and PostgreSQL container images have exact version pins; container images also have digest pins.
 
-**PLT-2 proposal, awaiting review:** replace app Docker packaging and its CI build/check job with Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker remains for development and CI PostgreSQL only. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The proposed deployment tool is the official Vercel CLI, subject to [review](#review-decisions-and-operator-prerequisites), with no new Django dependency. No implementation or installation is authorised by this proposal.
+Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL only; there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
 
 ## Routes
 
@@ -20,7 +20,7 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 
 ## Configuration
 
-Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard developer settings as described in [Environments](#environments). Provider credentials are protected deployment-job inputs, not app settings.
+Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard developer settings as described in [Environments](#environments). Provider-supplied `VERCEL_ENV=production` activates production validation in [settings](../../src/deskmate/settings.py); Vercel's system environment variables must remain enabled. Provider credentials are protected deployment-job inputs, not app settings.
 
 | Variable | Meaning | Required | Valid values | Criteria |
 | --- | --- | --- | --- | --- |
@@ -33,7 +33,7 @@ Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard develo
 | `DJANGO_ALLOWED_HOSTS` | The host names the app answers to, separated by commas; spaces around a name and empty items are ignored. Names match as in Django's `ALLOWED_HOSTS`, so `*` matches every host ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)) | With debug off | At least one name | PLT-1.7 |
 | `DJANGO_DEBUG` | Turns on Django's debug pages | No | Any; only `true` turns debug on (PLT-1.6) | PLT-1.6 |
 
-The existing variables and their PLT-1 validation contract stay unchanged. Proposed production configuration adds these constraints under PLT-2.8:
+The existing variables and their PLT-1 validation contract stay unchanged. Production configuration adds these constraints under PLT-2.8:
 
 - `POSTGRES_HOST` is the exact Neon direct endpoint hostname; connection pooling and persistent Django database connections are disabled. The existing 5-second connection timeout remains.
 - Database transport is fixed by the host: literal `localhost`, `127.0.0.1` and `::1` may use plaintext for development or isolated CI; every other host uses `sslmode=verify-full` with the system CA trust store (`sslrootcert=system`). Production requires the selected Neon hostname and verified TLS. There is no setting that permits plaintext for a remote host, disables certificate verification or falls back after TLS failure.
@@ -42,20 +42,20 @@ The existing variables and their PLT-1 validation contract stay unchanged. Propo
 
 ## Environments
 
-The app environments are development and production. Vercel Hobby and Neon Free are selected; the integration below remains proposed. CI is temporary verification; there is no Preview environment.
+The app environments are development and production, using Vercel Hobby and Neon Free for production. CI is temporary verification; there is no Preview environment. Hosted integration still requires the checks in [Operator prerequisites](#review-decisions-and-operator-prerequisites).
 
 | Environment | Runs | Database | Configuration |
 | --- | --- | --- | --- |
 | Local development | The app, serving `http://localhost:8000/`, and the [verify command](../../AGENTS.md#commands) run from the developer's `.venv`; docker compose runs only PostgreSQL | A PostgreSQL container whose data survives restarts in a named volume | The developer's own `.env`, copied from `.env.example`, which sets `DJANGO_DEBUG=true` and leaves `DJANGO_SECRET_KEY` empty. Docker compose reads it for the database, and the developer loads it into the shell that runs the app |
-| Production (proposed integration) | Vercel Hobby native Python 3.14/Django in Singapore (`sin1`); a provider-generated `vercel.app` public hostname, managed HTTPS and HTTP-to-HTTPS redirects; maximum request duration 60 seconds; no background workers | Neon Free PostgreSQL 18 in AWS Singapore (`ap-southeast-1`), separate from development and CI; direct endpoint with the connection controls above | Production-only database credentials and secret key; debug off; exact public hostname |
+| Production | Vercel Hobby native Python 3.14/Django in Singapore (`sin1`); a provider-generated `vercel.app` public hostname, managed HTTPS and HTTP-to-HTTPS redirects; maximum request duration 60 seconds; no background workers | Neon Free PostgreSQL 18 in AWS Singapore (`ap-southeast-1`), separate from development and CI; direct endpoint with the connection controls above | Production-only database credentials and secret key; debug off; exact public hostname |
 
-CI validation runs in GitHub Actions on every pull request and push to `main`, using throwaway PostgreSQL containers discarded after each run and no stored secrets. The unchanged verify command and tests run on the runner. The proposed removal of the app-image job leaves production runtime verification to the public smoke test after deployment.
+CI validation runs in GitHub Actions on every pull request and push to `main`, using throwaway PostgreSQL containers discarded after each run and no stored secrets. The unchanged verify command and tests run on the runner. Production runtime verification uses the public smoke test after deployment.
 
 `pytest` needs no variables set by the developer: the tests take all their configuration from what is committed with them, except a secret key they make on each run ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)), and never from the developer's shell. Their database settings match the throwaway credentials in `.env.example` and the CI workflow.
 
 ## Release verification
 
-PLT-2 proposes **CI → human approval → production deployment → public smoke test**, owned by GitHub Actions. The Vercel project's Git integration is unlinked. There is no container-image publication.
+PLT-2 uses **CI → human approval → production deployment → public smoke test**, owned by GitHub Actions. The Vercel project's Git integration must be unlinked. There is no container-image publication. Deployment commands and pins are in the [workflow](../../.github/workflows/deploy.yml); provider verification is in [`release.py`](../../src/deskmate/release.py).
 
 1. Require successful CI for the exact `main` commit. Wait for human approval of this run in the protected GitHub `production` environment. After approval, immediately before deployment, recheck current `main`; skip an outdated commit.
 2. Submit only committed application/build inputs from a clean checkout of that checked commit to the fixed owner/project using the official Vercel CLI. Exclude local configuration, credentials and Git history. A normal [production deployment](https://vercel.com/docs/cli/deploy) builds the native application and automatically assigns its production domain when ready; there is no separate promotion or pre-live application probe.
@@ -70,16 +70,16 @@ A build, deployment or smoke-test failure fails the job and identifies its stage
 
 ### Free-plan operating limits
 
-The proposal uses the selected free plans without automatic paid upgrades. Vercel Hobby is for personal, non-commercial use and does not provide paid team collaboration; the hosting account owner must be established. Its documented monthly allowances include 4 CPU-hours, 360 GB-hours of provisioned memory and one million function invocations. The proposed 60-second request limit is below the documented 300-second Hobby ceiling ([Hobby](https://vercel.com/docs/plans/hobby)). Neon Free's documented per-project monthly allowances are 1 GB storage, 100 CU-hours and 5 GB transfer; compute can sleep after five minutes idle, compute or transfer exhaustion suspends service, and the storage cap prevents further storage-growing operations ([Neon plans](https://neon.com/docs/introduction/plans)). These provider limits can change and must be checked at setup. Cold starts and quota pauses can prevent availability; the slice adds no keep-awake traffic or availability guarantee.
+The selected free plans are used without automatic paid upgrades. Vercel Hobby is for personal, non-commercial use and does not provide paid team collaboration; the hosting account owner must be established. Its documented monthly allowances include 4 CPU-hours, 360 GB-hours of provisioned memory and one million function invocations. The 60-second request limit is below the documented 300-second Hobby ceiling ([Hobby](https://vercel.com/docs/plans/hobby)). Neon Free's documented per-project monthly allowances are 1 GB storage, 100 CU-hours and 5 GB transfer; compute can sleep after five minutes idle, compute or transfer exhaustion suspends service, and the storage cap prevents further storage-growing operations ([Neon plans](https://neon.com/docs/introduction/plans)). These provider limits can change and must be checked at setup. Cold starts and quota pauses can prevent availability; the slice adds no keep-awake traffic or availability guarantee.
 
 ### Review decisions and operator prerequisites
 
-The selected providers and development/production split are settled. These decisions remain for human review:
+Hosted settings and integration have not been verified. Before enabling production deployments, operators must complete this setup:
 
-- Accept native Vercel Python 3.14 with managed patching, removal of app Docker packaging and its CI job, and the proposed [security tradeoffs](SECURITY-SPEC.md#release-access-and-provenance): public checks after deployment and manual recovery.
-- Approve adding the official Vercel CLI as CI tooling. Devops must verify and pin its exact version before installation; no tool is installed by this proposal. Commands and provider API details belong in the later implementation plan.
-- Accept the Singapore regions, generated public hostname, 60-second app-request ceiling, verified direct Neon connections and free-plan limits above. Confirm Hobby eligibility and hosting account owners.
+- Confirm hosting account owners, eligibility for the selected plans and the current [free-plan limits](#free-plan-operating-limits).
+- Configure the GitHub `production` environment with a required reviewer, only the `main` branch allowed, tags and pull-request refs excluded, self-review prevented and protection bypass disabled.
+- Set non-secret GitHub environment variables `VERCEL_ORG_ID`, `VERCEL_PROJECT_ID` and `VERCEL_PUBLIC_HOSTNAME` for the fixed owner, project and exact public hostname. The only deployment secret in GitHub is `VERCEL_TOKEN`, confined to the protected job. Verify its actual scope, use the least scope available and obtain human acceptance of any broader resource access; do not assume it is project-scoped.
+- Configure the Vercel project with the repository root as its root directory and the Django preset, system environment variables enabled as required by [Configuration](#configuration), Git integration unlinked, and the stable production hostname publicly accessible. Use the committed [runtime configuration](../../vercel.json), without custom build or migration commands.
+- Configure the required [application variables](#configuration) only in Vercel production settings: a strong `DJANGO_SECRET_KEY`, `DJANGO_DEBUG=false`, `DJANGO_ALLOWED_HOSTS` matching the public hostname, and the separate production database settings. `POSTGRES_HOST` must use the direct Neon PostgreSQL 18 endpoint in AWS Singapore; the database password and Django key stay only in Vercel production settings, never GitHub. Agents never receive secret values.
 
-Before enablement, operators supply non-secret owner/project IDs, public hostname, Neon endpoint/database/user identifiers and GitHub reviewer identities. They configure main-only production approval with no self-review or bypass, unlinked Vercel Git integration, public domain access, the Vercel token only in the protected GitHub job, and the database password/Django key only in provider production settings. The token's actual scope must be checked and disclosed for human acceptance; it is not assumed project-scoped. Agents never receive secret values.
-
-Implementation must verify approval and rerun behaviour, clean committed inputs, absence of provider builds from PR edits, deployment identity/domain mapping, public smoke checks and recovery procedure before enabling deployments. These are integration checks for the implementing team, not API research delegated to the human. Provider selection does not authorise provisioning, installation, implementation, pushing or deployment enablement.
+Hosted integration checks remain required: approval and rerun protections, clean committed deployment inputs, absence of provider builds from PR edits, production configuration and verified database TLS, deployment identity and domain mapping, public HTTPS/HTTP smoke checks, and the manual recovery procedure above. Local tests do not establish these hosted controls.
