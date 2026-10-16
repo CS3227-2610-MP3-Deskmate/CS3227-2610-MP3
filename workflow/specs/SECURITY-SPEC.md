@@ -22,20 +22,23 @@ Threat: a leaked secret key lets an attacker forge sessions and signed data, lea
 Threat: an error response reveals internals that help an attacker, or reflects attacker input into a page.
 
 - With debug off, errors show no internal details (PLT-1.4).
+- The `403` pages show only fixed text and `405` responses have an empty body, so neither shows internal details (ACC-1.2, ACC-1.4, ACC-1.5, ACC-1.8).
 - The health check reveals only `ok` or `error` (PLT-1.2, PLT-1.3).
 - Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies.
 
 ## Sign-in and access control
 
-Threat: a visitor opens a role's pages without signing in or with the other role, learns which usernames exist, steals, fixes or reuses a session, makes a signed-in browser sign in or out without its user meaning to, or uses the sign-in redirect to send users to another site.
+Threat: a visitor opens a role's pages without signing in or with the other role, learns which usernames exist, steals, fixes or reuses a session, makes a signed-in browser sign in or out without its user meaning to, frames a page to trick its user into clicking, reads a role's page from a browser cache after its user has left, or uses the sign-in redirect to send users to another site.
 
 - The server decides access on every request from the signed-in user's stored account: a signed-out visitor is redirected to the sign-in page and the other role gets `403`. Nothing the client sends but the session cookie affects the decision (ACC-1.4, ACC-1.5).
 - Passwords are stored only as Django's salted hashes ([data model](TECHNICAL-SPEC.md#data-model)) and are never shown or logged.
-- A failed sign-in shows one message whatever was wrong, and does not reveal whether the username exists (ACC-1.3).
-- Sign-in always leads to the user's own role's page and ignores any `next` parameter, so it cannot redirect anywhere else (ACC-1.8).
-- Signing in and out accept only `POST` with a valid CSRF token (ACC-1.2, ACC-1.8).
-- Sessions are stored on the server. Sign-in replaces the session ID, sign-out ends the session on the server, and a session has a fixed lifetime and ends when the browser closes (ACC-1.2, ACC-1.6, ACC-1.8).
-- With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.8).
+- A failed sign-in shows one message whatever was wrong, and an existing username with a wrong password gets the same response, apart from its CSRF token, as an unknown username with the same submission (ACC-1.3). Gap: response time is not checked.
+- Sign-in always leads to the user's own role's page and ignores any `next` parameter, so it cannot redirect anywhere else (ACC-1.5).
+- Every `POST`, `PUT`, `PATCH` or `DELETE` needs a valid CSRF token before any other rule applies, and signing in and out accept only `POST` (ACC-1.2, ACC-1.8).
+- With debug off, such a request is also refused if its `Origin` is anything but exactly `https://` and a host in `DJANGO_ALLOWED_HOSTS`. The app trusts no forwarded-scheme request header to decide this; it trusts only that exact origin (ACC-1.8).
+- Sessions are stored on the server. Sign-in replaces the session ID and sign-out ends the session on the server. The session cookie is dropped when the browser closes, and the server ends the session 8 hours after sign-in, however active its user is (ACC-1.2, ACC-1.6).
+- With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.6).
+- No page may show the sign-in or role pages in a frame, and no browser or cache may store the role pages (ACC-1.8).
 - Gap: sign-in attempts have no rate limit or lockout, so nothing slows online password guessing.
 
 ## Container image
