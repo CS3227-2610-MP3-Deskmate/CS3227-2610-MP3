@@ -2,6 +2,8 @@
 Closes #
 
 **What changes for users:**
+<!-- Describe what users experience differently because of this PR, not which files were added or edited.
+If there is no user-facing behavior change (e.g. logs or internal documentation/instructions only), write "None." -->
 
 | Criterion | Test or manual check | Result |
 | --- | --- | --- |
