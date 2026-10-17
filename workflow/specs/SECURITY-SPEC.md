@@ -24,7 +24,8 @@ Threat: an error response reveals internals that help an attacker, or reflects a
 - With debug off, errors show no internal details (PLT-1.4).
 - The `403` pages show only fixed text and `405` responses have an empty body, so neither shows internal details (ACC-1.2, ACC-1.4, ACC-1.5, ACC-1.8, ACC-2.5).
 - The health check reveals only `ok` or `error` (PLT-1.2, PLT-1.3).
-- Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies.
+- Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies. For the database server's own logs, see [Demo workspaces](#demo-workspaces).
+- No error reporting or logging captures or sends the local variables of a failing request, because they can hold [generated passwords](#demo-workspaces) and their hashes. Django's debug page shows them, but debug is on only in local development.
 
 ## Sign-in and access control
 
@@ -50,10 +51,11 @@ Threat: anyone, without signing in, makes the app create workspaces and accounts
 - The request chooses nothing: extra form fields and query parameters are ignored, and each creation makes one new workspace with two Requesters and one Support Officer and adds no account to an existing workspace (ACC-2.1, ACC-2.5).
 - Generated passwords are 16 characters, each drawn independently and uniformly from the operating system's cryptographically secure random source, so each has about 79 bits of entropy. Usernames carry a random code from the same source rather than a sequence, so they reveal neither how many workspaces exist nor other workspaces' usernames (ACC-2.3, ACC-2.8).
 - A generated password is shown once, only in the response that creates it, which no browser or cache may store and no page may frame. It is stored only as Django's salted hash, never in a session, cookie or other record, and no route shows it again; resending the submission makes a different workspace (ACC-2.6).
-- No generated username or password, and no password hash, appears in standard error or logs in either debug mode: when creation fails, the error written there keeps its type and traceback but leaves out any database message or detail that contains one, since such details can hold the row being written (ACC-2.4, ACC-2.6).
+- No generated username or password, and no password hash, appears in standard output, standard error or logs in either debug mode: when creation fails, the error written there keeps its type and traceback but leaves out any database message or detail that contains one, since such details can hold the row being written (ACC-2.4, ACC-2.6). Error reports capture no local variables either: see [Error pages, health check and logs](#error-pages-health-check-and-logs).
 - Creation is all or nothing, including when a code clashes, and it signs no one in and leaves a signed-in user's session as it was (ACC-2.2–ACC-2.4, ACC-2.7).
 - Gap: the page shows the passwords in plain view, and a browser that keeps pages in its back-forward cache may show the page again in the same tab after Back or Forward, so anyone who sees the screen, or uses that tab soon after, may read them.
 - Gap: creating workspaces has no rate limit, and workspaces are never deleted. Each creation hashes three passwords with Django's deliberately slow default hasher, so repeated creation can use up the [free-plan CPU allowance](TECHNICAL-SPEC.md#free-plan-operating-limits), which can pause the site, and fill the database's storage, after which writes that need more storage, such as the sessions that sign-in creates, fail for every user.
+- Gap: when an insert fails, the database server may log the failing statement and its detail, such as `Key (username)=(…) already exists.` or `Failing row contains (…)`, so a generated username and password hash can reach the database provider's logs, which the app does not control.
 
 ## Container image
 
