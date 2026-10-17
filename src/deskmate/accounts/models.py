@@ -1,4 +1,5 @@
-"""Workspaces and the users who belong to them (TECHNICAL-SPEC "Data model")."""
+"""Workspaces, the users who belong to them, and the attempts the rate limits
+count (TECHNICAL-SPEC "Data model")."""
 
 from django.contrib.auth.models import AbstractUser
 from django.db import models
@@ -33,3 +34,22 @@ class User(AbstractUser):
                 condition=models.Q(role__in=Role.values), name="accounts_user_role"
             )
         ]
+
+
+class Kind(models.TextChoices):
+    """What a counted attempt was (ACC-3.1)."""
+
+    SIGN_IN = "sign_in", "Sign-in attempt"
+    CREATION = "creation", "Creation"
+
+
+class CountedAttempt(models.Model):
+    """One attempt counted toward the rate limits, the limits' only state.
+
+    `group` is the client's address group as a hash keyed with the secret key,
+    never the address or group itself (ACC-3.6).
+    """
+
+    kind = models.CharField(max_length=16, choices=Kind)
+    group = models.CharField(max_length=64)
+    counted_at = models.DateTimeField()

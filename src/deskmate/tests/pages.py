@@ -156,29 +156,15 @@ class Form:
         assert len(buttons) == 1, f"Expected one {caption!r} button in the form."
         return buttons[0]
 
-    def submit(
-        self,
-        client,
-        typed=None,
-        *,
-        button=None,
-        changes=None,
-        query=None,
-        headers=None,
-        secure=False,
-    ):
-        """Send this form from `client` as a browser would; return the response.
+    def data(self, typed=None, *, button=None, changes=None):
+        """Return the fields a browser sends with this form, by name.
 
         `typed` maps a field's label to what the user typed into it, and
         `button` is the caption of the button they pressed. `changes` maps a
         control's name to a value that replaces the page's, or to None to leave
         the control out, as a forged or tampered request would; names that are
-        not on the page are added. `query` is added to the URL's query. The
-        request carries `Origin: https://testserver` unless `headers` replaces
-        it, and is sent over HTTPS if `secure` is true. Only POST forms are
-        supported, because every form the specs name is one.
+        not on the page are added.
         """
-        assert self.method == "post", f"The form's method is {self.method!r}."
         data = {
             control.name: control.value or ""
             for control in self.controls
@@ -195,6 +181,31 @@ class Form:
                 data.pop(name, None)
             else:
                 data[name] = value
+        return data
+
+    def submit(
+        self,
+        client,
+        typed=None,
+        *,
+        button=None,
+        changes=None,
+        query=None,
+        headers=None,
+        secure=False,
+        environ=None,
+    ):
+        """Send this form from `client` as a browser would; return the response.
+
+        `typed`, `button` and `changes` are those of `data`. `query` is added
+        to the URL's query. The request carries `Origin: https://testserver`
+        unless `headers` replaces it, and is sent over HTTPS if `secure` is
+        true. `environ` sets WSGI variables that are not headers, such as
+        REMOTE_ADDR, the address the connection came from. Only POST forms are
+        supported, because every form the specs name is one.
+        """
+        assert self.method == "post", f"The form's method is {self.method!r}."
+        data = self.data(typed, button=button, changes=changes)
         url = urlsplit(self.url)
         assert url.netloc == SITE, f"The form is sent to another site: {self.url}"
         query_string = "&".join(
@@ -207,6 +218,7 @@ class Form:
             content_type="application/x-www-form-urlencoded",
             secure=secure,
             headers={"Origin": ORIGIN, **(headers or {})},
+            **(environ or {}),
         )
 
 

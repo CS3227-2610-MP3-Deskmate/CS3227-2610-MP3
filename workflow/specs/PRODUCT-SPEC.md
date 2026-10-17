@@ -14,7 +14,7 @@ Every user has exactly one of these roles and belongs to exactly one **workspace
 | Prefix | Area | File |
 | --- | --- | --- |
 | `PLT` | Platform: the home page, health check, error pages, startup checks and releases that every feature relies on | [`product/platform.md`](product/platform.md) |
-| `ACC` | Accounts: creating demo workspaces, signing in and out, and which role may open which pages | [`product/accounts.md`](product/accounts.md) |
+| `ACC` | Accounts: creating demo workspaces and signing in, with rate limits on both, signing out, and which role may open which pages | [`product/accounts.md`](product/accounts.md) |
 
 ## Requirements
 

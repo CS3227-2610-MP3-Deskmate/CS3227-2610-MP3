@@ -263,18 +263,28 @@ def signed_in_account_ids():
     return signed_in - {None}
 
 
-def records_holding(values):
-    """Return where a database row's text holds one of `values`, as
-    `<table> row <number>`, for every table."""
-    found = []
+def stored_rows():
+    """Return, for every table, the text of each of its rows, as PostgreSQL
+    writes a row as text: every column's value, with binary values in
+    hexadecimal."""
+    rows = {}
     with connection.cursor() as cursor:
         for table in connection.introspection.table_names(cursor):
             name = connection.ops.quote_name(table)
             cursor.execute(f"SELECT CAST(t AS text) FROM {name} AS t")
-            for number, (text,) in enumerate(cursor.fetchall(), 1):
-                if any(value in text for value in values):
-                    found.append(f"{table} row {number}")
-    return found
+            rows[table] = [text for (text,) in cursor.fetchall()]
+    return rows
+
+
+def records_holding(values):
+    """Return where a database row's text holds one of `values`, as
+    `<table> row <number>`, for every table."""
+    return [
+        f"{table} row {number}"
+        for table, texts in stored_rows().items()
+        for number, text in enumerate(texts, 1)
+        if any(value in text for value in values)
+    ]
 
 
 def sessions_holding(values):
