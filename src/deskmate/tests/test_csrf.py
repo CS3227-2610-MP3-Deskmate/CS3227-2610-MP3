@@ -13,10 +13,12 @@ import pytest
 from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
 from deskmate.tests.signing_in import (
     FORM_EXPIRED,
+    METHODS,
     PASSWORD,
     REQUESTER,
     ROLE_PAGES,
     ROLES,
+    SAFE_METHODS,
     SIGN_IN,
     SIGN_OUT,
     SUPPORT_OFFICER,
@@ -40,8 +42,8 @@ ACCOUNT = "alice"
 EVIL_ORIGIN = "https://evil.example"
 ROUTES = ["/", "/health/", SIGN_IN, SIGN_OUT, *ROLE_PAGES.values()]
 # Methods that need a token: POST sends it in the form, the others in a
-# header, and PROPFIND stands for methods that Django does not name.
-UNSAFE_METHODS = ["POST", "PUT", "PATCH", "DELETE", "PROPFIND"]
+# header.
+UNSAFE_METHODS = [method for method in METHODS if method not in SAFE_METHODS]
 # Every route with every method, cycling through visitors so each visitor
 # meets each route and each method.
 NO_TOKEN_CASES = [

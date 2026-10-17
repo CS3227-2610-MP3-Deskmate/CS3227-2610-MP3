@@ -33,6 +33,21 @@ WRONG_PASSWORD = "Wrong pass 2"
 SIGN_IN_ERROR = "Incorrect username or password."
 NOT_FOR_YOUR_ROLE = "This page is not for your role."
 FORM_EXPIRED = "This form has expired. Go back, reload the page and try again."
+# Every request method: those of RFC 9110, PATCH, and PROPFIND, which stands
+# for the methods that Django does not name. Each route answers the methods it
+# does not list with 405 (TECHNICAL-SPEC "Routes").
+METHODS = (
+    "GET",
+    "HEAD",
+    "POST",
+    "PUT",
+    "DELETE",
+    "CONNECT",
+    "OPTIONS",
+    "TRACE",
+    "PATCH",
+    "PROPFIND",
+)
 # The methods that need no CSRF token (ACC-1.8).
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
 # A session key in Django's format that no session has.
@@ -54,6 +69,14 @@ _numbers = itertools.count(1)
 def other_role(role):
     """Return the role that is not `role`."""
     return SUPPORT_OFFICER if role == REQUESTER else REQUESTER
+
+
+def methods_not_listed(*listed):
+    """Return, in order, each method in METHODS that is not in `listed`.
+
+    `listed` are the methods a route lists in TECHNICAL-SPEC "Routes".
+    """
+    return [method for method in METHODS if method not in listed]
 
 
 def new_browser():
@@ -160,7 +183,12 @@ def assert_redirects(response, path):
 
 
 def assert_sign_in_page(response):
-    """Assert `response` is the sign-in page of ACC-1.1, and return it."""
+    """Assert `response` is the sign-in page of ACC-1.1, and return it.
+
+    Neither field may be `required` or have a `maxlength`: every submission
+    must reach the server (ACC-1.3), and a username that is 150 characters
+    only after NFKC must be typeable (ACC-1.7).
+    """
     assert response.status_code == 200
     page = Page(response)
     assert page.title == "Sign in"
@@ -170,6 +198,10 @@ def assert_sign_in_page(response):
     assert form.path == SIGN_IN
     assert form.field("Username").type == "text"
     assert form.field("Password").type == "password"
+    for label in ("Username", "Password"):
+        field = form.field(label)
+        assert not field.required, f"The {label} field is required."
+        assert field.maxlength is None, f"The {label} field has a maxlength."
     return page
 
 

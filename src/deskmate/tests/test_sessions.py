@@ -8,8 +8,14 @@ from datetime import timedelta
 from importlib import import_module
 
 import pytest
+from asgiref.sync import async_to_sync
 from django.conf import settings
+from django.contrib.auth.middleware import AuthenticationMiddleware
+from django.contrib.sessions.middleware import SessionMiddleware
+from django.http import HttpResponse
+from django.test import RequestFactory
 
+from deskmate.accounts.sessions import sign_in_limit
 from deskmate.tests.signing_in import (
     PASSWORD,
     REQUESTER,
@@ -34,6 +40,40 @@ ONE_SECOND = timedelta(seconds=1)
 def session_store():
     """Return the session store class of Django's configured session engine."""
     return import_module(settings.SESSION_ENGINE).SessionStore
+
+
+def save_session_again(browser):
+    """Save `browser`'s session again, as a later feature that writes to it would.
+
+    Django then sets the session's database expiry SESSION_COOKIE_AGE from
+    now, so only the 8 hours from signing in can end it sooner. Returns the
+    session.
+    """
+    session = browser.session
+    session["synthetic"] = "written by a later feature"
+    session.save()
+    return session
+
+
+def user_read_async(session_key):
+    """Return the user that an async view reads for a request with `session_key`.
+
+    The request goes through Django's session and authentication middleware
+    and then Deskmate's `sign_in_limit`, in the settings' order, to a view
+    that reads the user with `request.auser`, as an async view does.
+    """
+    users = []
+
+    def view(request):
+        users.append(async_to_sync(request.auser)())
+        return HttpResponse()
+
+    factory = RequestFactory()
+    factory.cookies[settings.SESSION_COOKIE_NAME] = session_key
+    handler = SessionMiddleware(AuthenticationMiddleware(sign_in_limit(view)))
+    handler(factory.get(ROLE_PAGES[REQUESTER]))
+    assert len(users) == 1, "The view did not run once."
+    return users[0]
 
 
 @pytest.mark.ac("ACC-1.6")
@@ -76,17 +116,42 @@ def test_session_activity_does_not_extend_8_hours(make_account, clock):
 def test_session_saved_again_after_sign_in_still_ends_at_8_hours(make_account, clock):
     browser, account = sign_in_as(make_account, REQUESTER)
     clock.set_elapsed(EIGHT_HOURS - ONE_SECOND)
-    # A later feature writes to the session, so Django saves it again and sets
-    # its database expiry 8 hours from now.
-    session = browser.session
-    session["synthetic"] = "written by a later feature"
-    session.save()
+    session = save_session_again(browser)
     stored = session.get_model_class().objects.get(session_key=session.session_key)
     assert stored.expire_date > clock.start + EIGHT_HOURS
     assert_signed_in_as(browser, REQUESTER, account.username)
     clock.set_elapsed(EIGHT_HOURS)
     assert_signed_out(browser)
     assert_sign_in_page(browser.get(SIGN_IN))
+
+
+@pytest.mark.ac("ACC-1.6", "ACC-1.4")
+def test_session_sign_in_time_unknown_signs_out_and_deletes_session(make_account):
+    account = make_account("rhea", PASSWORD, SUPPORT_OFFICER)
+    browser = new_browser()
+    # Signs in without the sign-in page, so no sign-in time is recorded.
+    browser.force_login(account)
+    key = session_cookie(browser)
+    assert session_store()().exists(key)
+    assert_redirects(browser.get(ROLE_PAGES[SUPPORT_OFFICER]), SIGN_IN)
+    assert not session_store()().exists(key)
+
+
+@pytest.mark.ac("ACC-1.6", "ACC-1.4")
+def test_session_async_user_read_at_8_hours_is_anonymous_and_session_deleted(
+    make_account, clock
+):
+    browser, account = sign_in_as(make_account, REQUESTER)
+    key = session_cookie(browser)
+    clock.set_elapsed(EIGHT_HOURS - ONE_SECOND)
+    user = user_read_async(key)
+    assert user.is_authenticated
+    assert user.pk == account.pk
+    # Otherwise the session's database expiry would also end it at 8 hours.
+    save_session_again(browser)
+    clock.set_elapsed(EIGHT_HOURS)
+    assert not user_read_async(key).is_authenticated
+    assert not session_store()().exists(key)
 
 
 @pytest.mark.ac("ACC-1.6")

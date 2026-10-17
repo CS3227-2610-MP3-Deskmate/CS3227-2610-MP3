@@ -20,15 +20,16 @@ from deskmate.tests.signing_in import (
     assert_signed_out,
     browser_as,
     csrf_token,
+    methods_not_listed,
     new_browser,
     send,
     session_cookie,
     sign_in_as,
 )
 
-# Methods other than GET and POST, each sent with a valid CSRF token, and each
-# with every kind of visitor.
-OTHER_METHODS = ["HEAD", "PUT", "PATCH", "DELETE"]
+# Every method but POST, GET included, each sent with a valid CSRF token, and
+# each with every kind of visitor.
+OTHER_METHODS = methods_not_listed("POST")
 METHOD_CASES = [
     pytest.param(method, visitor, id=f"{method}-{visitor or 'signed-out'}")
     for method in OTHER_METHODS
