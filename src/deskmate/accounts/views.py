@@ -1,4 +1,5 @@
-"""Signing in and out, and each role's placeholder page (ACC-1)."""
+"""Signing in and out, each role's placeholder page (ACC-1), and creating demo
+workspaces (ACC-2)."""
 
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -6,7 +7,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from deskmate.accounts import sessions
+from deskmate.accounts import demo, sessions
 from deskmate.accounts.forms import SignInForm
 from deskmate.accounts.models import Role
 from deskmate.views import forbidden
@@ -41,6 +42,20 @@ def sign_out(request):
     """Sign the visitor out, if they were signed in; go to sign-in (ACC-1.2)."""
     logout(request)
     return redirect("sign-in")
+
+
+@require_POST
+def demo_workspace(request):
+    """Create a demo workspace and show its accounts' passwords, this once (ACC-2).
+
+    A signed-in user goes to their own role's page and nothing is created
+    (ACC-2.7). Nothing the request sends is read, and nothing is put in the
+    session (ACC-2.5, 2.6).
+    """
+    if request.user.is_authenticated:
+        return redirect(ROLE_PAGES[request.user.role])
+    context = {"title": "Demo workspace created", "accounts": demo.create_workspace()}
+    return render(request, "accounts/demo_workspace.html", context)
 
 
 @require_GET

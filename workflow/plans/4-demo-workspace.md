@@ -2,7 +2,7 @@
 
 Goal: A signed-out visitor presses **Create demo workspace** on the sign-in page and gets a new workspace with two Requesters and one Support Officer, whose generated passwords are shown once, meeting ACC-2.1–2.8 in about 120 changed lines under `src/`, not counting tests and migrations, with no model change, migration or dependency.
 
-- [ ] **implementer**: Create demo workspaces from the sign-in page (ACC-2.1–2.8). Makes `test_demo_workspace.py`, `test_demo_requests.py`, `test_demo_failures.py` and `test_demo_passwords.py` pass, and keeps every other test passing.
+- [x] **implementer**: Create demo workspaces from the sign-in page (ACC-2.1–2.8). Makes `test_demo_workspace.py`, `test_demo_requests.py`, `test_demo_failures.py` and `test_demo_passwords.py` pass, and keeps every other test passing.
   - New `accounts/demo.py`, which owns generating and saving a demo workspace, with docstrings for the module and each function:
     - Constants: the 31 characters, the lengths 6 and 16, `MAX_CODES = 3`, and each account's username prefix and `Role`, in the page's order. `Account` is a named tuple of username, role and password.
     - `_random_string(length)` joins `secrets.choice(ALPHABET)` once per character, so each character is uniform and independent, from the operating system's secure source, with no modulo (ACC-2.8). `random_code()` returns one of length 6. The tests replace it, so creation calls it by its module-level name for each code and draws codes no other way.
