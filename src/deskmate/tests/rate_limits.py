@@ -55,6 +55,7 @@ from deskmate.tests.signing_in import (
 SIGN_IN_ATTEMPT = "sign-in"
 CREATION = "creation"
 KINDS = (SIGN_IN_ATTEMPT, CREATION)
+OTHER_KIND = {SIGN_IN_ATTEMPT: CREATION, CREATION: SIGN_IN_ATTEMPT}
 PATHS = {SIGN_IN_ATTEMPT: SIGN_IN, CREATION: DEMO_WORKSPACE}
 # The limits of ACC-3.1: for each kind, how many attempts counted in the
 # 10 minutes before an attempt refuse it, from one address group and from

@@ -26,6 +26,7 @@ from deskmate.tests.rate_limits import (
     CREATION,
     EVERYONE,
     KINDS,
+    OTHER_KIND,
     PER_GROUP,
     SIGN_IN_ATTEMPT,
     Visitor,
@@ -50,7 +51,6 @@ from deskmate.tests.signing_in import (
 pytestmark = pytest.mark.usefixtures("db", "fast_hashing")
 
 SCOPES = ["address-group", "everyone"]
-OTHER_KIND = {SIGN_IN_ATTEMPT: CREATION, CREATION: SIGN_IN_ATTEMPT}
 # (seconds after the limit was reached, Retry-After or None if allowed), at
 # and around the end of the 10 minutes (ACC-3.3).
 WINDOW_EDGES = [
@@ -174,6 +174,18 @@ def test_limit_clock_back_attempt_counts_until_10_minutes_after_latest(
     assert_refused(visitor.attempt(kind), kind, retry_after=300)
     clock.set_elapsed(seconds(900))
     assert_allowed(visitor.attempt(kind), kind)
+
+
+@pytest.mark.ac("ACC-3.3", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_other_kind_counted_later_does_not_set_moment(clock, kind):
+    visitor = make_attempts(kind, PER_GROUP[kind], forwarded_for(ADDRESS))
+    clock.set_elapsed(seconds(300))
+    assert_allowed(visitor.attempt(OTHER_KIND[kind]), OTHER_KIND[kind])
+    clock.set_elapsed(seconds(100))
+    # Its moment is the clock's 100 s, later than the latest of its own kind,
+    # 0 s; the other kind's 300 s does not count.
+    assert_refused(visitor.attempt(kind), kind, retry_after=500)
 
 
 @pytest.mark.ac("ACC-3.1", "ACC-3.3")

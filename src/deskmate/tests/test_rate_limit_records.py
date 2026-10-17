@@ -24,6 +24,7 @@ from deskmate.tests.rate_limits import (
     CREATION,
     EVERYONE,
     KINDS,
+    OTHER_KIND,
     PER_GROUP,
     SIGN_IN_ATTEMPT,
     Visitor,
@@ -222,18 +223,32 @@ def test_limit_records_of_same_group_change_with_secret_key(db, clock, settings,
 
 
 @pytest.mark.ac("ACC-3.6")
-@pytest.mark.parametrize("later", KINDS)
-@pytest.mark.parametrize("earlier", KINDS)
-def test_limit_counting_deletes_records_counted_10_minutes_before(
-    db, clock, earlier, later
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_counting_deletes_own_kind_records_counted_10_minutes_before(
+    db, clock, kind
 ):
-    tables = limit_tables(earlier)
-    make_attempts(earlier, 1, forwarded_for(ADDRESS))
+    tables = limit_tables(kind)
+    make_attempts(kind, 1, forwarded_for(ADDRESS))
     old = records(tables)
     clock.set_elapsed(timedelta(minutes=10))
-    assert_allowed(Visitor(forwarded_for("198.51.100.30")).attempt(later), later)
+    assert_allowed(Visitor(forwarded_for("198.51.100.30")).attempt(kind), kind)
     remaining = old & records(tables)
     assert not remaining, f"{len(remaining)} records 10 minutes old remain."
+
+
+@pytest.mark.ac("ACC-3.6")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_counting_leaves_other_kind_records_counted_10_minutes_before(
+    db, clock, kind
+):
+    other = OTHER_KIND[kind]
+    tables = limit_tables(other)
+    make_attempts(other, 1, forwarded_for(ADDRESS))
+    old = records(tables)
+    clock.set_elapsed(timedelta(minutes=10))
+    assert_allowed(Visitor(forwarded_for("198.51.100.30")).attempt(kind), kind)
+    gone = old - records(tables)
+    assert not gone, f"{len(gone)} records of the other kind were changed or deleted."
 
 
 @pytest.mark.ac("ACC-3.6")
@@ -280,3 +295,25 @@ def test_limit_clock_back_after_10_minutes_records_gone_attempts_uncounted(
     assert_allowed(visitor.attempt(kind), kind)
     remaining = old & records(tables)
     assert not remaining, f"{len(remaining)} records 10 minutes old remain."
+
+
+@pytest.mark.ac("ACC-3.3", "ACC-3.6", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_other_kind_moment_leaves_records_that_still_count(
+    db, clock, kind
+):
+    other = OTHER_KIND[kind]
+    clock.set_elapsed(timedelta(seconds=601))
+    assert_allowed(Visitor(numbered_source(1)).attempt(other), other)
+    clock.set_elapsed(timedelta(seconds=0))
+    tables = limit_tables(kind)
+    visitor = make_attempts(kind, PER_GROUP[kind], forwarded_for(ADDRESS))
+    old = records(tables)
+    clock.set_elapsed(timedelta(seconds=500))
+    # The other kind's moment is 601 s, 10 minutes after this kind's records,
+    # but it deletes none of them.
+    assert_allowed(Visitor(numbered_source(2)).attempt(other), other)
+    gone = old - records(tables)
+    assert not gone, f"The other kind's attempt changed or deleted {len(gone)} records."
+    # This kind's moment is the clock's 500 s, so the attempts at 0 s count.
+    assert_refused(visitor.attempt(kind), kind, retry_after=100)
