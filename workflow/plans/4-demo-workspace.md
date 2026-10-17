@@ -16,7 +16,7 @@ Goal: A signed-out visitor presses **Create demo workspace** on the sign-in page
     - `accounts/sign_in.html`: after the sign-in form, the invitation in a `<p>`, then a `post` form to `{% url 'demo-workspace' %}`. It holds only `{% csrf_token %}` and an unnamed `<button type="submit">`.
     - New `accounts/demo_workspace.html`: the copy-now line in a `<p>`, then one table. Its first row is `<th scope="col">` cells `Username`, `Role` and `Password`, then one row of `<td>` cells per account, with the role as `account.role.label`. Last, a `<p>` with the `Sign in` link to `{% url 'sign-in' %}`. No other text.
   - Nothing else changes. The existing middleware already adds `no-store` and `X-Frame-Options: DENY` to every response. CSRF failures already get `forbidden.html` through `csrf_failure`. The `LOGGING` setting already writes the 500's error to standard error.
-- [ ] **implementer**: Update `docs/UserGuide.md` in the pages' exact words. Replace "only sign in and out" in the intro and "Accounts cannot yet be created in Deskmate.", and describe:
+- [x] **implementer**: Update `docs/UserGuide.md` in the pages' exact words. Replace "only sign in and out" in the intro and "Accounts cannot yet be created in Deskmate.", and describe:
   - the invitation and the **Create demo workspace** button on `/sign-in/`;
   - the **Demo workspace created** page, with `Copy these passwords now. They will not be shown again.`, its **Username**, **Role** and **Password** table for two Requesters and one Support Officer, and its **Sign in** link;
   - that pressing the button again, or reloading and resending the form, makes another workspace;
