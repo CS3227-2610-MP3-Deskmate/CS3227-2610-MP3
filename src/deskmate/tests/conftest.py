@@ -140,14 +140,16 @@ def browser():
 
 
 class FrozenClock:
-    """Django's clock, stopped at a whole second, which a test moves forward."""
+    """Django's clock, stopped at a whole second, which a test moves forward
+    or, as the app's clock can go, backwards."""
 
     def __init__(self, start):
         self.start = start
         self.now = start
 
     def set_elapsed(self, elapsed):
-        """Set the clock to `elapsed`, a timedelta, after the time it stopped at."""
+        """Set the clock to `elapsed`, a timedelta, after the time it stopped
+        at, or before it if `elapsed` is negative."""
         self.now = self.start + elapsed
 
 

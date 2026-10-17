@@ -2,8 +2,10 @@
 that refuses an attempt, and the 10 minutes an attempt counts for.
 
 Every test stops the clock, so each attempt is counted at the moment the test
-chooses. Unless a test says otherwise, attempts come from ADDRESS, as the last
-entry of X-Forwarded-For, and sign-in attempts use an unknown username.
+chooses; tests that move it backwards check ACC-3.8's moment, the later of the
+clock and the latest attempt of its kind already counted. Unless a test says
+otherwise, attempts come from ADDRESS, as the last entry of X-Forwarded-For,
+and sign-in attempts use an unknown username.
 """
 
 from datetime import timedelta
@@ -58,6 +60,12 @@ WINDOW_EDGES = [
     pytest.param(599.999999, 1, id="1us-before-10-minutes"),
     pytest.param(600, None, id="10-minutes-later"),
     pytest.param(600.000001, None, id="1us-after-10-minutes"),
+]
+# Where the clock goes back to, in seconds, after the limit is reached at 300
+# seconds: just before then, and more than 10 minutes before then.
+CLOCK_BACK = [
+    pytest.param(299.999999, id="1us-back"),
+    pytest.param(-1000, id="1300s-back"),
 ]
 
 
@@ -127,6 +135,44 @@ def test_limit_spread_attempts_free_one_place_as_earliest_turns_10_minutes(clock
     # The second attempt now counts for 10 seconds more.
     assert_refused(visitor.attempt(kind), kind, retry_after=10)
     clock.set_elapsed(seconds(610))
+    assert_allowed(visitor.attempt(kind), kind)
+
+
+@pytest.mark.ac("ACC-3.3", "ACC-3.8")
+@pytest.mark.parametrize("back_to", CLOCK_BACK)
+@pytest.mark.parametrize("scope", SCOPES)
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_after_limit_reached_refuses_with_retry_after_600(
+    clock, kind, scope, back_to
+):
+    # The refused attempt's moment is 300 s, the latest counted attempt's
+    # time, so Retry-After is from then, not from the earlier clock.
+    clock.set_elapsed(seconds(300))
+    source = fill(kind, scope)
+    clock.set_elapsed(seconds(back_to))
+    assert_refused(Visitor(source).attempt(kind), kind, retry_after=600)
+
+
+@pytest.mark.ac("ACC-3.3", "ACC-3.8")
+@pytest.mark.parametrize("scope", SCOPES)
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_attempt_counts_until_10_minutes_after_latest(
+    clock, kind, scope
+):
+    limit = limit_of(kind, scope)
+    clock.set_elapsed(seconds(300))
+    if scope == "address-group":
+        visitor = make_attempts(kind, limit - 1, forwarded_for(ADDRESS))
+    else:
+        make_attempts_from_many(kind, limit - 1)
+        visitor = Visitor(forwarded_for(ADDRESS))
+    clock.set_elapsed(seconds(0))
+    # Counted at its moment, 300 s, not at the clock's 0 s.
+    assert_allowed(visitor.attempt(kind), kind, limit)
+    assert_refused(visitor.attempt(kind), kind, retry_after=600)
+    clock.set_elapsed(seconds(600))
+    assert_refused(visitor.attempt(kind), kind, retry_after=300)
+    clock.set_elapsed(seconds(900))
     assert_allowed(visitor.attempt(kind), kind)
 
 

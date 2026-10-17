@@ -6,7 +6,8 @@ connection, as from separate server instances; another instance is also
 started as a new process. The limits' records are found without naming them:
 they are the rows that counting an attempt adds to tables other than those of
 accounts and workspaces. The clock is stopped unless a test moves it, so
-attempts released together are all counted at one moment.
+attempts released together are all counted at one moment; a test that moves it
+backwards checks the moment of ACC-3.8 at which an attempt is counted.
 """
 
 import base64
@@ -133,6 +134,16 @@ def records(tables):
     }
 
 
+def counted_record(tables, kind, source):
+    """Count an allowed attempt of `kind` from `source`, and return the one
+    record of `tables` it added, as a dict from columns' names to values."""
+    before = records(tables)
+    assert_allowed(Visitor(source).attempt(kind), kind)
+    added = records(tables) - before
+    assert len(added) == 1, f"Counting an attempt added {len(added)} records."
+    return dict(next(iter(added))[1])
+
+
 @pytest.mark.ac("ACC-3.6")
 def test_limit_5_sign_in_attempts_together_after_9_allow_exactly_1(transactional_db):
     source = forwarded_for(ADDRESS)
@@ -199,18 +210,10 @@ def test_limit_records_hold_nothing_the_request_sent(db, kind, address):
 def test_limit_records_of_same_group_change_with_secret_key(db, clock, settings, kind):
     tables = limit_tables(kind)
     source = forwarded_for(ADDRESS)
-
-    def counted():
-        """Count an attempt from `source`; return the record it added."""
-        before = records(tables)
-        assert_allowed(Visitor(source).attempt(kind), kind)
-        added = records(tables) - before
-        assert len(added) == 1, f"Counting an attempt added {len(added)} records."
-        return dict(next(iter(added))[1])
-
-    first, second = counted(), counted()
+    first = counted_record(tables, kind, source)
+    second = counted_record(tables, kind, source)
     settings.SECRET_KEY = make_secret_key()
-    third = counted()
+    third = counted_record(tables, kind, source)
     # The columns that two attempts from one group, at one moment, share.
     shared = [name for name in first if first[name] == second[name]]
     assert any(third[name] != first[name] for name in shared), (
@@ -240,3 +243,40 @@ def test_limit_records_kept_under_10_minutes_still_count(db, clock, kind):
     clock.set_elapsed(timedelta(minutes=10) - timedelta(microseconds=1))
     assert_allowed(Visitor(forwarded_for("198.51.100.30")).attempt(kind), kind)
     assert_refused(visitor.attempt(kind), kind, retry_after=1)
+
+
+@pytest.mark.ac("ACC-3.6", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_attempt_stored_at_latest_counted_time(db, clock, kind):
+    tables = limit_tables(kind)
+    early = counted_record(tables, kind, numbered_source(1))
+    clock.set_elapsed(timedelta(seconds=100))
+    latest = counted_record(tables, kind, numbered_source(2))
+    alike = counted_record(tables, kind, numbered_source(3))
+    # The columns that two attempts at one moment share, and that differ from
+    # an attempt's at another moment: when an attempt was counted.
+    timed = [name for name in latest if latest[name] == alike[name] != early[name]]
+    assert timed, "No record says when its attempt was counted."
+    clock.set_elapsed(timedelta(seconds=40))
+    after = counted_record(tables, kind, numbered_source(4))
+    assert {name: after[name] for name in timed} == {
+        name: latest[name] for name in timed
+    }, "The attempt was counted at the clock's earlier time, not the latest's."
+
+
+@pytest.mark.ac("ACC-3.3", "ACC-3.6", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_clock_back_after_10_minutes_records_gone_attempts_uncounted(
+    db, clock, kind
+):
+    tables = limit_tables(kind)
+    visitor = make_attempts(kind, PER_GROUP[kind], forwarded_for(ADDRESS))
+    old = records(tables)
+    clock.set_elapsed(timedelta(seconds=601))
+    assert_allowed(Visitor(forwarded_for("198.51.100.30")).attempt(kind), kind)
+    clock.set_elapsed(timedelta(seconds=500))
+    # Its moment is 601 s, 10 minutes or more after ADDRESS's attempts, so
+    # they neither remain nor count, though the clock says 500 s.
+    assert_allowed(visitor.attempt(kind), kind)
+    remaining = old & records(tables)
+    assert not remaining, f"{len(remaining)} records 10 minutes old remain."
