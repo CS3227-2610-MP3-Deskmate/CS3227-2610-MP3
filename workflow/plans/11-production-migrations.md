@@ -1,6 +1,6 @@
 Goal: the Vercel production build migrates through one tested entry point, per [PLT-2.4, 2.6, 2.8–2.10 and 2.12–2.14](../specs/product/platform.md#plt-2-release-the-placeholder-site-to-production).
 
-Estimate: about 70 lines under `src/` outside tests and migrations (budget 400). No new dependency, service or credential; `manage.py`, `settings.py` and `ci.yml` stay unchanged.
+Estimate: about 140 lines under `src/` outside tests and migrations (budget 400), grown from about 70 by the preview-build guard and migration lock added after review. No new dependency, service or credential; `manage.py`, `settings.py` and `ci.yml` stay unchanged.
 
 - [x] **implementer**: Add `src/deskmate/migrate.py`, run as `python src/deskmate/migrate.py` with no arguments.
   - First, if `VERCEL` is set, even empty, and `VERCEL_ENV` is not exactly `production`, print only `migration: failed` and exit 1, before loading settings or connecting (PLT-2.8, PLT-2.12).
