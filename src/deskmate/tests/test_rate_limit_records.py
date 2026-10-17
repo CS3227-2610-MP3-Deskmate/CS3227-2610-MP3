@@ -12,10 +12,12 @@ backwards checks the moment of ACC-3.8 at which an attempt is counted.
 
 import base64
 import ipaddress
+import threading
 from datetime import timedelta
 
 import pytest
 from django.conf import settings as django_settings
+from django.db import DEFAULT_DB_ALIAS, connection, connections
 
 from deskmate.tests.demo_workspaces import stored_rows
 from deskmate.tests.environment import make_secret_key
@@ -54,6 +56,9 @@ STORED_ADDRESSES = [
     pytest.param("probe-host-9f2", id="not-valid"),
 ]
 EARLIER_ADDRESS = "198.51.100.23"
+# A default isolation level a database may be configured with, under which
+# each transaction reads one snapshot taken at its first statement.
+REPEATABLE_READ = "repeatable read"
 
 
 def encodings(label, value):
@@ -145,8 +150,51 @@ def counted_record(tables, kind, source):
     return dict(next(iter(added))[1])
 
 
-@pytest.mark.ac("ACC-3.6")
-def test_limit_5_sign_in_attempts_together_after_9_allow_exactly_1(transactional_db):
+@pytest.fixture
+def repeatable_read_by_default(transactional_db):
+    """Make REPEATABLE READ the default isolation of every new connection to
+    the test database, as the database's own configuration may, and restore
+    the server's default afterwards."""
+    name = connection.ops.quote_name(connection.settings_dict["NAME"])
+    with connection.cursor() as cursor:
+        cursor.execute(
+            f"ALTER DATABASE {name} SET default_transaction_isolation"
+            f" = '{REPEATABLE_READ}'"
+        )
+    connection.close()
+    try:
+        yield
+    finally:
+        # A new connection, in case the test left this one broken.
+        connection.close()
+        with connection.cursor() as cursor:
+            cursor.execute(f"ALTER DATABASE {name} RESET default_transaction_isolation")
+        connection.close()
+
+
+def new_connection_isolation():
+    """Return the isolation level a transaction gets on a new database
+    connection, opened in another thread as each attempt together's is."""
+    levels = []
+
+    def show():
+        try:
+            with connections[DEFAULT_DB_ALIAS].cursor() as cursor:
+                cursor.execute("SHOW transaction_isolation")
+                levels.append(cursor.fetchone()[0])
+        finally:
+            connections.close_all()
+
+    thread = threading.Thread(target=show, daemon=True)
+    thread.start()
+    thread.join(60)
+    assert levels, "The new connection did not answer."
+    return levels[0]
+
+
+def assert_5_sign_in_attempts_together_after_9_allow_exactly_1():
+    """Count 9 sign-in attempts from one address group, release 5 more from
+    it together, and assert exactly 1 is allowed and 4 are refused."""
     source = forwarded_for(ADDRESS)
     make_attempts(SIGN_IN_ATTEMPT, PER_GROUP[SIGN_IN_ATTEMPT] - 1, source)
     responses = attempts_together(SIGN_IN_ATTEMPT, [source] * TOGETHER)
@@ -157,6 +205,20 @@ def test_limit_5_sign_in_attempts_together_after_9_allow_exactly_1(transactional
             assert_refused(response, SIGN_IN_ATTEMPT)
         else:
             assert_allowed(response, SIGN_IN_ATTEMPT)
+
+
+@pytest.mark.ac("ACC-3.6")
+def test_limit_5_sign_in_attempts_together_after_9_allow_exactly_1(transactional_db):
+    assert_5_sign_in_attempts_together_after_9_allow_exactly_1()
+
+
+@pytest.mark.ac("ACC-3.6", "ACC-3.8")
+def test_limit_5_sign_in_attempts_together_under_repeatable_read_allow_exactly_1(
+    repeatable_read_by_default,
+):
+    # Otherwise the database's default could not make the check unserialised.
+    assert new_connection_isolation() == REPEATABLE_READ
+    assert_5_sign_in_attempts_together_after_9_allow_exactly_1()
 
 
 @pytest.mark.ac("ACC-3.6")
