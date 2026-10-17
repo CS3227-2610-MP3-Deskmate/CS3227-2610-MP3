@@ -14,6 +14,10 @@ connection for its whole run, never waiting for it and never reconnecting
 Unlike the `migrate` command, it sends no pre_migrate or post_migrate signal, so
 no content type or permission rows are created: their handlers can write output
 PLT-2.12 forbids, and no spec uses Django permissions.
+
+Its standard-library imports run while this script's folder is still
+`sys.path[0]`, so no file in src/deskmate may share a name with a
+standard-library module.
 """
 
 import logging
@@ -49,8 +53,20 @@ def _silence():
     return say
 
 
+def _unsilenced(line):
+    """Print a line to standard output, ignoring a closed or broken stream."""
+    try:
+        print(line, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
 def _no_reconnect():
-    """Stand in for the connection's `connect` once it has connected (PLT-2.14)."""
+    """Stand in for the connection's `connect` once it has connected (PLT-2.14).
+
+    Defence in depth: no current path reconnects, since any database error ends
+    the run, but this stops future code that catches one and carries on.
+    """
     raise ConnectionError
 
 
@@ -101,10 +117,11 @@ def main():
     # Python puts this script's own folder first; Deskmate imports from src.
     sys.path[0] = str(Path(__file__).resolve().parents[1])
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deskmate.settings")
-    say = _silence()
-    warnings.simplefilter("ignore")
-    logging.disable(logging.CRITICAL)
+    say = _unsilenced  # Only `migration: failed` is written if silencing fails.
     try:
+        say = _silence()
+        warnings.simplefilter("ignore")
+        logging.disable(logging.CRITICAL)
         passed = _migrate(say)
     except SystemExit as error:
         message = error.code if isinstance(error.code, str) else ""
