@@ -1,0 +1,19 @@
+{% extends "deskmate/base.html" %}
+{% block content %}
+  <p>Copy these passwords now. They will not be shown again.</p>
+  <table>
+    <tr>
+      <th scope="col">Username</th>
+      <th scope="col">Role</th>
+      <th scope="col">Password</th>
+    </tr>
+    {% for account in accounts %}
+    <tr>
+      <td>{{ account.username }}</td>
+      <td>{{ account.role.label }}</td>
+      <td>{{ account.password }}</td>
+    </tr>
+    {% endfor %}
+  </table>
+  <p><a href="{% url 'sign-in' %}">Sign in</a></p>
+{% endblock %}

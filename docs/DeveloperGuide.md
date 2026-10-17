@@ -9,12 +9,15 @@ Deskmate's architecture, routes, configuration and environments are in [`TECHNIC
 2. Copy `.env.example` to `.env`, or add its lines to an existing `.env`. Keep its database values: the tests connect with them.
 3. Start PostgreSQL with `docker compose up -d db`. `docker compose down` stops it and keeps the data; `docker compose down -v` deletes the data too.
 4. Run the [verify command](../AGENTS.md#commands) from the repository root.
-5. Load `.env` into the shell, then start the app and open `http://localhost:8000/`:
+5. Load `.env` into the shell, create or update the database tables, then start the app and open `http://localhost:8000/`:
 
    ```bash
    set -a; source <(tr -d '\r' < .env); set +a
+   python src/manage.py migrate
    python src/manage.py runserver
    ```
+
+6. To get accounts, open `http://localhost:8000/sign-in/` and press **Create demo workspace**. The page shows two Requesters' and one Support Officer's usernames and passwords once, as the [User Guide](UserGuide.md) describes. `createsuperuser` does not work, because it cannot set a role or a workspace.
 
 ## Development workflow
 

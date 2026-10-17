@@ -63,6 +63,12 @@ def media_type(response):
     return response["Content-Type"].split(";")[0].strip().lower()
 
 
+def cache_directives(response):
+    """Return the names of the directives in `response`'s Cache-Control header."""
+    header = response.get("Cache-Control", "")
+    return {part.split("=")[0].strip().lower() for part in header.split(",")}
+
+
 def unused_port():
     """Return a local TCP port that nothing is listening on."""
     with socket.socket() as probe:

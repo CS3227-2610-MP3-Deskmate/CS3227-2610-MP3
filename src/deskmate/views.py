@@ -1,4 +1,5 @@
-"""Deskmate's views: the placeholder home page and the health check."""
+"""Deskmate's views: the placeholder home page, the health check, and the
+message pages, such as Forbidden, that any route can return."""
 
 from django import db
 from django.http import JsonResponse
@@ -9,7 +10,7 @@ from django.views.decorators.http import require_GET
 @require_GET
 def home(request):
     """Render the placeholder home page (PLT-1.1)."""
-    return render(request, "deskmate/home.html")
+    return render(request, "deskmate/home.html", {"title": "Deskmate"})
 
 
 @require_GET
@@ -21,3 +22,24 @@ def health(request):
     except db.Error:
         return JsonResponse({"status": "error"}, status=503)
     return JsonResponse({"status": "ok"})
+
+
+def message_page(request, title, message, status):
+    """Return a `status` page titled `title` whose only other text is `message`."""
+    context = {"title": title, "message": message}
+    return render(request, "deskmate/message.html", context, status=status)
+
+
+def forbidden(request, message):
+    """Return a 403 page titled Forbidden whose only other text is `message`."""
+    return message_page(request, "Forbidden", message, 403)
+
+
+def csrf_failure(request, reason=""):
+    """Refuse a request to any route that failed Django's CSRF checks (ACC-1.8).
+
+    `reason` is never shown, so the page gives no internal details.
+    """
+    return forbidden(
+        request, "This form has expired. Go back, reload the page and try again."
+    )
