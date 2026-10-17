@@ -3,7 +3,8 @@
 import secrets
 from collections import namedtuple
 
-from django.db import DatabaseError, IntegrityError, transaction
+from django.contrib.auth.hashers import make_password
+from django.db import Error, IntegrityError, transaction
 
 from deskmate.accounts.models import Role, User, Workspace
 
@@ -57,21 +58,25 @@ def _draw_passwords():
 def create_workspace():
     """Create a demo workspace, and return its accounts in the page's order.
 
-    A `DatabaseError` is raised again as the same type, with the same
-    traceback but without the database's message and detail, which can hold
-    a generated username or the row being written, or the driver's error
-    chained to it (ACC-2.4, ACC-2.6).
+    Each password is hashed once, as the configured hasher's salted hash,
+    before anything is saved (ACC-2.6). Any Django database `Error`, such as
+    a `DatabaseError` or an `InterfaceError`, is raised again as the same
+    type, with the same traceback but without the database's message and
+    detail, which can hold a generated username or the row being written,
+    or the driver's error chained to it (ACC-2.4, ACC-2.6).
     """
     try:
-        return _save_under_free_code(_draw_passwords())
-    except DatabaseError as error:
+        passwords = _draw_passwords()
+        hashes = [make_password(password) for password in passwords]
+        return _save_under_free_code(passwords, hashes)
+    except Error as error:
         hidden = type(error)("Creating a demo workspace failed.")
         raise hidden.with_traceback(error.__traceback__) from None
 
 
-def _save_under_free_code(passwords):
-    """Save the accounts, with `passwords`, under the first code that does not
-    clash, and return them (ACC-2.3).
+def _save_under_free_code(passwords, hashes):
+    """Save the accounts, with `passwords` stored as `hashes`, under the first
+    code that does not clash, and return them (ACC-2.3).
 
     Each of at most MAX_CODES codes is drawn by calling `random_code`. A
     code clashes if saving fails because one of its usernames is taken,
@@ -81,11 +86,11 @@ def _save_under_free_code(passwords):
     for _ in range(MAX_CODES - 1):
         accounts = _accounts(random_code(), passwords)
         try:
-            return _save(accounts)
+            return _save(accounts, hashes)
         except IntegrityError:
             if not _any_taken(accounts):
                 raise
-    return _save(_accounts(random_code(), passwords))
+    return _save(_accounts(random_code(), passwords), hashes)
 
 
 def _accounts(code, passwords):
@@ -97,19 +102,17 @@ def _accounts(code, passwords):
 
 
 @transaction.atomic
-def _save(accounts):
-    """Save one new workspace holding `accounts`, and return them; if saving
-    any fails, nothing is saved.
+def _save(accounts, hashes):
+    """Save one new workspace holding `accounts`, each with its password's hash
+    from `hashes`, and return them; if saving any fails, nothing is saved.
 
-    `create_user` stores each password as the configured hasher's salted
-    hash (ACC-2.6). Nothing is locked, so another creation can save its
-    accounts meanwhile.
+    Nothing is locked, so another creation can save its accounts meanwhile.
     """
     workspace = Workspace.objects.create()
-    for account in accounts:
-        User.objects.create_user(
-            username=account.username,
-            password=account.password,
+    for account, hashed in zip(accounts, hashes, strict=True):
+        User.objects.create(
+            username=User.normalize_username(account.username),
+            password=hashed,
             role=account.role,
             workspace=workspace,
         )
