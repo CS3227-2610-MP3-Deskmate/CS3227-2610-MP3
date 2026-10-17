@@ -6,6 +6,11 @@ only the lines PLT-2.12 allows, all to standard output, ending with
 `migration: passed` and status 0 once no migration remains unapplied, or
 `migration: failed` and status 1. Nothing is retried (PLT-2.14).
 
+In a Vercel build other than production it fails before loading settings or
+connecting (PLT-2.8). Otherwise it holds a migration lock on its one database
+connection for its whole run, never waiting for it and never reconnecting
+(PLT-2.14).
+
 Unlike the `migrate` command, it sends no pre_migrate or post_migrate signal, so
 no content type or permission rows are created: their handlers can write output
 PLT-2.12 forbids, and no spec uses Django permissions.
@@ -20,6 +25,8 @@ from pathlib import Path
 
 # The line settings.py writes for each invalid variable (PLT-1.7).
 _CANNOT_START = r"Deskmate cannot start: [A-Z][A-Z0-9_]* is not set or is invalid\."
+# The key of the PostgreSQL advisory lock that only one run can hold (PLT-2.14).
+_LOCK_KEY = 3227_0011
 
 
 def _silence():
@@ -42,6 +49,21 @@ def _silence():
     return say
 
 
+def _no_reconnect():
+    """Stand in for the connection's `connect` once it has connected (PLT-2.14)."""
+    raise ConnectionError
+
+
+def _lock(connection):
+    """Connect, refuse any later connection, then take the lock without waiting."""
+    connection.ensure_connection()
+    connection.connect = _no_reconnect
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [_LOCK_KEY])
+        if not cursor.fetchone()[0]:
+            raise RuntimeError
+
+
 def _unapplied(executor):
     """Return the executor's plan to apply every migration not yet applied."""
     return executor.migration_plan(executor.loader.graph.leaf_nodes())
@@ -59,6 +81,7 @@ def _migrate(say):
             say(f"migration: applying {migration.app_label}.{migration.name}")
 
     django.setup()
+    _lock(connection)
     executor = MigrationExecutor(connection, report_progress)
     executor.loader.check_consistent_history(connection)
     if executor.loader.detect_conflicts():
@@ -72,6 +95,9 @@ def _migrate(say):
 
 def main():
     """Migrate the configured database and return the exit status."""
+    if "VERCEL" in os.environ and os.environ.get("VERCEL_ENV") != "production":
+        print("migration: failed", flush=True)  # Before anything else (PLT-2.8).
+        return 1
     # Python puts this script's own folder first; Deskmate imports from src.
     sys.path[0] = str(Path(__file__).resolve().parents[1])
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deskmate.settings")
