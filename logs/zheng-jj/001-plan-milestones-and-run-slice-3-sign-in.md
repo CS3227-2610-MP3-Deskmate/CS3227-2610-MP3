@@ -15,6 +15,7 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
 - Answered "yse" to Claude's questions, which Claude took as yes to all of them:
   - for #3: push and open a draft pull request, keep the three security additions from review, and run a third review round;
   - for #4: every checkpoint recommendation.
+- Told Claude to stop crediting itself and to undo every `Co-Authored-By: Claude` trailer it had added. Asked it to turn attribution off in the global Claude Code settings, and approved rewriting both slice branches.
 
 ## Agent runs
 
@@ -24,20 +25,20 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
   - Created issues #11–#37 from the Slice template, holding only titles, `Spec: new` and proposed tiers, with owners unassigned. During #3 it added #38 (rate limits) and #39 (home page link to sign-in).
   - GitHub first shifted the due dates a day earlier. Setting the time to 12:00 UTC fixed it.
 - **spec-writer** (`a58461d`), 3 runs and 1 resume, all within scope:
-  - ACC-1 with 8 criteria, a Data model section, the routes and the sign-in security controls: `eb2cfad`.
-  - The spec-critic's findings: `504517c`.
-  - The checkpoint changes, plus a `Gap:` line for `http://` origins: `5e1cd2d`.
-- **spec-critic** (`a58461d`): 10 findings on `eb2cfad`, including the rule order, Origin checks behind HTTPS, database outages and username matching.
+  - ACC-1 with 8 criteria, a Data model section, the routes and the sign-in security controls: `d781e2f`.
+  - The spec-critic's findings: `9eb0236`.
+  - The checkpoint changes, plus a `Gap:` line for `http://` origins: `3bd719b`.
+- **spec-critic** (`a58461d`): 10 findings on `d781e2f`, including the rule order, Origin checks behind HTTPS, database outages and username matching.
 - **test-writer** (`3d65dbb`), 3 runs, all within scope:
-  - Tests for ACC-1.1–1.8: `a402efe`. Before the build, 224 failed for want of a user model or routes, and 221 passed. The agent also checked them against a scratch reference implementation, which was never committed: 445 passed, and each of 30 injected defects was caught.
-  - The review round's tests: `b8cbea1`. With these, 511 passed. A deliberately broken copy (`|safe`, or no sign-in time middleware) failed as it should.
-  - Third round, which the human approved: `8bf1ae7`. It pins that the sign-in fields have no `required` or `maxlength`, covers every method each route doesn't list, both untested `sign_in_limit` branches, the 600-character guard, and `/health/` with a session cookie. 561 passed. Each new test failed on a deliberately broken copy.
+  - Tests for ACC-1.1–1.8: `c544d61`. Before the build, 224 failed for want of a user model or routes, and 221 passed. The agent also checked them against a scratch reference implementation, which was never committed: 445 passed, and each of 30 injected defects was caught.
+  - The review round's tests: `097ca36`. With these, 511 passed. A deliberately broken copy (`|safe`, or no sign-in time middleware) failed as it should.
+  - Third round, which the human approved: `719c3b1`. It pins that the sign-in fields have no `required` or `maxlength`, covers every method each route doesn't list, both untested `sign_in_limit` branches, the 600-character guard, and `/health/` with a session cookie. 561 passed. Each new test failed on a deliberately broken copy.
 - **implementer** (`3d65dbb`), 5 runs and 1 resume, all within scope:
-  - Plan: `86e9793`. The resume applied Claude's two answers.
-  - Task 1, the accounts app, sign-in, sign-out and role pages: `22afaed`. The size command gave 189 lines.
-  - Task 2, the CSRF page and the framing and caching headers: `52cfbea`. 445 passed, at 223 lines.
-  - Task 3, the User Guide: `d3aaefa`.
-  - Review fixes: `b94d703`. 445 passed, at 343 of 400 lines.
+  - Plan: `2df6bea`. The resume applied Claude's two answers.
+  - Task 1, the accounts app, sign-in, sign-out and role pages: `c5c4e63`. The size command gave 189 lines.
+  - Task 2, the CSRF page and the framing and caching headers: `4abb49e`. 445 passed, at 223 lines.
+  - Task 3, the User Guide: `b9478c3`.
+  - Review fixes: `113a860`. 445 passed, at 343 of 400 lines.
 - **reviewer** (`a58461d`), 2 rounds:
   - Round 1: three must-fix findings (the username field's mobile attributes, no test of markup in role-page usernames, and the browser-close wording) and eleven nice-to-have.
   - Round 2: nothing must-fix. Open: no test pins `required` and `maxlength` being off, the 405 lists are incomplete, and two `sessions.py` branches are untested.
@@ -45,8 +46,8 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
   - Round 1: nothing must-fix in code. Two Medium decisions (unthrottled sign-in using up the CPU quota, and the missing production schema), Lows 3–8, and missing attack tests.
   - Round 2: nothing must-fix. Three Lows remain: `sign_in_limit` relies on middleware order, the async and missing-time branches have no tests, and no test fails if the 600-character guard is removed.
 - **Orchestrator commits:**
-  - `5cf5a73`: the Developer Guide's `migrate` and local-account steps. Claude ran them in the container against the local database: sign-in redirected to `/requester/`, that page returned 200, and `/support/` returned 403.
-  - `6b01780`: merged `main` (#8's automatic releases and the scope-confirmation rule). 511 passed after the merge.
+  - `b1b828b`: the Developer Guide's `migrate` and local-account steps. Claude ran them in the container against the local database: sign-in redirected to `/requester/`, that page returned 200, and `/support/` returned 403.
+  - `3bbf1b4`: merged `main` (#8's automatic releases and the scope-confirmation rule). 511 passed after the merge.
 
 ## Decisions and corrections
 
@@ -69,6 +70,10 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
   - Trusted origins built only from plain host names.
   - The shared Forbidden page and CSRF view moved into the `deskmate` package.
 - **The human's answers on #3:** keep the review additions (the `sign_in_limit` middleware, the 600-character guard, and `no-store` and `X-Frame-Options` on every route), run a third test round, and push a draft pull request.
+- **Attribution:**
+  - Claude had added a `Co-Authored-By: Claude` trailer to its commits, and a "Generated with Claude Code" line to the PR #44 description.
+  - With the human's approval, it rewrote both slice branches with `git filter-branch`, keeping only `main`'s commits as they were. That removed the trailer from every commit and left the code unchanged; the `Agent:` trailers stay. It then force-pushed #3's branch and changed the hashes in this log to the new ones.
+  - It removed the line from #44's description, and set `"attribution"` to empty in `~/.claude/settings.json`.
 - **Raised by the third round:**
   - The 600-character NFKC bound has no home in the specs.
   - ACC-1.6 doesn't say that a session with no recorded sign-in time is ended.
