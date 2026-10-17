@@ -1,9 +1,9 @@
 """The rate limits on sign-in attempts and demo workspace creations (ACC-3).
 
 Each attempt is checked against its kind's limits, and counted if they allow
-it, in one transaction that every attempt of either kind waits its turn for,
-so counts kept only in the database hold across server instances (ACC-3.6,
-3.8).
+it, in one transaction that every other attempt of its kind waits its turn
+for, so counts kept only in the database hold across server instances
+(ACC-3.6, 3.8).
 """
 
 import ipaddress
@@ -20,8 +20,12 @@ from deskmate.accounts.models import CountedAttempt, Kind
 # from its client's address group, and from everyone (ACC-3.1).
 LIMITS = {Kind.SIGN_IN: (10, 30), Kind.CREATION: (3, 5)}
 WINDOW = timedelta(minutes=10)
-# The advisory lock key that serialises every check. ACC-3.8 needs only each
-# kind's checks in turn, but one lock for both kinds needs only one key.
+# How long an attempt may wait to be checked, or a statement in its check
+# may run, before it fails (ACC-3.7).
+MAX_WAIT = timedelta(seconds=5)
+# With each kind's index in `Kind`, the advisory lock key that serialises that
+# kind's checks (ACC-3.8). Each kind reads and deletes only its own records,
+# so the kinds need not wait for each other.
 _LOCK_KEY = 3227_0038
 # The group every client address that is not a valid IP address shares.
 _NO_ADDRESS = "none"
@@ -69,15 +73,26 @@ def check_and_count(request, kind):
 
     Returns None if it is allowed, or else its Retry-After in seconds (ACC-3.2,
     3.3), from 1 to 600 because no attempt is counted later than its moment.
-    The check commits before the caller goes on, and waiting more than
-    5 seconds for it, or a database failure, raises (ACC-3.7).
+    The check commits before the caller goes on, and waiting longer than
+    `MAX_WAIT` for it, or a database failure, raises (ACC-3.7).
     """
     group = _stored_group(address_group(client_address(request.META)))
+    wait = f"{MAX_WAIT // timedelta(milliseconds=1)}ms"
     with transaction.atomic(durable=True):
         with connection.cursor() as cursor:
-            # Waiting more than 5 seconds for the lock fails (ACC-3.7).
-            cursor.execute("SET LOCAL lock_timeout = '5s'")
-            cursor.execute("SELECT pg_advisory_xact_lock(%s)", [_LOCK_KEY])
+            # Waiting for the lock, or any one statement, fails after
+            # `MAX_WAIT` (ACC-3.7).
+            cursor.execute(
+                "SELECT set_config('lock_timeout', %s, true),"
+                " set_config('statement_timeout', %s, true)",
+                [wait, wait],
+            )
+            # Serialises only under READ COMMITTED, Django's default, where each
+            # later statement sees what the lock's last holder committed.
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(%s, %s)",
+                [_LOCK_KEY, Kind.values.index(kind)],
+            )
         # The attempt's moment: the clock, read only once its turn has come,
         # but never before the latest attempt of its kind (ACC-3.8).
         moment = timezone.now()
@@ -86,8 +101,6 @@ def check_and_count(request, kind):
         if latest is not None:
             moment = max(moment, latest)
         start = moment - WINDOW
-        # Only this kind's old records, so the other kind's moment is kept (ACC-3.6).
-        of_kind.filter(counted_at__lte=start).delete()
         counted = of_kind.filter(counted_at__gt=start)
         refused_until = []
         for records, limit in zip(
@@ -97,6 +110,8 @@ def check_and_count(request, kind):
             times = records.order_by("-counted_at").values_list("counted_at", flat=True)
             refused_until += [oldest + WINDOW for oldest in times[limit - 1 : limit]]
         if not refused_until:
+            # Counting it deletes only this kind's old records (ACC-3.6).
+            of_kind.filter(counted_at__lte=start).delete()
             CountedAttempt.objects.create(kind=kind, group=group, counted_at=moment)
             return None
     # In whole seconds, rounded up (ACC-3.3).
