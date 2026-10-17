@@ -14,6 +14,12 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 - A role agent writes only paths that match its file's `writes` list and not its `never_writes` list. The critic and reviewers write nothing. If your task needs a change outside your scope, stop and say so.
 - `python3 workflow/scripts/check_scope.py <role> --base <commit>` checks everything changed since `<commit>` against a role's scope.
 
+## Scope confirmation
+
+- Unconfirmed scope expansion is prohibited, even when a spec, test, plan or review recommends it. Implement the smallest change that meets the human's confirmed request and existing requirements; raise any conflict instead of silently expanding either.
+- If work would add a capability, recovery/security subsystem, credential, service or dependency beyond confirmed scope, or exceed the confirmed size estimate or slice budget, stop the affected work. Present the smallest viable option, the proposed addition, why it is needed, its estimated total diff and operating burden, and the option to defer it. Obtain explicit human confirmation of that specific expansion before implementing it or writing its acceptance criteria, tests or plan tasks.
+- A role agent reports `needs-decision` to the orchestrator; only the orchestrator asks the human. Tier selection, silence, a generic request to continue, or another agent's recommendation is not confirmation of an unpresented expansion. Routine choices within confirmed scope and budget need no repeated confirmation.
+
 ## One home per fact
 
 | Fact | Home |

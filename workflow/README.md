@@ -36,7 +36,7 @@ Both tools load `AGENTS.md`; Codex loads `.codex/` agents and hooks only in a tr
 1. The adapters give the critic and the reviewers no way to write.
 2. The pre-edit hook runs `check_scope.py --hook` and blocks a role agent's file edit outside its scope. Shell commands are not checked, so the hook catches accidents, not attacks.
 3. The orchestrator runs `check_scope.py <role> --base <commit>` after every role agent, which also catches files written or committed from the shell. Files ignored by Git are not checked.
-4. GitHub is the boundary agents cannot cross: the default branch accepts only reviewed pull requests with passing checks, and production deploys need a human's approval.
+4. GitHub is the boundary agents cannot cross: the default branch accepts only reviewed pull requests with passing checks; production releases follow the [release controls](specs/SECURITY-SPEC.md#release-access-and-provenance).
 
 After changing a role, skill, adapter or hook, run `python3 -m unittest discover -s workflow/scripts`. In each new clone or worktree, and in each tool you use, check once that the hook works: ask the implementer to edit a test file, and it must be refused.
 
@@ -49,6 +49,5 @@ After changing a role, skill, adapter or hook, run `python3 -m unittest discover
 ## GitHub settings (once)
 
 - Pull requests: allow merge commits only, so each slice keeps its small commits.
-- Default branch: require a pull request with one approval and passing checks; no bypass and no force pushes.
-- `production` environment: a required reviewer, and prevent self-review.
+- Default branch and `production` environment: apply the [release prerequisites](specs/TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites).
 - Secret scanning with push protection.

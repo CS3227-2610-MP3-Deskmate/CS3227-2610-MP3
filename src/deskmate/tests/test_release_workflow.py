@@ -1,4 +1,4 @@
-"""PLT-2 workflow wiring; hosted approval/access settings still need integration checks.
+"""PLT-2 workflow wiring; hosted branch/environment controls need integration checks.
 
 These source checks cover only committed workflow declarations. They do not prove
 GitHub environment protections, Vercel account configuration or token scope.
@@ -208,3 +208,10 @@ def test_deployment_driver_obeys_gate_and_propagates_failure_without_retry(
 ):
     result = run_deployment_script(deployment_script(), tmp_path, **options)
     assert_deployment_outcome(result, succeeds, events, stage)
+    if not succeeds:
+        guidance = result[0].stdout.lower()
+        assert "pause automatic deployments" in guidance
+        assert "cancel queued deployment runs" in guidance
+        assert re.search(r"(check|reconcile) vercel", guidance)
+        assert "before resuming" in guidance
+        assert "before approving" not in guidance
