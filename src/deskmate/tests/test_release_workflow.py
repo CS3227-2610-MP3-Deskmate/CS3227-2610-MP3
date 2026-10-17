@@ -232,6 +232,9 @@ def test_deployment_driver_obeys_gate_and_propagates_failure_without_retry(
         assert re.search(r"(check|reconcile) vercel", guidance)
         assert "before resuming" in guidance
         assert re.search(r"which migrations (?:are|were|have been) applied", guidance)
+        # PLT-2.4: no session may still hold the PLT-2.14 lock; end a stale one.
+        assert "migration lock" in guidance
+        assert re.search(r"\b(?:end|ending|terminat\w*)\b[^.]*\bstale\b", guidance)
         assert "before approving" not in guidance
 
 
