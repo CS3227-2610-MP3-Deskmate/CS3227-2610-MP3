@@ -20,7 +20,8 @@ from deskmate.accounts.models import CountedAttempt, Kind
 # from its client's address group, and from everyone (ACC-3.1).
 LIMITS = {Kind.SIGN_IN: (10, 30), Kind.CREATION: (3, 5)}
 WINDOW = timedelta(minutes=10)
-# The advisory lock key that serialises every check, of either kind.
+# The advisory lock key that serialises every check. ACC-3.8 needs only each
+# kind's checks in turn, but one lock for both kinds needs only one key.
 _LOCK_KEY = 3227_0038
 # The group every client address that is not a valid IP address shares.
 _NO_ADDRESS = "none"
@@ -80,12 +81,14 @@ def check_and_count(request, kind):
         # The attempt's moment: the clock, read only once its turn has come,
         # but never before the latest attempt of its kind (ACC-3.8).
         moment = timezone.now()
-        latest = CountedAttempt.objects.filter(kind=kind).aggregate(Max("counted_at"))
-        if latest["counted_at__max"] is not None:
-            moment = max(moment, latest["counted_at__max"])
+        of_kind = CountedAttempt.objects.filter(kind=kind)
+        latest = of_kind.aggregate(Max("counted_at"))["counted_at__max"]
+        if latest is not None:
+            moment = max(moment, latest)
         start = moment - WINDOW
-        CountedAttempt.objects.filter(counted_at__lte=start).delete()
-        counted = CountedAttempt.objects.filter(kind=kind, counted_at__gt=start)
+        # Only this kind's old records, so the other kind's moment is kept (ACC-3.6).
+        of_kind.filter(counted_at__lte=start).delete()
+        counted = of_kind.filter(counted_at__gt=start)
         refused_until = []
         for records, limit in zip(
             [counted.filter(group=group), counted], LIMITS[kind], strict=True
