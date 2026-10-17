@@ -5,11 +5,11 @@ migfix_alpha.0001_initial, then migfix_beta.0002_board_pinned. Their models matc
 their migrations.
 """
 
-from deskmate import settings as _deskmate
 from deskmate.settings import *
 
+ROOT_URLCONF = "deskmate.tests.migration_fixtures"
 INSTALLED_APPS = [
-    *_deskmate.INSTALLED_APPS,
+    "deskmate",
     "deskmate.tests.migration_fixtures.alpha",
     "deskmate.tests.migration_fixtures.beta",
 ]

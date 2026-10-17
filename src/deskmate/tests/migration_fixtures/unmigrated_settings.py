@@ -4,10 +4,10 @@ Django's `makemigrations --check` passes for such an app, because it makes no
 first migration for an app that has no migrations package.
 """
 
-from deskmate import settings as _deskmate
 from deskmate.settings import *
 
+ROOT_URLCONF = "deskmate.tests.migration_fixtures"
 INSTALLED_APPS = [
-    *_deskmate.INSTALLED_APPS,
+    "deskmate",
     "deskmate.tests.migration_fixtures.unmigrated",
 ]

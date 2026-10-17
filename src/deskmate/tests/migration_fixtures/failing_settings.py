@@ -6,10 +6,10 @@ creates, `migfix_fail_source`, so it fails, quoting the duplicated code, when th
 table holds one code twice.
 """
 
-from deskmate import settings as _deskmate
 from deskmate.settings import *
 
+ROOT_URLCONF = "deskmate.tests.migration_fixtures"
 INSTALLED_APPS = [
-    *_deskmate.INSTALLED_APPS,
+    "deskmate",
     "deskmate.tests.migration_fixtures.failing",
 ]

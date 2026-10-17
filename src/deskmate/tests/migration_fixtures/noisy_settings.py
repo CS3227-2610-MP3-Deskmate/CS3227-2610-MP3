@@ -8,10 +8,10 @@ CRITICAL, or a database warning; or it raises KeyboardInterrupt, or another
 BaseException that is not SystemExit, carrying the value.
 """
 
-from deskmate import settings as _deskmate
 from deskmate.settings import *
 
+ROOT_URLCONF = "deskmate.tests.migration_fixtures"
 INSTALLED_APPS = [
-    *_deskmate.INSTALLED_APPS,
+    "deskmate",
     "deskmate.tests.migration_fixtures.noisy",
 ]
