@@ -2,7 +2,7 @@ Goal: the Vercel production build migrates through one tested entry point, per [
 
 Estimate: about 70 lines under `src/` outside tests and migrations (budget 400). No new dependency, service or credential; `manage.py`, `settings.py` and `ci.yml` stay unchanged.
 
-- [ ] **implementer**: Add `src/deskmate/migrate.py`, run as `python src/deskmate/migrate.py` with no arguments.
+- [x] **implementer**: Add `src/deskmate/migrate.py`, run as `python src/deskmate/migrate.py` with no arguments.
   - Replace `sys.path[0]`, the script's own folder, with the absolute `src` folder derived from `__file__`, as `wsgi.py` does, then default `DJANGO_SETTINGS_MODULE` to `deskmate.settings`.
   - Write every line to standard output and flush it, so `migration: passed` or `migration: failed` is always last. Ignore Python warnings and disable logging while it runs, so nothing else reaches either stream (PLT-2.12).
   - Call `django.setup()`. If settings raise `SystemExit`, print only the lines of its message that have the PLT-1.7 form; the text comes from `settings.py`, not a copy.
