@@ -80,6 +80,11 @@ def check_and_count(request, kind):
     wait = f"{MAX_WAIT // timedelta(milliseconds=1)}ms"
     with transaction.atomic(durable=True):
         with connection.cursor() as cursor:
+            # The lock serialises checks only under READ COMMITTED, where each
+            # later statement sees what the lock's last holder committed, so
+            # it is pinned whatever the database's default. It must come
+            # before any other statement in the transaction.
+            cursor.execute("SET TRANSACTION ISOLATION LEVEL READ COMMITTED")
             # Waiting for the lock, or any one statement, fails after
             # `MAX_WAIT` (ACC-3.7).
             cursor.execute(
@@ -87,8 +92,6 @@ def check_and_count(request, kind):
                 " set_config('statement_timeout', %s, true)",
                 [wait, wait],
             )
-            # Serialises only under READ COMMITTED, Django's default, where each
-            # later statement sees what the lock's last holder committed.
             cursor.execute(
                 "SELECT pg_advisory_xact_lock(%s, %s)",
                 [_LOCK_KEY, Kind.values.index(kind)],
