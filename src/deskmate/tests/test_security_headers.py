@@ -7,6 +7,7 @@ paths, not only the pages served with 200.
 
 import pytest
 
+from deskmate.tests.helpers import cache_directives
 from deskmate.tests.pages import CSRF_FIELD
 from deskmate.tests.signing_in import (
     PASSWORD,
@@ -88,11 +89,6 @@ def role_page_response(make_account, role, case):
     if case == "method-not-allowed":
         return send(browser, "POST", path, csrf_token(browser, role))
     return send(browser, "POST", path)
-
-
-def cache_directives(response):
-    header = response.get("Cache-Control", "")
-    return {part.split("=")[0].strip().lower() for part in header.split(",")}
 
 
 @pytest.mark.ac("ACC-1.8")

@@ -48,8 +48,26 @@ METHODS = (
     "PATCH",
     "PROPFIND",
 )
-# The methods that need no CSRF token (ACC-1.8).
+# The methods that need no CSRF token (ACC-1.8), and those that need one.
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+UNSAFE_METHODS = [method for method in METHODS if method not in SAFE_METHODS]
+# Ways a submission can lack a valid token: no token, an empty one, another
+# browser's, or a token from a page with no CSRF cookie sent alongside it.
+TOKEN_FAULTS = ["missing", "empty", "other-browser", "no-csrf-cookie"]
+# Origins that are not exactly https:// or http:// and an allowed host
+# (ACC-1.8).
+EVIL_ORIGIN = "https://evil.example"
+REJECTED_ORIGINS = [
+    pytest.param(EVIL_ORIGIN, id="other-site"),
+    pytest.param("null", id="null"),
+    pytest.param("https://testserver.evil.example", id="allowed-host-as-prefix"),
+    pytest.param("https://testserver:8443", id="port-not-in-host-header"),
+    pytest.param("ftp://testserver", id="other-scheme"),
+    pytest.param("https://TESTSERVER", id="other-case"),
+    pytest.param("https://testserver.", id="trailing-dot"),
+    pytest.param("https://testserver/", id="trailing-slash"),
+    pytest.param(f"{ORIGIN}, {EVIL_ORIGIN}", id="list-with-other-site"),
+]
 # A session key in Django's format that no session has.
 UNKNOWN_SESSION_KEY = "0123456789abcdefghijklmnopqrstuv"
 
@@ -147,6 +165,19 @@ def csrf_token(browser, role=None):
     response = browser.get(ROLE_PAGES[role])
     assert response.status_code == 200, f"GET {ROLE_PAGES[role]} failed."
     return Page(response).csrf_token()
+
+
+def token_fault_changes(fault):
+    """Return the form `changes` that give a submission `fault`'s CSRF token.
+
+    `fault` is one of TOKEN_FAULTS other than "no-csrf-cookie", which needs a
+    page from another browser instead of a change.
+    """
+    if fault == "missing":
+        return {CSRF_FIELD: None}
+    if fault == "empty":
+        return {CSRF_FIELD: ""}
+    return {CSRF_FIELD: csrf_token(new_browser())}
 
 
 def send(browser, method, path, token=None, *, data=None, headers=None, secure=False):
@@ -266,8 +297,12 @@ def assert_method_not_allowed(response):
     assert response.content == b""
 
 
-def assert_server_error(response):
-    """Assert `response` is a 500 that shows no internal details (PLT-1.4)."""
+def assert_server_error(response, hidden=None):
+    """Assert `response` is a 500 that shows no internal details (PLT-1.4).
+
+    `hidden` maps a description to another value the response must not show,
+    such as a generated password (ACC-2.4).
+    """
     assert response.status_code == 500, f"Expected 500, got {response.status_code}."
     body = response.content.decode("utf-8", "replace")
     details = {
@@ -275,5 +310,6 @@ def assert_server_error(response):
         "the database's name": settings.DATABASES["default"]["NAME"],
         "the database error's type": "OperationalError",
         "the database error's message": "connection to server",
+        **(hidden or {}),
     }
     assert internal_details(body, details) == []
