@@ -1,5 +1,7 @@
-"""Signing in and out, each role's placeholder page (ACC-1), and creating demo
-workspaces (ACC-2)."""
+"""Signing in and out, each role's placeholder page (ACC-1), creating demo
+workspaces (ACC-2), and the rate limits on both (ACC-3)."""
+
+from functools import wraps
 
 from django.contrib.auth import login, logout
 from django.contrib.auth.decorators import login_required
@@ -7,17 +9,51 @@ from django.shortcuts import redirect, render
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from deskmate.accounts import demo, sessions
+from deskmate.accounts import demo, limits, sessions
 from deskmate.accounts.forms import SignInForm
-from deskmate.accounts.models import Role
-from deskmate.views import forbidden
+from deskmate.accounts.models import Kind, Role
+from deskmate.views import forbidden, message_page
 
 # The URL name of each role's page in deskmate.urls.
 ROLE_PAGES = {Role.REQUESTER: "requester", Role.SUPPORT_OFFICER: "support"}
+# What the page refusing an attempt of each kind says (ACC-3.2).
+REFUSALS = {
+    Kind.SIGN_IN: "Too many sign-in attempts. Wait a few minutes, then try again.",
+    Kind.CREATION: (
+        "Too many demo workspaces have been created. "
+        "Wait a few minutes, then try again."
+    ),
+}
+
+
+def rate_limited(kind):
+    """Check and count a signed-out visitor's POST as an attempt of `kind`, and
+    refuse it with 429 if a limit does (ACC-3.1, 3.2).
+
+    Any other request goes straight to the view, uncounted (ACC-3.4).
+    """
+
+    def decorator(view):
+        @wraps(view)
+        def limited(request, *args, **kwargs):
+            if request.method == "POST" and not request.user.is_authenticated:
+                retry_after = limits.check_and_count(request, kind)
+                if retry_after is not None:
+                    response = message_page(
+                        request, "Too many attempts", REFUSALS[kind], 429
+                    )
+                    response["Retry-After"] = str(retry_after)
+                    return response
+            return view(request, *args, **kwargs)
+
+        return limited
+
+    return decorator
 
 
 @sensitive_post_parameters()
 @require_http_methods(["GET", "POST"])
+@rate_limited(Kind.SIGN_IN)
 def sign_in(request):
     """Show the sign-in page, and sign in a visitor who submits an account's details.
 
@@ -45,6 +81,7 @@ def sign_out(request):
 
 
 @require_POST
+@rate_limited(Kind.CREATION)
 def demo_workspace(request):
     """Create a demo workspace and show its accounts' passwords, this once (ACC-2).
 

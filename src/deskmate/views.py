@@ -1,5 +1,5 @@
-"""Deskmate's views: the placeholder home page, the health check and the
-Forbidden page that any route can return."""
+"""Deskmate's views: the placeholder home page, the health check, and the
+message pages, such as Forbidden, that any route can return."""
 
 from django import db
 from django.http import JsonResponse
@@ -24,10 +24,15 @@ def health(request):
     return JsonResponse({"status": "ok"})
 
 
+def message_page(request, title, message, status):
+    """Return a `status` page titled `title` whose only other text is `message`."""
+    context = {"title": title, "message": message}
+    return render(request, "deskmate/message.html", context, status=status)
+
+
 def forbidden(request, message):
     """Return a 403 page titled Forbidden whose only other text is `message`."""
-    context = {"title": "Forbidden", "message": message}
-    return render(request, "deskmate/forbidden.html", context, status=403)
+    return message_page(request, "Forbidden", message, 403)
 
 
 def csrf_failure(request, reason=""):
