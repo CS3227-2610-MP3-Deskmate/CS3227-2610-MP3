@@ -22,8 +22,10 @@ class User(AbstractUser):
     normalisation, and the salted password hash.
     """
 
-    role = models.CharField(max_length=15, choices=Role)
-    workspace = models.ForeignKey(Workspace, on_delete=models.PROTECT)
+    role = models.CharField(max_length=32, choices=Role)
+    workspace = models.ForeignKey(
+        Workspace, on_delete=models.PROTECT, related_name="users"
+    )
 
     class Meta:
         constraints = [

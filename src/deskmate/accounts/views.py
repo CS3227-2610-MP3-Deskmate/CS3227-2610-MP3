@@ -6,27 +6,13 @@ from django.shortcuts import redirect, render
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from deskmate.accounts import sessions
 from deskmate.accounts.forms import SignInForm
 from deskmate.accounts.models import Role
+from deskmate.views import forbidden
 
-# The URL name of each role's page, which is also its path.
+# The URL name of each role's page in deskmate.urls.
 ROLE_PAGES = {Role.REQUESTER: "requester", Role.SUPPORT_OFFICER: "support"}
-
-
-def _forbidden(request, message):
-    """Return a 403 page titled Forbidden whose only other text is `message`."""
-    context = {"title": "Forbidden", "message": message}
-    return render(request, "accounts/forbidden.html", context, status=403)
-
-
-def csrf_failure(request, reason=""):
-    """Refuse a request that failed Django's CSRF checks (ACC-1.8).
-
-    `reason` is never shown, so the page gives no internal details.
-    """
-    return _forbidden(
-        request, "This form has expired. Go back, reload the page and try again."
-    )
 
 
 @sensitive_post_parameters()
@@ -36,7 +22,8 @@ def sign_in(request):
 
     A signed-in user, including one who has just signed in, goes to their own
     role's page, whatever was submitted; `next` is never read (ACC-1.1, 1.3,
-    1.5, 1.7).
+    1.5, 1.7). Signing in records its time, from which the session's 8 hours
+    run (ACC-1.6).
     """
     if not request.user.is_authenticated:
         data = request.POST if request.method == "POST" else None
@@ -45,6 +32,7 @@ def sign_in(request):
             context = {"title": "Sign in", "form": form}
             return render(request, "accounts/sign_in.html", context)
         login(request, form.get_user())
+        sessions.record_sign_in(request.session)
     return redirect(ROLE_PAGES[request.user.role])
 
 
@@ -64,6 +52,6 @@ def role_page(request, role):
     users with the other role get 403.
     """
     if request.user.role != role:
-        return _forbidden(request, "This page is not for your role.")
+        return forbidden(request, "This page is not for your role.")
     context = {"title": role.label, "username": request.user.username}
     return render(request, "accounts/role_page.html", context)

@@ -33,7 +33,7 @@ Press **Sign out** to sign out and go back to the sign-in page.
 
 While signed in, `/sign-in/` takes you to your role's page. While signed out, a role's page takes you to the sign-in page.
 
-You are signed out 8 hours after signing in, however active you are, or when you close your browser.
+You are signed out 8 hours after signing in, however active you are. Closing your browser may also sign you out, but not if it reopens your previous tabs, so press **Sign out** on a shared computer.
 
 ## Forbidden pages
 

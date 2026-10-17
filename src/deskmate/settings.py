@@ -102,6 +102,9 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    # After AuthenticationMiddleware, because it wraps the user that one gives
+    # each request, so the 8-hour check runs before the user is read (ACC-1.6).
+    "deskmate.accounts.sessions.sign_in_limit",
 ]
 ROOT_URLCONF = "deskmate.urls"
 WSGI_APPLICATION = "deskmate.wsgi.application"
@@ -132,17 +135,25 @@ if os.environ["POSTGRES_HOST"] not in _LOOPBACK_HOSTS:
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 AUTH_USER_MODEL = "accounts.User"
 
-# A session ends when the browser closes or 8 hours after signing in (ACC-1.6).
-# Django sets a database session's expiry only when it saves the session, and
-# nothing saves it after sign-in, so activity does not extend it.
+# A session ends 8 hours after signing in, however active its user is, and its
+# cookie has no expiry, so the browser may drop it when it closes (ACC-1.6).
+# deskmate.accounts.sessions ends it SESSION_COOKIE_AGE after the sign-in time
+# it records. Django's database expiry, set to the same age whenever it saves
+# the session, stays as a second check.
 SESSION_COOKIE_AGE = 8 * 60 * 60
 SESSION_EXPIRE_AT_BROWSER_CLOSE = True
 # With debug off, the session and CSRF cookies are sent only over HTTPS.
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
-# The origin of each allowed host over HTTPS (ACC-1.8).
-CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS]
-CSRF_FAILURE_VIEW = "deskmate.accounts.views.csrf_failure"
+# The origin over HTTPS of each allowed host that names one host (ACC-1.8).
+# Names with "*" or a leading dot are left out: Django reads "*" in a trusted
+# origin as any subdomain.
+CSRF_TRUSTED_ORIGINS = [
+    f"https://{host}"
+    for host in ALLOWED_HOSTS
+    if "*" not in host and not host.startswith(".")
+]
+CSRF_FAILURE_VIEW = "deskmate.views.csrf_failure"
 
 # Unexpected errors in requests, with their tracebacks, go to standard error
 # whether or not debug is on (PLT-1.4). They do not propagate, so Django's own
