@@ -2,11 +2,11 @@
 
 The database either does not answer, fails at one of the statements that
 check and count an attempt, or keeps an attempt waiting while another attempt
-of its kind is being checked. Each attempt sends an account's username and
-password, so it would sign in, or check or hash a password, if it got past
-the limits. The statements that check and count an attempt are found as those
-an allowed attempt runs before it first reads or writes an account or a
-workspace (`check_statements`).
+of its kind is being checked, though not while one of the other kind is.
+Each attempt sends an account's username and password, so it would sign in,
+or check or hash a password, if it got past the limits. The statements that
+check and count an attempt are found as those an allowed attempt runs before
+it first reads or writes an account or a workspace (`check_statements`).
 """
 
 import threading
@@ -27,6 +27,7 @@ from deskmate.tests.rate_limits import (
     CREATION,
     KINDS,
     MAX_WAIT_SECONDS,
+    OTHER_KIND,
     SIGN_IN_ATTEMPT,
     FailingStatement,
     HeldCheck,
@@ -49,9 +50,13 @@ pytestmark = pytest.mark.usefixtures("fast_hashing")
 
 ACCOUNT = "alice"
 # How long another attempt keeps its check going at most: far more than an
-# attempt may wait, so the waiting attempt answers first, and less.
+# attempt may wait, so the waiting attempt answers first; and less, by enough
+# that on a slow machine the waiting attempt is still checked within 5 seconds.
 LONGER = 3 * MAX_WAIT_SECONDS
-SHORTER = MAX_WAIT_SECONDS - 1
+SHORTER = MAX_WAIT_SECONDS - 2
+# How much sooner than SHORTER an attempt that waited for the other may answer,
+# since it is timed from just after the other one stopped.
+SLACK = 1
 
 
 def this_threads(hashed):
@@ -139,6 +144,36 @@ def test_limit_attempt_waiting_over_5_seconds_to_be_checked_returns_500(
         assert signed_in_account_ids() == set()
 
 
+@pytest.mark.ac("ACC-3.1", "ACC-3.7", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_attempt_while_other_kind_is_checked_is_answered_without_waiting(
+    transactional_db, make_account, kind
+):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    other = OTHER_KIND[kind]
+    statements = check_statements(other, Visitor(numbered_source(200)))
+    held = HeldCheck(other, statements[-1], LONGER, numbered_source(201))
+    visitor = Visitor(numbered_source(202))
+    visitor.browser.raise_request_exception = False
+    with held.holding():
+        started = time.monotonic()
+        response = visitor.attempt(kind, ACCOUNT, PASSWORD)
+        waited = time.monotonic() - started
+    # Only attempts of one kind are checked one after another (ACC-3.8), so
+    # this one does not wait for the other kind's check, which is still going,
+    # until it fails as ACC-3.7 says.
+    assert response.status_code != 500 and waited < MAX_WAIT_SECONDS, (
+        f"While an attempt of the other kind was being checked, this one got "
+        f"{response.status_code} after {waited:.1f}s."
+    )
+    if kind == SIGN_IN_ATTEMPT:
+        assert_redirects(response, ROLE_PAGES[REQUESTER])
+        assert_signed_in_as(visitor.browser, REQUESTER, ACCOUNT)
+    else:
+        assert_allowed(response, kind)
+    assert_allowed(held.response, other)
+
+
 @pytest.mark.ac("ACC-3.7", "ACC-3.6")
 def test_limit_attempt_waiting_under_5_seconds_is_checked_after_the_other(
     transactional_db, make_account
@@ -152,7 +187,7 @@ def test_limit_attempt_waiting_under_5_seconds_is_checked_after_the_other(
         started = time.monotonic()
         response = visitor.attempt(kind, ACCOUNT, PASSWORD)
         waited = time.monotonic() - started
-    assert waited > SHORTER - 0.5, (
+    assert waited > SHORTER - SLACK, (
         f"The attempt was checked after {waited:.1f}s, while the other attempt "
         "of its kind was still being checked."
     )

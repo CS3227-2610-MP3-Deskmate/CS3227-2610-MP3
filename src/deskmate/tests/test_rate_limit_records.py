@@ -251,6 +251,30 @@ def test_limit_counting_leaves_other_kind_records_counted_10_minutes_before(
     assert not gone, f"{len(gone)} records of the other kind were changed or deleted."
 
 
+@pytest.mark.ac("ACC-3.2", "ACC-3.3", "ACC-3.6", "ACC-3.8")
+@pytest.mark.parametrize("kind", KINDS)
+def test_limit_refused_attempt_deletes_no_records_that_still_count(db, clock, kind):
+    before = stored_rows()
+    first = make_attempts(kind, 1, forwarded_for(ADDRESS))
+    tables = {table for table, _ in added_rows(before)}
+    assert tables, "Counting an attempt stored no record."
+    clock.set_elapsed(timedelta(seconds=300))
+    other = make_attempts(kind, PER_GROUP[kind], forwarded_for("198.51.100.30"))
+    old = records(tables)
+    clock.set_elapsed(timedelta(minutes=10))
+    # 10 minutes after ADDRESS's attempt, but refused, so it is not counted.
+    assert_refused(other.attempt(kind), kind, retry_after=300)
+    gone = old - records(tables)
+    assert not gone, f"The refused attempt changed or deleted {len(gone)} records."
+    clock.set_elapsed(timedelta(seconds=300))
+    # The latest attempt counted is at 300 s, so the next ones' moment is
+    # 300 s, and ADDRESS's attempt at 0 s still counts: after this many more
+    # from ADDRESS, its group's limit or everyone's refuses, until 600 s.
+    room = min(PER_GROUP[kind] - 1, EVERYONE[kind] - 1 - PER_GROUP[kind])
+    make_attempts(kind, room, forwarded_for(ADDRESS))
+    assert_refused(first.attempt(kind), kind, retry_after=300)
+
+
 @pytest.mark.ac("ACC-3.6")
 @pytest.mark.parametrize("kind", KINDS)
 def test_limit_records_kept_under_10_minutes_still_count(db, clock, kind):

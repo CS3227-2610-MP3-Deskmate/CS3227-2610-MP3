@@ -40,6 +40,51 @@ pytestmark = pytest.mark.usefixtures("db", "fast_hashing", "clock")
 # An address that is not valid, whose group every such address shares.
 NOT_AN_ADDRESS = forwarded_for("unknown")
 
+# Characters around the last entry that are not spaces or tabs, so they are
+# not ignored (ACC-3.5), though Python's str.strip() would strip them.
+ASCII_NOT_STRIPPED = [
+    ("carriage-return", "\r"),
+    ("line-feed", "\n"),
+    ("vertical-tab", "\v"),
+    ("form-feed", "\f"),
+]
+# Last entries that would be valid addresses if non-ASCII characters were
+# normalised, as NFKC does, or ignored. Stored escaped (AGENTS.md).
+NOT_ASCII = [
+    ("fullwidth-digits", "\uff12\uff10\uff13.\uff10.\uff11\uff11\uff13.\uff17"),
+    ("fullwidth-full-stops", "203\uff0e0\uff0e113\uff0e7"),
+    ("arabic-indic-digits", "\u0662\u0660\u0663.\u0660.\u0661\u0661\u0663.\u0667"),
+    ("ipv6-arabic-indic-digit", "2001:db8:0:1::\u0661"),
+    *(
+        (f"{name}-{where}", text)
+        for name, character in [
+            ("zero-width-space", "\u200b"),
+            ("byte-order-mark", "\ufeff"),
+        ]
+        for where, text in [
+            ("before", f"{character}203.0.113.7"),
+            ("after", f"203.0.113.7{character}"),
+        ]
+    ),
+]
+
+
+def around(character):
+    """Return, by where it is, ADDRESS with `character` before it, after it,
+    and both, as the last entry of an X-Forwarded-For header."""
+    return [
+        ("before", f"{character}{ADDRESS}"),
+        ("after", f"{ADDRESS}{character}"),
+        ("around", f"198.51.100.1,{character}{ADDRESS}{character}"),
+    ]
+
+
+def as_wsgi_gives(text):
+    """Return `text`, sent in UTF-8, as a WSGI server gives it: each byte
+    as the character of that code, as PEP 3333 says."""
+    return text.encode("utf-8").decode("latin-1")
+
+
 # (first, second): Sources in one address group.
 SAME_GROUP = [
     pytest.param(
@@ -129,7 +174,7 @@ SAME_GROUP = [
             ("ipv4-octet-over-255", "203.0.113.256"),
             ("ipv4-three-numbers", "203.0.113"),
             ("ipv4-trailing-dot", "203.0.113.7."),
-            ("no-break-space-before", " 203.0.113.7"),
+            ("no-break-space-before", "\u00a0203.0.113.7"),
             ("ipv6-brackets", "[2001:db8::1]"),
             ("ipv6-brackets-port", "[2001:db8::1]:443"),
             ("ipv6-zone-id", "fe80::1%eth0"),
@@ -137,6 +182,20 @@ SAME_GROUP = [
             ("ipv6-two-double-colons", "2001:db8::1::1"),
             ("ipv4-mapped-leading-zero", "::ffff:203.0.113.07"),
             ("network", "203.0.113.0/24"),
+            ("sign-before-ipv4", "+203.0.113.7"),
+            *(
+                (f"{name}-{where}", text)
+                for name, character in ASCII_NOT_STRIPPED
+                for where, text in around(character)
+            ),
+        ]
+    ),
+    *(
+        pytest.param(NOT_AN_ADDRESS, forwarded_for(value), id=f"not-valid-{name}")
+        for payload, text in NOT_ASCII
+        for name, value in [
+            (f"{payload}-as-text", text),
+            (f"{payload}-as-wsgi-gives-utf-8", as_wsgi_gives(text)),
         ]
     ),
     pytest.param(
