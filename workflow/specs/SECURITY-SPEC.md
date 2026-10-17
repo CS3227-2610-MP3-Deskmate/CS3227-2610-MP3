@@ -34,8 +34,9 @@ Threat: a visitor opens a role's pages without signing in or with the other role
 - Passwords are stored only as Django's salted hashes ([data model](TECHNICAL-SPEC.md#data-model)) and are never shown or logged.
 - A failed sign-in shows one message whatever was wrong, and an existing username with a wrong password gets the same response, apart from its CSRF token, as an unknown username with the same submission (ACC-1.3). Gap: response time is not checked.
 - Sign-in always leads to the user's own role's page and ignores any `next` parameter, so it cannot redirect anywhere else (ACC-1.5).
-- Every `POST`, `PUT`, `PATCH` or `DELETE` needs a valid CSRF token before any other rule applies, and signing in and out accept only `POST` (ACC-1.2, ACC-1.8).
-- With debug off, such a request is also refused if its `Origin` is anything but exactly `https://` and a host in `DJANGO_ALLOWED_HOSTS`. The app trusts no forwarded-scheme request header to decide this; it trusts only that exact origin (ACC-1.8).
+- Every request by a method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` needs a valid CSRF token before any other rule applies, and signing in and out accept only `POST` (ACC-1.2, ACC-1.8).
+- With debug off, such a request is also refused if its `Origin` is anything but exactly `https://` or `http://` and a host in `DJANGO_ALLOWED_HOSTS`. No forwarded-scheme request header changes this (ACC-1.8).
+- Gap: with debug off, a request that needs a CSRF token and whose `Origin` is `http://` and a host in `DJANGO_ALLOWED_HOSTS` may be accepted, so someone who can serve plain HTTP on that host and plant a CSRF cookie might force a sign-in (ACC-1.8).
 - Sessions are stored on the server. Sign-in replaces the session ID and sign-out ends the session on the server. The session cookie is dropped when the browser closes, and the server ends the session 8 hours after sign-in, however active its user is (ACC-1.2, ACC-1.6).
 - With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.6).
 - No page may show the sign-in or role pages in a frame, and no browser or cache may store the role pages (ACC-1.8).

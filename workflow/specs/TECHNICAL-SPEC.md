@@ -23,7 +23,7 @@ Users, their passwords and their sessions use Django's built-in authentication. 
 
 ## Routes
 
-On every route below, whether or not the visitor is signed in, these rules apply in order: a `POST`, `PUT`, `PATCH` or `DELETE` without a valid CSRF token, or, with debug off, with an `Origin` that ACC-1.8 rejects, gets `403` (ACC-1.8); otherwise a method the route does not list gets `405` with an empty body (ACC-1.2, ACC-1.4); otherwise the route's access applies. Access `Requester` or `Support Officer` means signed-out visitors are redirected to `/sign-in/` (ACC-1.4) and the other role gets `403` (ACC-1.5).
+On every route below, whether or not the visitor is signed in, these rules apply in order: a request by any method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` without a valid CSRF token, or, with debug off, with an `Origin` that ACC-1.8 rejects, gets `403` (ACC-1.8); otherwise a method the route does not list gets `405` with an empty body (ACC-1.2, ACC-1.4); otherwise the route's access applies. Access `Requester` or `Support Officer` means signed-out visitors are redirected to `/sign-in/` (ACC-1.4) and the other role gets `403` (ACC-1.5).
 
 | Route | Methods | Access | Purpose | Criteria |
 | --- | --- | --- | --- | --- |
