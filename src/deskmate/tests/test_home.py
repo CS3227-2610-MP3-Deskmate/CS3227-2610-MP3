@@ -4,6 +4,7 @@ import pytest
 from django.utils.html import strip_tags
 from pytest_django.asserts import assertInHTML
 
+from deskmate.tests.accounts import REQUESTER, sign_in_as
 from deskmate.tests.helpers import media_type
 
 
@@ -28,3 +29,14 @@ def test_home_database_answers_returns_placeholder_page(client):
 @pytest.mark.usefixtures("database_refuses_connections")
 def test_home_database_refuses_connections_returns_placeholder_page(client):
     assert_placeholder_page(client.get("/"))
+
+
+@pytest.mark.ac("PLT-1.1")
+def test_home_session_cookie_database_down_returns_placeholder_page(
+    make_account, database_outage
+):
+    # A browser that signed in sends its session cookie with every request.
+    browser, _ = sign_in_as(make_account, REQUESTER)
+    with database_outage():
+        response = browser.get("/")
+    assert_placeholder_page(response)
