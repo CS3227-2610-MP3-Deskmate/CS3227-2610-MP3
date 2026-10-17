@@ -1,16 +1,30 @@
 # User Guide
 
-Deskmate is still being built. So far you can only sign in and out.
+Deskmate is still being built. So far you can only create a demo workspace, then sign in and out with its accounts.
 
 Its home page shows only the heading **Deskmate** and this line:
 
 > Deskmate is under construction.
 
+## Getting accounts
+
+Go to `/sign-in/`; the home page does not link to it. Below the sign-in form, the page shows:
+
+> No account? Create a demo workspace with 2 Requesters and 1 Support Officer.
+
+Press **Create demo workspace**. A new workspace is created, and a page headed **Demo workspace created** shows this line, a table and a **Sign in** link:
+
+> Copy these passwords now. They will not be shown again.
+
+The table's **Username**, **Role** and **Password** columns list the workspace's two Requesters, `requester1-`*code* and `requester2-`*code*, and its Support Officer, `support1-`*code*, where *code* is the same in all three.
+
+Creating a workspace signs no one in. Press **Sign in** to go to the sign-in page.
+
+Pressing **Create demo workspace** again, or reloading the page and resending the form, creates another workspace, with new usernames and passwords.
+
 ## Signing in
 
-Accounts cannot yet be created in Deskmate.
-
-Go to `/sign-in/`; the home page does not link to it. Enter your **Username** and **Password**, and press **Sign in**.
+On `/sign-in/`, enter your **Username** and **Password**, and press **Sign in**.
 
 If the username or password is wrong or empty, the page shows:
 

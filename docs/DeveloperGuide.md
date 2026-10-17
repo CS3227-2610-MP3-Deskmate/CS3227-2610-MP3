@@ -17,11 +17,7 @@ Deskmate's architecture, routes, configuration and environments are in [`TECHNIC
    python src/manage.py runserver
    ```
 
-6. To try signing in at `http://localhost:8000/sign-in/`, create a workspace with one account per role. Run this in a second shell with `.env` loaded as in step 5, replacing each `<password>`. `createsuperuser` does not work, because it cannot set a role or a workspace.
-
-   ```bash
-   python src/manage.py shell -c "from deskmate.accounts.models import User, Workspace; w = Workspace.objects.create(); User.objects.create_user('alice', password='<password>', role='requester', workspace=w); User.objects.create_user('sam', password='<password>', role='support_officer', workspace=w)"
-   ```
+6. To get accounts, open `http://localhost:8000/sign-in/` and press **Create demo workspace**. The page shows two Requesters' and one Support Officer's usernames and passwords once, as the [User Guide](UserGuide.md) describes. `createsuperuser` does not work, because it cannot set a role or a workspace.
 
 ## Development workflow
 

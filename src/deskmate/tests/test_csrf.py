@@ -12,16 +12,18 @@ import pytest
 
 from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
 from deskmate.tests.signing_in import (
+    EVIL_ORIGIN,
     FORM_EXPIRED,
-    METHODS,
     PASSWORD,
+    REJECTED_ORIGINS,
     REQUESTER,
     ROLE_PAGES,
     ROLES,
-    SAFE_METHODS,
     SIGN_IN,
     SIGN_OUT,
     SUPPORT_OFFICER,
+    TOKEN_FAULTS,
+    UNSAFE_METHODS,
     VISITORS,
     WRONG_PASSWORD,
     assert_forbidden,
@@ -36,15 +38,13 @@ from deskmate.tests.signing_in import (
     send,
     sign_in_as,
     submit_sign_in,
+    token_fault_changes,
 )
 
 ACCOUNT = "alice"
-EVIL_ORIGIN = "https://evil.example"
 ROUTES = ["/", "/health/", SIGN_IN, SIGN_OUT, *ROLE_PAGES.values()]
-# Methods that need a token: POST sends it in the form, the others in a
-# header.
-UNSAFE_METHODS = [method for method in METHODS if method not in SAFE_METHODS]
-# Every route with every method, cycling through visitors so each visitor
+# Every route with every method that needs a token, which POST sends in the
+# form and the others in a header, cycling through visitors so each visitor
 # meets each route and each method.
 NO_TOKEN_CASES = [
     pytest.param(
@@ -55,21 +55,6 @@ NO_TOKEN_CASES = [
     )
     for i, route in enumerate(ROUTES)
     for j, method in enumerate(UNSAFE_METHODS)
-]
-# Ways a submission can lack a valid token: no token, an empty one, another
-# browser's, or a token from a page with no CSRF cookie sent alongside it.
-TOKEN_FAULTS = ["missing", "empty", "other-browser", "no-csrf-cookie"]
-# Origins that are not exactly https:// or http:// and an allowed host.
-REJECTED_ORIGINS = [
-    pytest.param(EVIL_ORIGIN, id="other-site"),
-    pytest.param("null", id="null"),
-    pytest.param("https://testserver.evil.example", id="allowed-host-as-prefix"),
-    pytest.param("https://testserver:8443", id="port-not-in-host-header"),
-    pytest.param("ftp://testserver", id="other-scheme"),
-    pytest.param("https://TESTSERVER", id="other-case"),
-    pytest.param("https://testserver.", id="trailing-dot"),
-    pytest.param("https://testserver/", id="trailing-slash"),
-    pytest.param(f"{ORIGIN}, {EVIL_ORIGIN}", id="list-with-other-site"),
 ]
 # How the request reached Deskmate: over HTTP or HTTPS, and with which
 # forwarded-scheme header, if any.
@@ -85,14 +70,6 @@ def forwarded_headers(origin, forwarded):
     if forwarded is not None:
         headers["X-Forwarded-Proto"] = forwarded
     return headers
-
-
-def token_fault_changes(fault):
-    if fault == "missing":
-        return {CSRF_FIELD: None}
-    if fault == "empty":
-        return {CSRF_FIELD: ""}
-    return {CSRF_FIELD: csrf_token(new_browser())}
 
 
 @pytest.mark.ac("ACC-1.8")

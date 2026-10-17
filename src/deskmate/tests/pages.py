@@ -1,11 +1,11 @@
 """Reads Deskmate's HTML pages as a browser would, and submits their forms.
 
-Tests use it to check what a page shows, such as its title, headings, text and
-the fields of its forms that a `for` attribute labels, and to send a form as a
-browser sends it. It reads only what Deskmate's pages use, so it does not
-handle checkboxes, radio buttons, image buttons or labels that wrap their
-field. It uses only the standard library's HTML parser, so it needs no
-dependency.
+Tests use it to check what a page shows, such as its title, headings, text,
+tables, links and the fields of its forms that a `for` attribute labels, and to
+send a form as a browser sends it. It reads only what Deskmate's pages use, so
+it does not handle checkboxes, radio buttons, image buttons, labels that wrap
+their field or tables inside tables. It uses only the standard library's HTML
+parser, so it needs no dependency.
 """
 
 from html.parser import HTMLParser
@@ -54,6 +54,10 @@ _INLINE = frozenset(
 )
 # Input types whose value a browser does not send as part of a form's data.
 _NOT_SENT = frozenset({"submit", "button", "reset", "image", "file"})
+# Input types that a browser shows as a button.
+_BUTTON_TYPES = frozenset({"submit", "button", "reset", "image"})
+# The cells of a table row.
+_CELLS = frozenset({"th", "td"})
 
 
 def normalise(text):
@@ -89,6 +93,10 @@ class Control:
         """Return whether pressing this control submits its form."""
         return self.type == "submit"
 
+    def looks_like_button(self):
+        """Return whether a browser shows this control as a button of any kind."""
+        return self.tag == "button" or self.type in _BUTTON_TYPES
+
     def is_field(self):
         """Return whether this control is a field a user types into."""
         return self.tag == "input" and self.type not in _NOT_SENT | {"hidden"}
@@ -99,7 +107,11 @@ class Control:
 
 
 class Form:
-    """A form on a page: where and how it is sent, its controls and labels."""
+    """A form on a page: where and how it is sent, its controls and labels.
+
+    `text_after` is the page's text after the form ends, with whitespace
+    normalised.
+    """
 
     def __init__(self, page_url, attributes):
         self.page_url = page_url
@@ -107,6 +119,9 @@ class Form:
         self.action = attributes.get("action") or ""
         self.controls = []
         self.labels = []
+        self.text_after = ""
+        # Where the form's text ends among the parser's text parts.
+        self.text_end = None
 
     @property
     def url(self):
@@ -196,7 +211,12 @@ class Form:
 
 
 class Page:
-    """An HTML page from a test client's response, read as a browser reads it."""
+    """An HTML page from a test client's response, read as a browser reads it.
+
+    `tables` holds each table as a list of rows, and each row as a list of
+    `(tag, text)` cells, where the tag is `th` or `td`. `links` holds each link
+    as `(text, url)`, with the URL made absolute as a browser makes it.
+    """
 
     def __init__(self, response):
         assert media_type(response) == "text/html", (
@@ -213,6 +233,14 @@ class Page:
         self.text = normalise("".join(parser.text))
         self.forms = parser.forms
         self.controls = parser.controls
+        self.tables = [
+            [[(tag, normalise("".join(parts))) for tag, parts in row] for row in rows]
+            for rows in parser.tables
+        ]
+        self.links = [
+            (normalise("".join(parts)), urljoin(self.url, href))
+            for href, parts in parser.links
+        ]
 
     @property
     def h1s(self):
@@ -259,7 +287,8 @@ class _Label:
 
 
 class _Parser(HTMLParser):
-    """Collects a page's text, title, headings, forms, controls and labels."""
+    """Collects a page's text, title, headings, forms, controls, labels, tables
+    and links."""
 
     def __init__(self, url):
         super().__init__(convert_charrefs=True)
@@ -270,6 +299,8 @@ class _Parser(HTMLParser):
         self.forms = []
         self.controls = []
         self.labels = []
+        self.tables = []
+        self.links = []
         self._open = []
         self._form = None
 
@@ -283,6 +314,21 @@ class _Parser(HTMLParser):
         if tag == "form":
             self._form = Form(self.url, attributes)
             self.forms.append(self._form)
+        elif tag == "table":
+            self.tables.append([])
+        elif tag == "tr" and self.tables:
+            # A new row ends the cell before it, even if its end tag is left out.
+            self._close(_CELLS)
+            self.tables[-1].append([])
+        elif tag in _CELLS and self.tables and self.tables[-1]:
+            self._close(_CELLS)
+            cell = (tag, [])
+            self.tables[-1][-1].append(cell)
+            self._open.append((tag, cell[1]))
+        elif tag == "a" and "href" in attributes:
+            link = (attributes["href"], [])
+            self.links.append(link)
+            self._open.append((tag, link[1]))
         elif tag in ("input", "button"):
             self._add_control(tag, attributes)
         elif tag == "label":
@@ -308,12 +354,19 @@ class _Parser(HTMLParser):
         """Record an element as it closes."""
         if tag not in _INLINE:
             self.handle_data(" ")
-        if tag == "form":
+        if tag == "form" and self._form is not None:
+            self._form.text_end = len(self.text)
             self._form = None
+        if tag in ("tr", "table"):
+            self._close(_CELLS)
         for index in range(len(self._open) - 1, -1, -1):
             if self._open[index][0] == tag:
                 del self._open[index]
                 break
+
+    def _close(self, tags):
+        """Stop collecting text for every open element whose tag is in `tags`."""
+        self._open = [(tag, parts) for tag, parts in self._open if tag not in tags]
 
     def handle_data(self, data):
         """Add text to the page and to every open element whose text is kept."""
@@ -322,8 +375,12 @@ class _Parser(HTMLParser):
             parts.append(data)
 
     def close(self):
-        """Finish the page, then give each label the control its `for` names."""
+        """Finish the page, then give each label the control its `for` names
+        and each form the text after it."""
         super().close()
+        for form in self.forms:
+            end = len(self.text) if form.text_end is None else form.text_end
+            form.text_after = normalise("".join(self.text[end:]))
         by_id = {}
         for control in self.controls:
             if control.id:

@@ -11,6 +11,7 @@ urlpatterns = [
     path("health/", views.health, name="health"),
     path("sign-in/", accounts.sign_in, name="sign-in"),
     path("sign-out/", accounts.sign_out, name="sign-out"),
+    path("demo-workspace/", accounts.demo_workspace, name="demo-workspace"),
     path("requester/", accounts.role_page, {"role": Role.REQUESTER}, name="requester"),
     path(
         "support/", accounts.role_page, {"role": Role.SUPPORT_OFFICER}, name="support"

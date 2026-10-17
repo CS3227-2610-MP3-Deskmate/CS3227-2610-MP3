@@ -17,20 +17,21 @@ Users, their passwords and their sessions use Django's built-in authentication. 
 
 | Record | Holds | Rules | Criteria |
 | --- | --- | --- | --- |
-| Workspace | Only its identity | Every user belongs to exactly one workspace, and so does every record users can see | — |
-| User | Username, password hash, workspace and role | Usernames are unique across all workspaces, because signing in asks for no workspace; each is 1 to 150 characters of Unicode letters and digits and `@`, `.`, `+`, `-`, `_`, matched as ACC-1.7 says. Passwords are stored only as Django's salted hashes. Workspace and role are both required, and the role is either Requester or Support Officer | ACC-1.1, ACC-1.3, ACC-1.5, ACC-1.7 |
+| Workspace | Only its identity | Every user belongs to exactly one workspace, and so does every record users can see. Through its routes, the app creates a workspace only together with its two Requesters and one Support Officer, all or nothing | ACC-2.1–ACC-2.4 |
+| User | Username, password hash, workspace and role | Usernames are unique across all workspaces, because signing in asks for no workspace; each is 1 to 150 characters of Unicode letters and digits and `@`, `.`, `+`, `-`, `_`, matched as ACC-1.7 says, and generated ones follow ACC-2.3. Passwords are stored only as Django's salted hashes. Workspace and role are both required, and the role is either Requester or Support Officer | ACC-1.1, ACC-1.3, ACC-1.5, ACC-1.7, ACC-2.3, ACC-2.6 |
 | Session | The signed-in user and when the session ends | Stored in the database, so signing out ends it on the server; its lifetime is set by ACC-1.6 | ACC-1.2, ACC-1.6, ACC-1.8 |
 
 ## Routes
 
-On every route below, whether or not the visitor is signed in, these rules apply in order: a request by any method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` without a valid CSRF token, or, with debug off, with an `Origin` that ACC-1.8 rejects, gets `403` (ACC-1.8); otherwise a method the route does not list gets `405` with an empty body (ACC-1.2, ACC-1.4); otherwise the route's access applies. Access `Requester` or `Support Officer` means signed-out visitors are redirected to `/sign-in/` (ACC-1.4) and the other role gets `403` (ACC-1.5).
+On every route below, whether or not the visitor is signed in, these rules apply in order: a request by any method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` without a valid CSRF token, or, with debug off, with an `Origin` that ACC-1.8 rejects, gets `403` (ACC-1.8); otherwise a method the route does not list gets `405` with an empty body (ACC-1.2, ACC-1.4, ACC-2.5); otherwise the route's access applies. Access `Requester` or `Support Officer` means signed-out visitors are redirected to `/sign-in/` (ACC-1.4) and the other role gets `403` (ACC-1.5).
 
 | Route | Methods | Access | Purpose | Criteria |
 | --- | --- | --- | --- | --- |
 | `/` | GET | Public | Placeholder home page | PLT-1.1 |
 | `/health/` | GET | Public | Reports whether the app can reach its database | PLT-1.2, PLT-1.3 |
-| `/sign-in/` | GET, POST | Public; signed-in users are redirected to their role's page | Sign-in page | ACC-1.1, ACC-1.3–ACC-1.8 |
+| `/sign-in/` | GET, POST | Public; signed-in users are redirected to their role's page | Sign-in page, with the **Create demo workspace** button | ACC-1.1, ACC-1.3–ACC-1.8, ACC-2.1 |
 | `/sign-out/` | POST | Public | Signs the visitor out | ACC-1.2, ACC-1.8 |
+| `/demo-workspace/` | POST | Public; signed-in users are redirected to their role's page | Creates a demo workspace and shows its accounts' passwords once | ACC-1.8, ACC-2.1–ACC-2.8 |
 | `/requester/` | GET | Requester | Requester's placeholder page | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8 |
 | `/support/` | GET | Support Officer | Support Officer's placeholder page | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8 |
 

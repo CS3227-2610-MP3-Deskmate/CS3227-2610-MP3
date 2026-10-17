@@ -22,16 +22,17 @@ Threat: a leaked secret key lets an attacker forge sessions and signed data, lea
 Threat: an error response reveals internals that help an attacker, or reflects attacker input into a page.
 
 - With debug off, errors show no internal details (PLT-1.4).
-- The `403` pages show only fixed text and `405` responses have an empty body, so neither shows internal details (ACC-1.2, ACC-1.4, ACC-1.5, ACC-1.8).
+- The `403` pages show only fixed text and `405` responses have an empty body, so neither shows internal details (ACC-1.2, ACC-1.4, ACC-1.5, ACC-1.8, ACC-2.5).
 - The health check reveals only `ok` or `error` (PLT-1.2, PLT-1.3).
-- Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies.
+- Server errors go to standard error with their traceback (PLT-1.4), never to the visitor. Logs never include request bodies or cookies. For the database server's own logs, see [Demo workspaces](#demo-workspaces).
+- No error reporting or logging captures or sends the local variables of a failing request, because they can hold [generated passwords](#demo-workspaces) and their hashes. Django's debug page shows them, but debug is on only in local development.
 
 ## Sign-in and access control
 
 Threat: a visitor opens a role's pages without signing in or with the other role, learns which usernames exist, steals, fixes or reuses a session, makes a signed-in browser sign in or out without its user meaning to, frames a page to trick its user into clicking, reads a role's page from a browser cache after its user has left, or uses the sign-in redirect to send users to another site.
 
 - The server decides access on every request from the signed-in user's stored account: a signed-out visitor is redirected to the sign-in page and the other role gets `403`. Nothing the client sends but the session cookie affects the decision (ACC-1.4, ACC-1.5).
-- Passwords are stored only as Django's salted hashes ([data model](TECHNICAL-SPEC.md#data-model)) and are never shown or logged.
+- Passwords are stored only as Django's salted hashes ([data model](TECHNICAL-SPEC.md#data-model)) and are never logged, and a password a user types is never shown back. A generated password is shown once, as [Demo workspaces](#demo-workspaces) says.
 - A failed sign-in shows one message whatever was wrong, and an existing username with a wrong password gets the same response, apart from its CSRF token, as an unknown username with the same submission (ACC-1.3). Gap: response time is not checked.
 - Sign-in always leads to the user's own role's page and ignores any `next` parameter, so it cannot redirect anywhere else (ACC-1.5).
 - Every request by a method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` needs a valid CSRF token before any other rule applies, and signing in and out accept only `POST` (ACC-1.2, ACC-1.8).
@@ -41,6 +42,20 @@ Threat: a visitor opens a role's pages without signing in or with the other role
 - With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.6).
 - No page may show the sign-in or role pages in a frame, and no browser or cache may store the role pages (ACC-1.8).
 - Gap: sign-in attempts have no rate limit or lockout, so nothing slows online password guessing.
+
+## Demo workspaces
+
+Threat: anyone, without signing in, makes the app create workspaces and accounts and spend CPU hashing their passwords; another site makes a visitor's browser create one; a request chooses the usernames, passwords, roles or workspace it gets; someone guesses a generated password or learns other workspaces' usernames; or a generated password leaks through logs, stored records, an error page, a browser or proxy cache, a framed page or someone who sees the screen. Because anyone can hold accounts of both roles, signing in and roles protect one workspace's records from other workspaces' users, not the app from strangers.
+
+- Creating a workspace needs a `POST` with a valid CSRF token and, with debug off, an allowed `Origin`, like every request that changes something (ACC-1.8, ACC-2.5).
+- The request chooses nothing: extra form fields and query parameters are ignored, and each creation makes one new workspace with two Requesters and one Support Officer and adds no account to an existing workspace (ACC-2.1, ACC-2.5).
+- Generated passwords are 16 characters, each drawn independently and uniformly from the operating system's cryptographically secure random source, so each has about 79 bits of entropy. Usernames carry a random code from the same source rather than a sequence, so they reveal neither how many workspaces exist nor other workspaces' usernames (ACC-2.3, ACC-2.8).
+- A generated password is shown once, only in the response that creates it, which no browser or cache may store and no page may frame. It is stored only as Django's salted hash, never in a session, cookie or other record, and no route shows it again; resending the submission makes a different workspace (ACC-2.6).
+- No generated username or password, and no password hash, appears in standard output, standard error or logs in either debug mode: when creation fails, the error written there keeps its type and traceback but leaves out any database message or detail that contains one, since such details can hold the row being written (ACC-2.4, ACC-2.6). Error reports capture no local variables either: see [Error pages, health check and logs](#error-pages-health-check-and-logs).
+- Creation is all or nothing, including when a code clashes, and it signs no one in and leaves a signed-in user's session as it was (ACC-2.2–ACC-2.4, ACC-2.7).
+- Gap: the page shows the passwords in plain view, and a browser that keeps pages in its back-forward cache may show the page again in the same tab after Back or Forward, so anyone who sees the screen, or uses that tab soon after, may read them.
+- Gap: creating workspaces has no rate limit, and workspaces are never deleted. Each creation hashes three passwords with Django's deliberately slow default hasher, so repeated creation can use up the [free-plan CPU allowance](TECHNICAL-SPEC.md#free-plan-operating-limits), which can pause the site, and fill the database's storage, after which writes that need more storage, such as the sessions that sign-in creates, fail for every user.
+- Gap: when an insert fails, the database server may log the failing statement and its detail, such as `Key (username)=(…) already exists.` or `Failing row contains (…)`, so a generated username and password hash can reach the database provider's logs, which the app does not control.
 
 ## Container image
 

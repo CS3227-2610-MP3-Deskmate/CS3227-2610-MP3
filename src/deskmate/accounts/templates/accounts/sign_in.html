@@ -11,4 +11,9 @@
     {{ form.password }}
     <button type="submit">Sign in</button>
   </form>
+  <p>No account? Create a demo workspace with 2 Requesters and 1 Support Officer.</p>
+  <form method="post" action="{% url 'demo-workspace' %}">
+    {% csrf_token %}
+    <button type="submit">Create demo workspace</button>
+  </form>
 {% endblock %}
