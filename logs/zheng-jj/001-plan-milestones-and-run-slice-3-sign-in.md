@@ -2,7 +2,7 @@
 
 Slice: #3 · Tool: Claude Code in VS Code (Claude Opus 5.5) · Date: 2026-10-16 to 2026-10-17
 
-Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT on 16 Oct, and the log was written at 12:30 SGT on 17 Oct. That span includes an overnight gap and waits for the human. There were 15 role-agent runs and 2 resumes, using about 1.88M subagent tokens. The orchestrator's own tokens are not counted.
+Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT on 16 Oct, and the log was written at 12:30 SGT on 17 Oct. That span includes an overnight gap and waits for the human. There were 16 role-agent runs and 2 resumes, using about 2.0M subagent tokens. The orchestrator's own tokens are not counted, and neither is #4's spec work, which belongs to its own log.
 
 ## Requests
 
@@ -11,6 +11,10 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
 - During that work, said the teammate had settled deployment and DevOps, and asked Claude to start on issues #3 and #4 once the planning was done.
 - At the #3 checkpoint, replied "yea do it". Claude took this as accepting every recommendation it had listed and approving the local setup.
 - After shell commands began failing, said "just work in a docker container then".
+- Asked Claude to start #4 now, on a branch built on top of #3's, and to close #12 and change `master` to `main` in their instructions. Claude found no repo instruction that named `master`, so it edited the one-pager in the human's Downloads folder and the Release v1.0 milestone.
+- Answered "yse" to Claude's questions, which Claude took as yes to all of them:
+  - for #3: push and open a draft pull request, keep the three security additions from review, and run a third review round;
+  - for #4: every checkpoint recommendation.
 
 ## Agent runs
 
@@ -24,9 +28,10 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
   - The spec-critic's findings: `504517c`.
   - The checkpoint changes, plus a `Gap:` line for `http://` origins: `5e1cd2d`.
 - **spec-critic** (`a58461d`): 10 findings on `eb2cfad`, including the rule order, Origin checks behind HTTPS, database outages and username matching.
-- **test-writer** (`3d65dbb`), 2 runs, both within scope:
+- **test-writer** (`3d65dbb`), 3 runs, all within scope:
   - Tests for ACC-1.1–1.8: `a402efe`. Before the build, 224 failed for want of a user model or routes, and 221 passed. The agent also checked them against a scratch reference implementation, which was never committed: 445 passed, and each of 30 injected defects was caught.
   - The review round's tests: `b8cbea1`. With these, 511 passed. A deliberately broken copy (`|safe`, or no sign-in time middleware) failed as it should.
+  - Third round, which the human approved: `8bf1ae7`. It pins that the sign-in fields have no `required` or `maxlength`, covers every method each route doesn't list, both untested `sign_in_limit` branches, the 600-character guard, and `/health/` with a session cookie. 561 passed. Each new test failed on a deliberately broken copy.
 - **implementer** (`3d65dbb`), 5 runs and 1 resume, all within scope:
   - Plan: `86e9793`. The resume applied Claude's two answers.
   - Task 1, the accounts app, sign-in, sign-out and role pages: `22afaed`. The size command gave 189 lines.
@@ -63,6 +68,10 @@ Cost: about 20 hours of wall time. The first milestone was created at 20:52 SGT 
   - The 600-character guard before NFKC.
   - Trusted origins built only from plain host names.
   - The shared Forbidden page and CSRF view moved into the `deskmate` package.
+- **The human's answers on #3:** keep the review additions (the `sign_in_limit` middleware, the 600-character guard, and `no-store` and `X-Frame-Options` on every route), run a third test round, and push a draft pull request.
+- **Raised by the third round:**
+  - The 600-character NFKC bound has no home in the specs.
+  - ACC-1.6 doesn't say that a session with no recorded sign-in time is ended.
 - **Left for the human:**
   - Softening ACC-1.6's "the browser drops it when it closes".
   - A missing Origin, or an Origin with a port.
