@@ -13,6 +13,22 @@ from deskmate.accounts.models import Role
 ROLE_PAGES = {Role.REQUESTER: "requester", Role.SUPPORT_OFFICER: "support"}
 
 
+def _forbidden(request, message):
+    """Return a 403 page titled Forbidden whose only other text is `message`."""
+    context = {"title": "Forbidden", "message": message}
+    return render(request, "accounts/forbidden.html", context, status=403)
+
+
+def csrf_failure(request, reason=""):
+    """Refuse a request that failed Django's CSRF checks (ACC-1.8).
+
+    `reason` is never shown, so the page gives no internal details.
+    """
+    return _forbidden(
+        request, "This form has expired. Go back, reload the page and try again."
+    )
+
+
 @sensitive_post_parameters()
 @require_http_methods(["GET", "POST"])
 def sign_in(request):
@@ -48,7 +64,6 @@ def role_page(request, role):
     users with the other role get 403.
     """
     if request.user.role != role:
-        context = {"title": "Forbidden", "message": "This page is not for your role."}
-        return render(request, "accounts/forbidden.html", context, status=403)
+        return _forbidden(request, "This page is not for your role.")
     context = {"title": role.label, "username": request.user.username}
     return render(request, "accounts/role_page.html", context)

@@ -93,7 +93,11 @@ INSTALLED_APPS = [
     "django.contrib.contenttypes",
     "django.contrib.sessions",
 ]
+# The no-store and framing middleware come first, so they also mark the
+# responses that Django and later middleware make (ACC-1.8).
 MIDDLEWARE = [
+    "deskmate.caching.no_store",
+    "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
@@ -138,6 +142,7 @@ SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 # The origin of each allowed host over HTTPS (ACC-1.8).
 CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS]
+CSRF_FAILURE_VIEW = "deskmate.accounts.views.csrf_failure"
 
 # Unexpected errors in requests, with their tracebacks, go to standard error
 # whether or not debug is on (PLT-1.4). They do not propagate, so Django's own
