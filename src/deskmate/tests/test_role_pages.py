@@ -25,6 +25,7 @@ from deskmate.tests.signing_in import (
     assert_server_error,
     browser_as,
     csrf_token,
+    methods_not_listed,
     other_role,
     send,
     sign_in_as,
@@ -39,7 +40,7 @@ DISPLAYED_USERNAMES = {
 
 # Every method but GET, with each kind of visitor, alternating the page so each
 # page meets each method and each visitor (ACC-1.4).
-OTHER_METHODS = ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"]
+OTHER_METHODS = methods_not_listed("GET")
 METHOD_CASES = [
     pytest.param(
         method,

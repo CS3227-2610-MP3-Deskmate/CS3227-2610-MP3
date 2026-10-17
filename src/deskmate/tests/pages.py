@@ -71,6 +71,10 @@ class Control:
         self.name = attributes.get("name")
         self.value = attributes.get("value")
         self.id = attributes.get("id")
+        # Whether the browser refuses to send the form while the control is
+        # empty, and the most characters it lets a user type, or None.
+        self.required = "required" in attributes
+        self.maxlength = attributes.get("maxlength")
         self.form = form
         self.parts = []
 

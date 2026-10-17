@@ -9,6 +9,7 @@ from urllib.parse import unquote, urlencode
 
 import pytest
 from django.conf import settings
+from django.contrib.auth import forms as auth_forms
 
 from deskmate.tests.pages import CSRF_FIELD, Page
 from deskmate.tests.signing_in import (
@@ -34,6 +35,7 @@ from deskmate.tests.signing_in import (
     browser_as,
     csrf_token,
     get_sign_in_page,
+    methods_not_listed,
     new_browser,
     other_role,
     send,
@@ -140,7 +142,16 @@ NON_MATCHING_PASSWORDS = [
 ]
 SPACED_PASSWORD = "  Spaced  pass 3 "
 # Methods that /sign-in/ does not list (TECHNICAL-SPEC "Routes").
-OTHER_METHODS = ["PUT", "PATCH", "DELETE"]
+OTHER_METHODS = methods_not_listed("GET", "POST")
+# NFKC turns at most 4 characters into 1, so no typed username longer than 4
+# times the 150-character limit can be 150 characters after NFKC (ACC-1.3).
+# Longer input is refused without being normalised, because NFKC is slow on
+# huge input.
+LONGEST_NORMALISED = 4 * len(LONGEST)
+OVER_LONGEST_NORMALISED = [
+    pytest.param(LONGEST_NORMALISED + 1, id="601-characters"),
+    pytest.param(100_000, id="100000-characters"),
+]
 
 # A `next` parameter on the sign-in page, in the submission's query, or in its
 # form data, with values that point off the site or at the other role's page.
@@ -167,7 +178,26 @@ def assert_matches_no_account(browser, username, password):
     assert_signed_out(browser)
 
 
-@pytest.mark.ac("ACC-1.1")
+@pytest.fixture
+def normalised_lengths(monkeypatch):
+    """Return a list of the length of each string normalised during the test.
+
+    It patches `unicodedata.normalize` as `django.contrib.auth.forms` reaches
+    it, so the list grows each time anything calls it, and the string is
+    still normalised.
+    """
+    lengths = []
+    normalize = auth_forms.unicodedata.normalize
+
+    def recording_normalize(form, text):
+        lengths.append(len(text))
+        return normalize(form, text)
+
+    monkeypatch.setattr(auth_forms.unicodedata, "normalize", recording_normalize)
+    return lengths
+
+
+@pytest.mark.ac("ACC-1.1", "ACC-1.3", "ACC-1.7")
 @pytest.mark.django_db
 def test_sign_in_page_signed_out_shows_sign_in_form(browser):
     assert_sign_in_page(browser.get(SIGN_IN))
@@ -240,6 +270,32 @@ def test_sign_in_oversized_username_matches_no_account(
 ):
     make_account(LONGEST, PASSWORD, REQUESTER)
     assert_matches_no_account(browser, unquote(escaped) * count, PASSWORD)
+
+
+@pytest.mark.ac("ACC-1.3")
+@pytest.mark.parametrize("length", OVER_LONGEST_NORMALISED)
+def test_sign_in_username_over_600_characters_never_normalised_matches_no_account(
+    make_account, browser, normalised_lengths, length
+):
+    make_account(LONGEST, PASSWORD, REQUESTER)
+    assert_matches_no_account(browser, "a" * length, PASSWORD)
+    assert max(normalised_lengths, default=0) <= LONGEST_NORMALISED, (
+        f"NFKC was applied to {max(normalised_lengths)} characters."
+    )
+
+
+@pytest.mark.ac("ACC-1.3", "ACC-1.7")
+def test_sign_in_username_600_characters_normalised_signs_in(
+    make_account, browser, normalised_lengths
+):
+    username = COMPOSED_ALPHA * 150
+    make_account(username, PASSWORD, SUPPORT_OFFICER)
+    typed = DECOMPOSED_ALPHA * 150
+    assert len(typed) == LONGEST_NORMALISED
+    response = sign_in(browser, typed, PASSWORD)
+    assert LONGEST_NORMALISED in normalised_lengths
+    assert_redirects(response, ROLE_PAGES[SUPPORT_OFFICER])
+    assert_signed_in_as(browser, SUPPORT_OFFICER, username)
 
 
 @pytest.mark.ac("ACC-1.3", "ACC-1.7")
