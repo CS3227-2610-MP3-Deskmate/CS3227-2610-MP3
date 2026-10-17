@@ -86,8 +86,19 @@ if _invalid:
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY") or secrets.token_urlsafe(50)
 ALLOWED_HOSTS = _host_names(os.environ.get("DJANGO_ALLOWED_HOSTS", ""))
 
-INSTALLED_APPS = ["deskmate"]
-MIDDLEWARE = ["django.middleware.common.CommonMiddleware"]
+INSTALLED_APPS = [
+    "deskmate",
+    "deskmate.accounts",
+    "django.contrib.auth",
+    "django.contrib.contenttypes",
+    "django.contrib.sessions",
+]
+MIDDLEWARE = [
+    "django.contrib.sessions.middleware.SessionMiddleware",
+    "django.middleware.common.CommonMiddleware",
+    "django.middleware.csrf.CsrfViewMiddleware",
+    "django.contrib.auth.middleware.AuthenticationMiddleware",
+]
 ROOT_URLCONF = "deskmate.urls"
 WSGI_APPLICATION = "deskmate.wsgi.application"
 
@@ -113,6 +124,20 @@ DATABASES = {
 }
 if os.environ["POSTGRES_HOST"] not in _LOOPBACK_HOSTS:
     DATABASES["default"]["OPTIONS"].update(sslmode="verify-full", sslrootcert="system")
+
+DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+AUTH_USER_MODEL = "accounts.User"
+
+# A session ends when the browser closes or 8 hours after signing in (ACC-1.6).
+# Django sets a database session's expiry only when it saves the session, and
+# nothing saves it after sign-in, so activity does not extend it.
+SESSION_COOKIE_AGE = 8 * 60 * 60
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+# With debug off, the session and CSRF cookies are sent only over HTTPS.
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+# The origin of each allowed host over HTTPS (ACC-1.8).
+CSRF_TRUSTED_ORIGINS = [f"https://{host}" for host in ALLOWED_HOSTS]
 
 # Unexpected errors in requests, with their tracebacks, go to standard error
 # whether or not debug is on (PLT-1.4). They do not propagate, so Django's own

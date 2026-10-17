@@ -1,0 +1,8 @@
+{% extends "accounts/base.html" %}
+{% block content %}
+  <p>Signed in as {{ username }}.</p>
+  <form method="post" action="{% url 'sign-out' %}">
+    {% csrf_token %}
+    <button type="submit">Sign out</button>
+  </form>
+{% endblock %}
