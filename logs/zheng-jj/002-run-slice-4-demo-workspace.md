@@ -2,7 +2,7 @@
 
 Slice: #4 · Tool: Claude Code in VS Code (Claude Opus 5.5) · Date: 2026-10-17
 
-Cost: about 3 hours of wall time (the first spec commit was at 13:58 SGT, and this log was written at 16:50 SGT), including waits for the human. There were 13 role-agent runs and no resumes, using about 1.57M subagent tokens. The orchestrator's own tokens are not counted.
+Cost: about 3 hours of wall time (the first spec commit was at 13:58 SGT, and this log was written at 16:50 SGT), including waits for the human. There were 15 role-agent runs and no resumes, using about 1.64M subagent tokens. The orchestrator's own tokens are not counted.
 
 ## Requests
 
@@ -18,14 +18,14 @@ Cost: about 3 hours of wall time (the first spec commit was at 13:58 SGT, and th
 
 ## Agent runs
 
-- **spec-writer** (`246260a`), 2 runs, both within scope:
+- **spec-writer** (`246260a`), 3 runs, all within scope. The third added the review's spec additions in `14e97b6`.
   - ACC-2 with 7 criteria, the `/demo-workspace/` route and a "Demo workspaces" section in SECURITY-SPEC: `5243080`.
   - The spec-critic's findings, which brought ACC-2 to 8 criteria with ACC-2.8 `[manual]`: `b46b57f`.
 - **spec-critic** (`a58461d`): 8 findings on `5243080`. The most important: ACC-2.6 contradicted PLT-1.4 on what database errors write to standard error, and narrowing the password control needed the human.
 - **test-writer** (`3d65dbb`), 2 runs, both within scope:
   - 122 tests: `d051c0b`. Before the build, 122 failed and 561 passed. A scratch reference implementation passed all 683, and each of 15 deliberate faults in it was caught.
   - Review fixes: `b3d783f`. They cover the key collision, the hasher moved to `tests/hashing.py`, the `transactional_db` guard, removed duplication and checking standard output, plus new interface-error, Origin, request-format and 500-header cases. 703 passed. The interface-error test failed on a copy that catches only `DatabaseError`.
-- **implementer** (`3d65dbb`), 4 runs, all within scope:
+- **implementer** (`3d65dbb`), 5 runs, all within scope. The fifth updated the plan in `57edec4`.
   - Plan: `fb4fa60`.
   - Task 1, demo workspaces: `3370a2e`. 683 passed. Against the plan, it redraws a password that matches another, as Claude asked, and splits the code loop into `_save_under_free_code`.
   - Task 2, the User Guide: `8e7ea1b`.
@@ -43,13 +43,15 @@ Cost: about 3 hours of wall time (the first spec commit was at 13:58 SGT, and th
 - The size check is measured against `3-sign-in-by-role`, because this branch is built on it. The result was 167 lines, within the confirmed 130–180.
 - Claude asked the implementer for distinct passwords, so that ACC-2.3's "differs from the other two" holds for certain rather than by chance.
 - From round 1, Claude sent the `InterfaceError` catch and hashing before the transaction to the implementer. The tests went to the test-writer. Anything needing a spec change goes to the human.
-- **Left for the human:**
-  - updating the plan's lines on hashing, the caught error type and password comparison before merge;
-  - adding standard output to ACC-2.6;
-  - recording the database server's logs as a gap;
-  - a control saying error reporting must not capture local variables;
+- **The human's answers after review ("yes to all"):**
+  - The implementer brought the plan up to date with what was built: `57edec4`.
+  - The spec-writer added standard output to ACC-2.6, a gap for the database server's own logs, and a control saying error reporting captures no local variables: `14e97b6`. 703 passed.
+  - Claude pushed the branch and opened a draft PR stacked on #44.
+- **Deferred:**
   - an SQLSTATE in the fixed error message;
-  - a test for a concurrent creation that hasn't committed yet.
+  - a test for a concurrent creation that hasn't committed yet;
+  - two duplicated test helpers;
+  - a fallback for `ProtectedError` when building the hidden error.
 
 ## Problems
 
