@@ -10,9 +10,12 @@ Its standard output and standard error are captured together, unbuffered, so the
 tests see every line it writes, in order.
 """
 
+import json
 import os
 import secrets
+import shutil
 import socket
+import ssl
 import struct
 import subprocess
 import sys
@@ -35,6 +38,7 @@ from deskmate.tests.helpers import (
     SRC_DIR,
     TIMEOUT_SECONDS,
     run_manage,
+    run_python,
     unused_port,
 )
 
@@ -43,6 +47,9 @@ FIXTURES = "deskmate.tests.migration_fixtures"
 ORDERED = f"{FIXTURES}.ordered_settings"
 FAILING = f"{FIXTURES}.failing_settings"
 DRIFT = f"{FIXTURES}.drift_settings"
+NOISY = f"{FIXTURES}.noisy_settings"
+UNMIGRATED = f"{FIXTURES}.unmigrated_settings"
+NOISY_MIGRATION = "migfix_noisy.0001_emit"
 # The only order the ordered fixture apps' dependencies allow.
 ORDERED_PLAN = [
     "migfix_beta.0001_initial",
@@ -303,6 +310,57 @@ def test_migration_database_error_quoting_settings_fails_without_leaking(
     assert environment["DJANGO_SECRET_KEY"] not in process.stdout
 
 
+def emit_from_migration(database, channel, value):
+    """Make migfix_noisy.0001_emit send `value` through `channel`."""
+    query(database, "CREATE TABLE migfix_noisy_source (channel text, value text)")
+    query(
+        database,
+        "INSERT INTO migfix_noisy_source (channel, value) VALUES (%s, %s)",
+        (channel, value),
+    )
+
+
+@pytest.mark.ac("PLT-2.12", "PLT-2.14")
+@pytest.mark.parametrize(
+    "channel",
+    [
+        "print",
+        "stderr",
+        "warning",
+        "log-error",
+        "log-critical",
+        "database-notice",
+        "stdout-descriptor",
+        "stderr-descriptor",
+    ],
+)
+def test_migration_code_writing_row_value_out_shows_only_allowed_lines(
+    database, channel
+):
+    row_value = f"row-{secrets.token_hex(8)}"
+    emit_from_migration(database, channel, row_value)
+    process = run_entry_point(configured(database), NOISY)
+    assert lines(process) == [applying(NOISY_MIGRATION), PASSED]
+    assert process.returncode == 0
+    assert applied(database) == [NOISY_MIGRATION]
+    assert row_value not in process.stdout
+
+
+@pytest.mark.ac("PLT-2.12", "PLT-2.14")
+@pytest.mark.parametrize("channel", ["keyboard-interrupt", "base-exception"])
+def test_migration_interrupted_by_base_exception_fails_without_traceback(
+    database, channel
+):
+    row_value = f"row-{secrets.token_hex(8)}"
+    emit_from_migration(database, channel, row_value)
+    process = run_entry_point(configured(database), NOISY)
+    assert lines(process) == [applying(NOISY_MIGRATION), FAILED]
+    assert process.returncode != 0
+    assert applied(database) == []
+    assert "migfix_noisy_done" not in tables(database)
+    assert row_value not in process.stdout
+
+
 @pytest.mark.ac("PLT-1.7", "PLT-2.10", "PLT-2.12")
 @pytest.mark.parametrize(
     ("overrides", "invalid"),
@@ -338,21 +396,27 @@ def test_migration_invalid_configuration_names_variables_then_fails(overrides, i
     assert environment["DJANGO_SECRET_KEY"] not in process.stdout
 
 
-class TlsRefusingServer:
-    """A PostgreSQL listener at 127.0.0.2, not a loopback literal, without TLS.
+class FakeDatabaseServer:
+    """A PostgreSQL listener at 127.0.0.2, not a loopback literal.
 
-    It answers every request to encrypt with "N" and counts those requests and
-    any plaintext startup message, which a client may send only by falling back.
+    Without an SSL `context`, it answers every request to encrypt with "N".
+    With one, it accepts SSLRequest, presents the context's certificate and counts
+    each startup message the client then sends over TLS. It always refuses
+    GSSENCRequest. It counts the requests to encrypt and any plaintext startup
+    message, which a client may send only by falling back.
     """
 
-    _ENCRYPTION_REQUESTS = (80877103, 80877104)  # SSLRequest, GSSENCRequest
+    _SSL_REQUEST = 80877103
+    _GSSENC_REQUEST = 80877104
 
-    def __init__(self):
+    def __init__(self, context=None):
+        self._context = context
         self._socket = socket.create_server(("127.0.0.2", 0))
         self._socket.settimeout(0.1)
         self.port = self._socket.getsockname()[1]
         self.encryption_requests = 0
         self.plaintext_startups = 0
+        self.tls_startups = 0
         self._stopped = Event()
         self._thread = Thread(target=self._serve, daemon=True)
 
@@ -375,7 +439,7 @@ class TlsRefusingServer:
                 client.settimeout(5)
                 try:
                     self._answer(client)
-                except OSError:
+                except OSError:  # Including a TLS handshake the client abandons.
                     pass
 
     def _answer(self, client):
@@ -387,38 +451,136 @@ class TlsRefusingServer:
                     return
                 header += chunk
             length, code = struct.unpack("!ii", header)
-            if length != 8 or code not in self._ENCRYPTION_REQUESTS:
+            if length != 8 or code not in (self._SSL_REQUEST, self._GSSENC_REQUEST):
                 self.plaintext_startups += 1
                 return
             self.encryption_requests += 1
+            if code == self._SSL_REQUEST and self._context:
+                client.sendall(b"S")
+                with self._context.wrap_socket(client, server_side=True) as tls:
+                    if tls.recv(8):
+                        self.tls_startups += 1
+                return
             client.sendall(b"N")
+
+
+def production_environment(port, overrides=None):
+    """Configure production mode against the fake server's port at 127.0.0.2."""
+    return valid_environment(
+        {
+            "VERCEL_ENV": "production",
+            "POSTGRES_HOST": "127.0.0.2",
+            "POSTGRES_PORT": str(port),
+            "DJANGO_ALLOWED_HOSTS": PUBLIC_HOST,
+            **(overrides or {}),
+        }
+    )
 
 
 @pytest.mark.ac("PLT-2.8", "PLT-2.12")
 def test_migration_production_database_without_tls_fails_without_plaintext():
-    with TlsRefusingServer() as server:
-        environment = valid_environment(
-            {
-                "VERCEL_ENV": "production",
-                "POSTGRES_HOST": "127.0.0.2",
-                "POSTGRES_PORT": str(server.port),
-                "DJANGO_ALLOWED_HOSTS": PUBLIC_HOST,
-            }
-        )
-        process = run_entry_point(environment, ORDERED)
+    with FakeDatabaseServer() as server:
+        process = run_entry_point(production_environment(server.port), ORDERED)
     assert lines(process) == [FAILED]
     assert process.returncode != 0
     assert server.encryption_requests >= 1
     assert server.plaintext_startups == 0
 
 
-@pytest.mark.ac("PLT-2.12", "PLT-2.14")
-def test_migration_deskmate_settings_without_import_path_passes(database):
-    process = run_entry_point(configured(database), import_path=False)
-    assert lines(process)[-1:] == [PASSED], process.stdout
-    assert process.returncode == 0
-    expected = [*map(applying, applied(database))] or [NOTHING]
-    assert lines(process) == [*expected, PASSED]
+def openssl(directory, *arguments):
+    """Run the OpenSSL command-line tool, which CI's runner and Git Bash include."""
+    executable = shutil.which("openssl")
+    assert executable, "The TLS tests make their certificates with openssl."
+    subprocess.run(
+        [executable, *arguments],
+        cwd=directory,
+        capture_output=True,
+        timeout=TIMEOUT_SECONDS,
+        check=True,
+    )
+
+
+def make_certificate(directory, name, subject_alt_name=None, issuer=None):
+    """Write `name`.pem and `name`.key: a CA's without `issuer`, otherwise a
+    server certificate for `subject_alt_name` that the CA named `issuer` signs."""
+    configuration = [
+        "[req]",
+        "prompt = no",
+        "distinguished_name = dn",
+        "[dn]",
+        f"CN = Deskmate synthetic {name}",
+        "[ca]",
+        "basicConstraints = critical, CA:TRUE",
+        "keyUsage = critical, keyCertSign",
+    ]
+    if subject_alt_name:
+        configuration += [
+            "[server]",
+            f"subjectAltName = {subject_alt_name}",
+            "extendedKeyUsage = serverAuth",
+        ]
+    (directory / f"{name}.cnf").write_text(
+        "".join(f"{line}\n" for line in configuration), encoding="ascii"
+    )
+    request = ["req", "-new", "-config", f"{name}.cnf", "-nodes"]
+    request += ["-newkey", "rsa:2048", "-keyout", f"{name}.key"]
+    if issuer is None:
+        openssl(
+            directory,
+            *request,
+            "-x509",
+            "-days",
+            "1",
+            "-extensions",
+            "ca",
+            "-out",
+            f"{name}.pem",
+        )
+        return
+    serial = str(secrets.randbits(63))
+    openssl(directory, *request, "-out", f"{name}.csr")
+    openssl(
+        directory,
+        *["x509", "-req", "-in", f"{name}.csr", "-days", "1", "-set_serial", serial],
+        *["-CA", f"{issuer}.pem", "-CAkey", f"{issuer}.key", "-out", f"{name}.pem"],
+        *["-extfile", f"{name}.cnf", "-extensions", "server"],
+    )
+
+
+@pytest.fixture(scope="module")
+def certificates(tmp_path_factory):
+    """A trusted and an untrusted test CA, and server certificates they sign."""
+    directory = tmp_path_factory.mktemp("certificates")
+    make_certificate(directory, "trusted-ca")
+    make_certificate(directory, "other-ca")
+    make_certificate(directory, "trusted", "IP:127.0.0.2", "trusted-ca")
+    make_certificate(directory, "untrusted-issuer", "IP:127.0.0.2", "other-ca")
+    make_certificate(directory, "wrong-hostname", "DNS:db.wrong.example", "trusted-ca")
+    return directory
+
+
+@pytest.mark.ac("PLT-2.8", "PLT-2.12")
+@pytest.mark.parametrize(
+    ("certificate", "valid"),
+    [("trusted", True), ("untrusted-issuer", False), ("wrong-hostname", False)],
+)
+def test_migration_production_database_certificate_is_verified_without_fallback(
+    certificates, certificate, valid
+):
+    context = ssl.create_default_context(ssl.Purpose.CLIENT_AUTH)
+    context.load_cert_chain(
+        certificates / f"{certificate}.pem", certificates / f"{certificate}.key"
+    )
+    # The system's CA roots are only the test CA, as OpenSSL's variable sets them.
+    trust = {"SSL_CERT_FILE": str(certificates / "trusted-ca.pem")}
+    with FakeDatabaseServer(context) as server:
+        process = run_entry_point(production_environment(server.port, trust), ORDERED)
+    # The fake server closes the connection after the startup message.
+    assert lines(process) == [FAILED]
+    assert process.returncode != 0
+    assert server.encryption_requests >= 1
+    assert (server.tls_startups > 0) is valid
+    assert server.plaintext_startups == 0
 
 
 def model_changes_without_migrations(database, settings):
@@ -446,6 +608,53 @@ def test_migration_drift_check_fails_for_model_change_without_migration(database
 def test_migration_drift_check_passes_when_migrations_match_models(database):
     process = model_changes_without_migrations(database, ORDERED)
     assert process.returncode == 0, process.stdout + process.stderr
+
+
+# Prints, as JSON, the label of each installed app that has a model but no
+# migrations, which `makemigrations --check` passes over.
+_UNMIGRATED_APPS_WITH_MODELS = """
+import json
+import django
+from django.apps import apps
+from django.db.migrations.loader import MigrationLoader
+
+django.setup()
+unmigrated = MigrationLoader(None).unmigrated_apps
+print(json.dumps(sorted(
+    config.label
+    for config in apps.get_app_configs()
+    if config.label in unmigrated and any(config.get_models())
+)))
+"""
+
+
+def unmigrated_apps_with_models(settings):
+    """Return the installed apps of `settings` with models but no migrations."""
+    process = run_python(
+        ["-c", _UNMIGRATED_APPS_WITH_MODELS],
+        valid_environment({"DJANGO_SETTINGS_MODULE": settings}),
+    )
+    assert process.returncode == 0, process.stderr
+    return json.loads(process.stdout.splitlines()[-1])
+
+
+@pytest.mark.ac("PLT-2.13")
+def test_migrations_exist_for_every_deskmate_app_with_models():
+    assert unmigrated_apps_with_models("deskmate.settings") == []
+
+
+@pytest.mark.ac("PLT-2.13")
+def test_migration_unmigrated_check_reports_app_with_models_without_migrations(
+    database,
+):
+    assert unmigrated_apps_with_models(UNMIGRATED) == ["migfix_unmigrated"]
+    # Django's own check passes over it, so it alone would not fail the commit.
+    assert model_changes_without_migrations(database, UNMIGRATED).returncode == 0
+
+
+@pytest.mark.ac("PLT-2.13")
+def test_migration_unmigrated_check_passes_when_apps_with_models_have_migrations():
+    assert unmigrated_apps_with_models(ORDERED) == []
 
 
 def non_atomic(migrations):

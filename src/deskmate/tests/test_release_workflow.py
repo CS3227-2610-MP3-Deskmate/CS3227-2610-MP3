@@ -321,6 +321,20 @@ def test_deployment_inputs_include_build_configuration_and_entry_point():
 @pytest.mark.parametrize("name", ["ci.yml", "deploy.yml"])
 def test_workflows_never_migrate_outside_the_provider_build(name):
     source = workflow(name)
-    assert "migrate.py" not in source
-    assert not re.search(r"manage\.py\s+\S*migrat", source)
-    assert "call_command" not in source
+    forbidden = {
+        "the entry point": r"migrate\.py",
+        "manage.py migrate": r"manage\.py\s+\S*migrat",
+        "django-admin migrate": r"django-admin(?:\.py)?\s+\S*migrat",
+        "python -m django migrate": r"-m\s+django\s+\S*migrat",
+        "call_command": r"call_command",
+        # A local build runs the build command, which migrates, on the runner.
+        "vercel build": r"\bvercel\b[^\n]*\sbuild\b",
+        "--prebuilt": r"--prebuilt\b",
+        # These would bring the project's production variables to the runner.
+        "vercel pull": r"\bvercel\b[^\n]*\spull\b",
+        "vercel env": r"\bvercel\b[^\n]*\senv\b",
+    }
+    found = [
+        label for label, pattern in forbidden.items() if re.search(pattern, source)
+    ]
+    assert found == []
