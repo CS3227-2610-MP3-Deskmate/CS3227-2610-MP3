@@ -58,3 +58,15 @@ A page headed **Forbidden** shows one line. If you open the other role's page, i
 If you submit a form that has expired, it says:
 
 > This form has expired. Go back, reload the page and try again.
+
+## Too many attempts
+
+After too many sign-in attempts or workspace creations in a short time, from your internet address or from everyone, a page headed **Too many attempts** shows one line instead. If you pressed **Sign in**, it says:
+
+> Too many sign-in attempts. Wait a few minutes, then try again.
+
+If you pressed **Create demo workspace**, it says:
+
+> Too many demo workspaces have been created. Wait a few minutes, then try again.
+
+If you are already signed in, you stay signed in, and your role's page and **Sign out** work as usual.
