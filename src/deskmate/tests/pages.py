@@ -1,8 +1,11 @@
 """Reads Deskmate's HTML pages as a browser would, and submits their forms.
 
 Tests use it to check what a page shows, such as its title, headings, text and
-the labelled fields of its forms, and to send a form as a browser sends it. It
-uses only the standard library's HTML parser, so it needs no dependency.
+the fields of its forms that a `for` attribute labels, and to send a form as a
+browser sends it. It reads only what Deskmate's pages use, so it does not
+handle checkboxes, radio buttons, image buttons or labels that wrap their
+field. It uses only the standard library's HTML parser, so it needs no
+dependency.
 """
 
 from html.parser import HTMLParser
@@ -68,7 +71,6 @@ class Control:
         self.name = attributes.get("name")
         self.value = attributes.get("value")
         self.id = attributes.get("id")
-        self.checked = "checked" in attributes
         self.form = form
         self.parts = []
 
@@ -81,19 +83,15 @@ class Control:
 
     def is_button(self):
         """Return whether pressing this control submits its form."""
-        if self.tag == "button":
-            return self.type == "submit"
-        return self.type in ("submit", "image")
+        return self.type == "submit"
 
     def is_field(self):
-        """Return whether this control is a field a user types into or picks."""
+        """Return whether this control is a field a user types into."""
         return self.tag == "input" and self.type not in _NOT_SENT | {"hidden"}
 
     def is_sent(self):
         """Return whether a browser sends this control's value with its form."""
-        if self.tag != "input" or not self.name or self.type in _NOT_SENT:
-            return False
-        return self.type not in ("checkbox", "radio") or self.checked
+        return self.tag == "input" and bool(self.name) and self.type not in _NOT_SENT
 
 
 class Form:
@@ -204,7 +202,6 @@ class Page:
         parser = _Parser(self.url)
         parser.feed(response.content.decode(response.charset or "utf-8"))
         parser.close()
-        self.tags = parser.tags
         self.title = normalise("".join(parser.titles[0])) if parser.titles else None
         self.headings = [
             (tag, normalise("".join(parts))) for tag, parts in parser.headings
@@ -255,7 +252,6 @@ class _Label:
     def __init__(self, for_id):
         self.for_id = for_id
         self.parts = []
-        self.nested = None
 
 
 class _Parser(HTMLParser):
@@ -264,7 +260,6 @@ class _Parser(HTMLParser):
     def __init__(self, url):
         super().__init__(convert_charrefs=True)
         self.url = url
-        self.tags = []
         self.text = []
         self.titles = []
         self.headings = []
@@ -272,7 +267,6 @@ class _Parser(HTMLParser):
         self.controls = []
         self.labels = []
         self._open = []
-        self._open_labels = []
         self._form = None
 
     def handle_starttag(self, tag, attrs):
@@ -280,7 +274,6 @@ class _Parser(HTMLParser):
         attributes = {}
         for name, value in attrs:
             attributes.setdefault(name, "" if value is None else value)
-        self.tags.append(tag)
         if tag not in _INLINE:
             self.handle_data(" ")
         if tag == "form":
@@ -291,7 +284,6 @@ class _Parser(HTMLParser):
         elif tag == "label":
             label = _Label(attributes.get("for"))
             self.labels.append(label)
-            self._open_labels.append(label)
             self._open.append((tag, label.parts))
         elif tag == "title":
             self.titles.append([])
@@ -305,9 +297,6 @@ class _Parser(HTMLParser):
         self.controls.append(control)
         if self._form is not None:
             self._form.controls.append(control)
-        labelable = control.is_field() or tag == "button"
-        if labelable and self._open_labels and self._open_labels[-1].nested is None:
-            self._open_labels[-1].nested = control
         if tag == "button":
             self._open.append((tag, control.parts))
 
@@ -317,8 +306,6 @@ class _Parser(HTMLParser):
             self.handle_data(" ")
         if tag == "form":
             self._form = None
-        elif tag == "label" and self._open_labels:
-            self._open_labels.pop()
         for index in range(len(self._open) - 1, -1, -1):
             if self._open[index][0] == tag:
                 del self._open[index]
@@ -331,16 +318,13 @@ class _Parser(HTMLParser):
             parts.append(data)
 
     def close(self):
-        """Finish the page, then give each label the control it names."""
+        """Finish the page, then give each label the control its `for` names."""
         super().close()
         by_id = {}
         for control in self.controls:
             if control.id:
                 by_id.setdefault(control.id, control)
         for label in self.labels:
-            if label.for_id is not None:
-                control = by_id.get(label.for_id)
-            else:
-                control = label.nested
+            control = by_id.get(label.for_id)
             if control is not None and control.form is not None:
                 control.form.labels.append((normalise("".join(label.parts)), control))

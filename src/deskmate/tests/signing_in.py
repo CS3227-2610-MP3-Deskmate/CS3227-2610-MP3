@@ -6,13 +6,15 @@ checks enforced. Every account is made by the `make_account` fixture.
 """
 
 import itertools
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import urlencode
 
+import pytest
 from django.conf import settings
 from django.test import Client
+from pytest_django.asserts import assertRedirects
 
 from deskmate.tests.helpers import internal_details
-from deskmate.tests.pages import CSRF_FIELD, ORIGIN, SITE, Page, normalise
+from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page, normalise
 
 # The stored values of the two roles.
 REQUESTER = "requester"
@@ -22,6 +24,8 @@ ROLE_PAGES = {REQUESTER: "/requester/", SUPPORT_OFFICER: "/support/"}
 ROLE_TITLES = {REQUESTER: "Requester", SUPPORT_OFFICER: "Support Officer"}
 SIGN_IN = "/sign-in/"
 SIGN_OUT = "/sign-out/"
+# Who sends a request: a signed-out visitor (None) or a user with a role.
+VISITORS = [None, *ROLES]
 # Synthetic passwords; nothing outside the tests uses them.
 PASSWORD = "Synthetic pass 1"
 WRONG_PASSWORD = "Wrong pass 2"
@@ -31,6 +35,18 @@ NOT_FOR_YOUR_ROLE = "This page is not for your role."
 FORM_EXPIRED = "This form has expired. Go back, reload the page and try again."
 # The methods that need no CSRF token (ACC-1.8).
 SAFE_METHODS = frozenset({"GET", "HEAD", "OPTIONS", "TRACE"})
+# A session key in Django's format that no session has.
+UNKNOWN_SESSION_KEY = "0123456789abcdefghijklmnopqrstuv"
+
+# Red-team usernames, stored escaped and decoded with `unquote` only inside
+# the tests: each is markup that a page must show as text (ACC-1.2, ACC-1.3).
+MARKUP_USERNAMES = [
+    pytest.param("%3Cscript%3Ealert(1)%3C%2Fscript%3E", id="script-element"),
+    pytest.param(
+        "%22%3E%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E", id="attribute-breakout"
+    ),
+    pytest.param("%26lt%3Bb%26gt%3B", id="character-reference"),
+]
 
 _numbers = itertools.count(1)
 
@@ -86,6 +102,17 @@ def sign_in_as(make_account, role, username=None):
     return browser, account
 
 
+def browser_as(make_account, visitor):
+    """Return a new browser for `visitor`, one of VISITORS, and its account.
+
+    For None the browser is signed out and the account is None; for a role it
+    is signed in as a new account with that role, as `sign_in_as` does.
+    """
+    if visitor is None:
+        return new_browser(), None
+    return sign_in_as(make_account, visitor)
+
+
 def csrf_token(browser, role=None):
     """Return a CSRF token from a form that `browser` was served.
 
@@ -99,19 +126,19 @@ def csrf_token(browser, role=None):
     return Page(response).csrf_token()
 
 
-def send(browser, method, path, token=None, *, headers=None, secure=False):
+def send(browser, method, path, token=None, *, data=None, headers=None, secure=False):
     """Send a `method` request for `path` from `browser`; return the response.
 
-    A `token` goes in the form data of a POST and in Django's CSRF header for
-    other methods. A request by a method that needs a token carries
-    `Origin: https://testserver`, as a browser's would, unless `headers`
-    replaces it.
+    `data` is sent as form data. A `token` goes in the form data of a POST and
+    in Django's CSRF header for other methods. A request by a method that
+    needs a token carries `Origin: https://testserver`, as a browser's would,
+    unless `headers` replaces it.
     """
-    body = ""
+    fields = dict(data or {})
     extra = {}
     if token is not None:
         if method == "POST":
-            body = urlencode({CSRF_FIELD: token})
+            fields[CSRF_FIELD] = token
         else:
             extra[settings.CSRF_HEADER_NAME] = token
     sent_headers = {} if method in SAFE_METHODS else {"Origin": ORIGIN}
@@ -119,7 +146,7 @@ def send(browser, method, path, token=None, *, headers=None, secure=False):
     return browser.generic(
         method,
         path,
-        body,
+        urlencode(fields),
         content_type="application/x-www-form-urlencoded",
         secure=secure,
         headers=sent_headers,
@@ -128,18 +155,8 @@ def send(browser, method, path, token=None, *, headers=None, secure=False):
 
 
 def assert_redirects(response, path):
-    """Assert `response` is a 302 to exactly `path` on this site, with no query."""
-    assert response.status_code == 302, (
-        f"Expected a 302 redirect to {path}, got {response.status_code}."
-    )
-    base = response.wsgi_request.build_absolute_uri()
-    target = urlsplit(urljoin(base, response["Location"]))
-    assert (target.netloc, target.path, target.query, target.fragment) == (
-        SITE,
-        path,
-        "",
-        "",
-    ), f"Redirected to {response['Location']!r}, not {path!r}."
+    """Assert `response` is a 302 to exactly `path`, with no query or fragment."""
+    assertRedirects(response, path, fetch_redirect_response=False)
 
 
 def assert_sign_in_page(response):

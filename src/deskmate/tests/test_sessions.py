@@ -10,12 +10,13 @@ from importlib import import_module
 import pytest
 from django.conf import settings
 
-from deskmate.tests.accounts import (
+from deskmate.tests.signing_in import (
     PASSWORD,
     REQUESTER,
     ROLE_PAGES,
     SIGN_IN,
     SUPPORT_OFFICER,
+    UNKNOWN_SESSION_KEY,
     assert_redirects,
     assert_sign_in_page,
     assert_signed_in_as,
@@ -28,8 +29,6 @@ from deskmate.tests.accounts import (
 
 EIGHT_HOURS = timedelta(hours=8)
 ONE_SECOND = timedelta(seconds=1)
-# A session key in Django's format that no session has.
-UNKNOWN_SESSION_KEY = "0123456789abcdefghijklmnopqrstuv"
 
 
 def session_store():
@@ -71,6 +70,23 @@ def test_session_activity_does_not_extend_8_hours(make_account, clock):
         assert_redirects(browser.get(SIGN_IN), ROLE_PAGES[SUPPORT_OFFICER])
     clock.set_elapsed(EIGHT_HOURS)
     assert_signed_out(browser)
+
+
+@pytest.mark.ac("ACC-1.6", "ACC-1.4")
+def test_session_saved_again_after_sign_in_still_ends_at_8_hours(make_account, clock):
+    browser, account = sign_in_as(make_account, REQUESTER)
+    clock.set_elapsed(EIGHT_HOURS - ONE_SECOND)
+    # A later feature writes to the session, so Django saves it again and sets
+    # its database expiry 8 hours from now.
+    session = browser.session
+    session["synthetic"] = "written by a later feature"
+    session.save()
+    stored = session.get_model_class().objects.get(session_key=session.session_key)
+    assert stored.expire_date > clock.start + EIGHT_HOURS
+    assert_signed_in_as(browser, REQUESTER, account.username)
+    clock.set_elapsed(EIGHT_HOURS)
+    assert_signed_out(browser)
+    assert_sign_in_page(browser.get(SIGN_IN))
 
 
 @pytest.mark.ac("ACC-1.6")

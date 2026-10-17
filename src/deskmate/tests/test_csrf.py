@@ -2,14 +2,16 @@
 
 Every client here enforces Django's CSRF checks, as a browser gets them, and
 debug is off. Each request that is meant to pass the checks carries
-`Origin: https://testserver`, which ACC-1.8 says is accepted; the tests leave
-requests without an Origin, origins with a port matching the Host header and
-`Origin: http://testserver` alone, because the spec leaves them open.
+`Origin: https://testserver`, which ACC-1.8 says is accepted. The tests leave
+alone what the spec leaves open: requests without an Origin, origins with a
+port matching the Host header, `Origin: http://testserver`, and which origins
+a `DJANGO_ALLOWED_HOSTS` name with `*` or a leading dot allows.
 """
 
 import pytest
 
-from deskmate.tests.accounts import (
+from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
+from deskmate.tests.signing_in import (
     FORM_EXPIRED,
     PASSWORD,
     REQUESTER,
@@ -18,11 +20,13 @@ from deskmate.tests.accounts import (
     SIGN_IN,
     SIGN_OUT,
     SUPPORT_OFFICER,
+    VISITORS,
     WRONG_PASSWORD,
     assert_forbidden,
     assert_redirects,
     assert_signed_in_as,
     assert_signed_out,
+    browser_as,
     csrf_token,
     get_sign_in_page,
     new_browser,
@@ -31,7 +35,6 @@ from deskmate.tests.accounts import (
     sign_in_as,
     submit_sign_in,
 )
-from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
 
 ACCOUNT = "alice"
 EVIL_ORIGIN = "https://evil.example"
@@ -39,7 +42,6 @@ ROUTES = ["/", "/health/", SIGN_IN, SIGN_OUT, *ROLE_PAGES.values()]
 # Methods that need a token: POST sends it in the form, the others in a
 # header, and PROPFIND stands for methods that Django does not name.
 UNSAFE_METHODS = ["POST", "PUT", "PATCH", "DELETE", "PROPFIND"]
-VISITORS = [None, REQUESTER, SUPPORT_OFFICER]
 # Every route with every method, cycling through visitors so each visitor
 # meets each route and each method.
 NO_TOKEN_CASES = [
@@ -62,6 +64,10 @@ REJECTED_ORIGINS = [
     pytest.param("https://testserver.evil.example", id="allowed-host-as-prefix"),
     pytest.param("https://testserver:8443", id="port-not-in-host-header"),
     pytest.param("ftp://testserver", id="other-scheme"),
+    pytest.param("https://TESTSERVER", id="other-case"),
+    pytest.param("https://testserver.", id="trailing-dot"),
+    pytest.param("https://testserver/", id="trailing-slash"),
+    pytest.param(f"{ORIGIN}, {EVIL_ORIGIN}", id="list-with-other-site"),
 ]
 # How the request reached Deskmate: over HTTP or HTTPS, and with which
 # forwarded-scheme header, if any.
@@ -90,11 +96,9 @@ def token_fault_changes(fault):
 @pytest.mark.ac("ACC-1.8")
 @pytest.mark.parametrize(("route", "method", "visitor"), NO_TOKEN_CASES)
 def test_csrf_request_without_token_returns_403(make_account, route, method, visitor):
-    if visitor is None:
-        browser = new_browser()
-        get_sign_in_page(browser)
-    else:
-        browser, _ = sign_in_as(make_account, visitor)
+    browser, _ = browser_as(make_account, visitor)
+    # Loading a form gives the browser a CSRF cookie, so only the token is missing.
+    csrf_token(browser, visitor)
     assert_forbidden(send(browser, method, route), FORM_EXPIRED)
 
 
@@ -210,6 +214,18 @@ def test_origin_rejected_sign_in_returns_403_signs_no_one_in(
 
 
 @pytest.mark.ac("ACC-1.8")
+def test_origin_matching_forwarded_host_sign_in_returns_403_signs_no_one_in(
+    make_account, browser
+):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    page = get_sign_in_page(browser)
+    headers = {"Origin": EVIL_ORIGIN, "X-Forwarded-Host": "evil.example"}
+    response = submit_sign_in(browser, page, ACCOUNT, PASSWORD, headers=headers)
+    assert_forbidden(response, FORM_EXPIRED)
+    assert_signed_out(browser)
+
+
+@pytest.mark.ac("ACC-1.8")
 @pytest.mark.parametrize(("secure", "forwarded"), TRANSPORTS)
 def test_origin_other_site_sign_in_returns_403_whatever_forwarded_scheme(
     make_account, browser, secure, forwarded
@@ -258,10 +274,7 @@ def test_origin_other_site_sign_out_returns_403_stays_signed_in(
 def test_origin_other_site_with_valid_token_returns_403_before_other_rules(
     make_account, route, visitor
 ):
-    if visitor is None:
-        browser = new_browser()
-    else:
-        browser, _ = sign_in_as(make_account, visitor)
+    browser, _ = browser_as(make_account, visitor)
     token = csrf_token(browser, visitor)
     response = send(browser, "POST", route, token, headers={"Origin": EVIL_ORIGIN})
     assert_forbidden(response, FORM_EXPIRED)

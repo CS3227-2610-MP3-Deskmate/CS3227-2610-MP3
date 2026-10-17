@@ -7,7 +7,8 @@ paths, not only the pages served with 200.
 
 import pytest
 
-from deskmate.tests.accounts import (
+from deskmate.tests.pages import CSRF_FIELD
+from deskmate.tests.signing_in import (
     PASSWORD,
     REQUESTER,
     ROLE_PAGES,
@@ -22,8 +23,8 @@ from deskmate.tests.accounts import (
     send,
     sign_in,
     sign_in_as,
+    submit_sign_in,
 )
-from deskmate.tests.pages import CSRF_FIELD
 
 ACCOUNT = "alice"
 
@@ -34,6 +35,7 @@ SIGN_IN_CASES = [
     ("succeeded", 302),
     ("signed-in", 302),
     ("without-token", 403),
+    ("method-not-allowed", 405),
 ]
 # (case, status): responses from a role's page.
 ROLE_PAGE_CASES = [
@@ -62,6 +64,8 @@ def sign_in_response(make_account, case):
     if case == "signed-in":
         signed_in, _ = sign_in_as(make_account, SUPPORT_OFFICER)
         return signed_in.get(SIGN_IN)
+    if case == "method-not-allowed":
+        return send(browser, "PUT", SIGN_IN, csrf_token(browser))
     form = get_sign_in_page(browser).form_with_button("Sign in")
     return form.submit(
         browser,
@@ -112,4 +116,31 @@ def test_headers_role_page_response_denies_framing(make_account, role, case, sta
 def test_headers_role_page_response_is_not_stored(make_account, role, case, status):
     response = role_page_response(make_account, role, case)
     assert response.status_code == status
+    assert "no-store" in cache_directives(response)
+
+
+@pytest.mark.ac("ACC-1.8")
+def test_headers_sign_in_server_error_denies_framing(
+    make_account, browser, database_outage
+):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    with database_outage():
+        response = submit_sign_in(browser, page, ACCOUNT, PASSWORD)
+    assert response.status_code == 500
+    assert response.get("X-Frame-Options") == "DENY"
+
+
+@pytest.mark.ac("ACC-1.8")
+@pytest.mark.parametrize("role", ROLES)
+def test_headers_role_page_server_error_denies_framing_and_is_not_stored(
+    make_account, database_outage, role
+):
+    browser, _ = sign_in_as(make_account, role)
+    browser.raise_request_exception = False
+    with database_outage():
+        response = browser.get(ROLE_PAGES[role])
+    assert response.status_code == 500
+    assert response.get("X-Frame-Options") == "DENY"
     assert "no-store" in cache_directives(response)

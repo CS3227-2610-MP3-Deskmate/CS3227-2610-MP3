@@ -1,11 +1,14 @@
 """ACC-1.2, ACC-1.4 and ACC-1.5: who may open the Requester and Support Officer
 pages, and what those pages show."""
 
+from urllib.parse import unquote
+
 import pytest
 from django.conf import settings
 from django.contrib.auth import get_user_model
 
-from deskmate.tests.accounts import (
+from deskmate.tests.signing_in import (
+    MARKUP_USERNAMES,
     NOT_FOR_YOUR_ROLE,
     PASSWORD,
     REQUESTER,
@@ -13,13 +16,15 @@ from deskmate.tests.accounts import (
     ROLES,
     SIGN_IN,
     SUPPORT_OFFICER,
+    UNKNOWN_SESSION_KEY,
+    VISITORS,
     assert_forbidden,
     assert_method_not_allowed,
     assert_redirects,
     assert_role_page,
     assert_server_error,
+    browser_as,
     csrf_token,
-    new_browser,
     other_role,
     send,
     sign_in_as,
@@ -31,13 +36,10 @@ DISPLAYED_USERNAMES = {
     REQUESTER: "zo\u00eb.r+1-2_x@desk",
     SUPPORT_OFFICER: "\u00dcnal.s+3-4_y@desk",
 }
-# A session key in Django's format that no session has.
-UNKNOWN_SESSION_KEY = "0123456789abcdefghijklmnopqrstuv"
 
 # Every method but GET, with each kind of visitor, alternating the page so each
 # page meets each method and each visitor (ACC-1.4).
 OTHER_METHODS = ["POST", "PUT", "PATCH", "DELETE", "HEAD", "OPTIONS", "TRACE"]
-VISITORS = [None, REQUESTER, SUPPORT_OFFICER]
 METHOD_CASES = [
     pytest.param(
         method,
@@ -59,6 +61,19 @@ def test_role_page_signed_in_shows_username_and_sign_out(make_account, role):
     username = DISPLAYED_USERNAMES[role]
     browser, _ = sign_in_as(make_account, role, username)
     assert_role_page(browser.get(ROLE_PAGES[role]), role, username)
+
+
+@pytest.mark.ac("ACC-1.2")
+@pytest.mark.parametrize("role", ROLES)
+@pytest.mark.parametrize("escaped", MARKUP_USERNAMES)
+def test_role_page_markup_username_shown_as_text(make_account, role, escaped):
+    # make_account uses create_user, which runs no validators, so the account
+    # can have a username that the data model's rules would refuse.
+    username = unquote(escaped)
+    browser, _ = sign_in_as(make_account, role, username)
+    response = browser.get(ROLE_PAGES[role])
+    assert_role_page(response, role, username)
+    assert username not in response.content.decode("utf-8")
 
 
 @pytest.mark.ac("ACC-1.4")
@@ -89,10 +104,7 @@ def test_role_page_account_deleted_redirects_to_sign_in(make_account, role):
 def test_role_page_method_other_than_get_returns_405_empty(
     make_account, method, visitor, path
 ):
-    if visitor is None:
-        browser = new_browser()
-    else:
-        browser, _ = sign_in_as(make_account, visitor)
+    browser, _ = browser_as(make_account, visitor)
     token = csrf_token(browser, visitor)
     assert_method_not_allowed(send(browser, method, path, token))
 
@@ -133,10 +145,7 @@ def test_role_page_stored_role_changed_applies_from_next_request(make_account, r
 def test_role_page_client_claims_do_not_change_access(make_account, claim, visitor):
     claimed_role = REQUESTER if visitor is None else other_role(visitor)
     owner = make_account(f"{claimed_role}-owner", PASSWORD, claimed_role)
-    if visitor is None:
-        browser = new_browser()
-    else:
-        browser, _ = sign_in_as(make_account, visitor)
+    browser, _ = browser_as(make_account, visitor)
     request = {}
     if claim == "query":
         request["query_params"] = {"role": claimed_role, "username": owner.username}

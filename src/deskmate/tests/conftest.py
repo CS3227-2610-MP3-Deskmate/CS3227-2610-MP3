@@ -1,6 +1,7 @@
 """Fixtures that put Deskmate's database into the states the criteria name, make
 accounts, and control the clock."""
 
+import functools
 import secrets
 from contextlib import contextmanager
 
@@ -8,49 +9,66 @@ import pytest
 
 # The shared checks are plain asserts; this makes pytest explain their failures
 # as it does in test files. It must run before the modules are imported.
-pytest.register_assert_rewrite("deskmate.tests.accounts", "deskmate.tests.pages")
+pytest.register_assert_rewrite("deskmate.tests.signing_in", "deskmate.tests.pages")
 
 from django.contrib.auth import get_user_model
 from django.db import DEFAULT_DB_ALIAS, connections
 from django.utils import timezone
 
-from deskmate.tests.accounts import new_browser
+from deskmate.accounts.models import Workspace
 from deskmate.tests.helpers import unused_port
+from deskmate.tests.signing_in import new_browser
 
 # A fast salted hasher, so tests that make many accounts stay quick.
 _TEST_PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
+# The two ways the database fails to answer.
+_REFUSES_CONNECTIONS = "refuses-connections"
+_REJECTS_CREDENTIALS = "rejects-credentials"
 
 
-@pytest.fixture
-def database_refuses_connections(django_db_blocker, monkeypatch):
-    """Point Deskmate's database connection at a local port nothing listens on."""
+@contextmanager
+def _outage(kind):
+    """Inside it, Deskmate's database refuses connections or rejects its credentials.
+
+    `kind` says which. It closes Deskmate's connection on entry and on exit,
+    and restores the connection's settings on exit.
+    """
     connection = connections[DEFAULT_DB_ALIAS]
-    connection.close()
-    monkeypatch.setitem(connection.settings_dict, "HOST", "127.0.0.1")
-    monkeypatch.setitem(connection.settings_dict, "PORT", str(unused_port()))
-    with django_db_blocker.unblock():
-        yield
+    with pytest.MonkeyPatch.context() as patch:
         connection.close()
+        if kind == _REFUSES_CONNECTIONS:
+            patch.setitem(connection.settings_dict, "HOST", "127.0.0.1")
+            patch.setitem(connection.settings_dict, "PORT", str(unused_port()))
+        else:
+            wrong_password = f"wrong-{secrets.token_hex(8)}"
+            patch.setitem(connection.settings_dict, "PASSWORD", wrong_password)
+        try:
+            yield
+        finally:
+            connection.close()
 
 
 @pytest.fixture
-def database_rejects_credentials(django_db_blocker, monkeypatch):
+def database_refuses_connections(django_db_blocker):
+    """Point Deskmate's database connection at a local port nothing listens on."""
+    with django_db_blocker.unblock(), _outage(_REFUSES_CONNECTIONS):
+        yield
+
+
+@pytest.fixture
+def database_rejects_credentials(django_db_blocker):
     """Give Deskmate a wrong password for a database server that answers.
 
     Connects with the right password first, so the test cannot pass merely
     because no database is running.
     """
-    connection = connections[DEFAULT_DB_ALIAS]
     with django_db_blocker.unblock():
-        connection.ensure_connection()
-        connection.close()
-        wrong_password = f"wrong-{secrets.token_hex(8)}"
-        monkeypatch.setitem(connection.settings_dict, "PASSWORD", wrong_password)
-        yield
-        connection.close()
+        connections[DEFAULT_DB_ALIAS].ensure_connection()
+        with _outage(_REJECTS_CREDENTIALS):
+            yield
 
 
-@pytest.fixture(params=["refuses-connections", "rejects-credentials"])
+@pytest.fixture(params=[_REFUSES_CONNECTIONS, _REJECTS_CREDENTIALS])
 def database_outage(request, transactional_db):
     """Return a context manager inside which Deskmate's database does not answer.
 
@@ -60,24 +78,7 @@ def database_outage(request, transactional_db):
     fixture's parameter says. The database is not wrapped in a transaction,
     so what the test wrote before the outage is really stored.
     """
-    connection = connections[DEFAULT_DB_ALIAS]
-
-    @contextmanager
-    def outage():
-        with pytest.MonkeyPatch.context() as patch:
-            connection.close()
-            if request.param == "refuses-connections":
-                patch.setitem(connection.settings_dict, "HOST", "127.0.0.1")
-                patch.setitem(connection.settings_dict, "PORT", str(unused_port()))
-            else:
-                wrong_password = f"wrong-{secrets.token_hex(8)}"
-                patch.setitem(connection.settings_dict, "PASSWORD", wrong_password)
-            try:
-                yield
-            finally:
-                connection.close()
-
-    return outage
+    return functools.partial(_outage, request.param)
 
 
 @pytest.fixture
@@ -85,20 +86,17 @@ def make_account(db, settings):
     """Return a function that makes an account and returns its user.
 
     `make_account(username, password, role)` makes the user through the user
-    model's `create_user`, with `role` one of the plain strings "requester"
-    and "support_officer", in a workspace made for the test through the user
-    model's `workspace` foreign key. Every account of a test shares that
-    workspace. The models are looked up only when an account is made.
+    model's `create_user`, which runs no validators, with `role` one of the
+    plain strings "requester" and "support_officer". Every account of a test
+    belongs to one workspace made for the test.
     """
     settings.PASSWORD_HASHERS = _TEST_PASSWORD_HASHERS
     workspaces = []
 
     def make(username, password, role):
-        user_model = get_user_model()
         if not workspaces:
-            workspace_model = user_model._meta.get_field("workspace").related_model
-            workspaces.append(workspace_model.objects.create())
-        return user_model.objects.create_user(
+            workspaces.append(Workspace.objects.create())
+        return get_user_model().objects.create_user(
             username=username, password=password, role=role, workspace=workspaces[0]
         )
 

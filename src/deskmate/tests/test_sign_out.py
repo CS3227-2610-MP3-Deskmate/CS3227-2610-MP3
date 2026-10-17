@@ -1,24 +1,39 @@
-"""ACC-1.2: signing out with the Sign out button, only by POST /sign-out/."""
+"""ACC-1.2: signing out with the Sign out button, only by POST /sign-out/.
+
+`/sign-out/` lists only POST, so other methods get 405 with an empty body
+(TECHNICAL-SPEC "Routes").
+"""
 
 import pytest
 from django.conf import settings
 
-from deskmate.tests.accounts import (
+from deskmate.tests.pages import Page
+from deskmate.tests.signing_in import (
     ROLE_PAGES,
     ROLES,
     SIGN_IN,
     SIGN_OUT,
+    VISITORS,
     assert_method_not_allowed,
     assert_redirects,
     assert_signed_in_as,
     assert_signed_out,
+    browser_as,
     csrf_token,
     new_browser,
     send,
     session_cookie,
     sign_in_as,
 )
-from deskmate.tests.pages import Page
+
+# Methods other than GET and POST, each sent with a valid CSRF token, and each
+# with every kind of visitor.
+OTHER_METHODS = ["HEAD", "PUT", "PATCH", "DELETE"]
+METHOD_CASES = [
+    pytest.param(method, visitor, id=f"{method}-{visitor or 'signed-out'}")
+    for method in OTHER_METHODS
+    for visitor in VISITORS
+]
 
 
 def press_sign_out(browser, role):
@@ -62,3 +77,17 @@ def test_sign_out_get_returns_405_empty_stays_signed_in(make_account, role):
     browser, account = sign_in_as(make_account, role)
     assert_method_not_allowed(browser.get(SIGN_OUT))
     assert_signed_in_as(browser, role, account.username)
+
+
+@pytest.mark.ac("ACC-1.2")
+@pytest.mark.parametrize(("method", "visitor"), METHOD_CASES)
+def test_sign_out_method_other_than_post_returns_405_empty_signs_no_one_out(
+    make_account, method, visitor
+):
+    browser, account = browser_as(make_account, visitor)
+    token = csrf_token(browser, visitor)
+    assert_method_not_allowed(send(browser, method, SIGN_OUT, token))
+    if account is None:
+        assert_signed_out(browser)
+    else:
+        assert_signed_in_as(browser, visitor, account.username)

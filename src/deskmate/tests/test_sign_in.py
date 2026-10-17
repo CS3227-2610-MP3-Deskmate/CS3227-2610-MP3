@@ -1,7 +1,8 @@
 """ACC-1.1, ACC-1.3 and ACC-1.7: signing in with a username and password.
 
 Also the sign-in parts of ACC-1.4, a database that does not answer, and of
-ACC-1.5, parameters that try to choose where signing in leads.
+ACC-1.5, parameters that try to choose where signing in leads, and the methods
+that /sign-in/ does not list, which sign no one in or out (ACC-1.1, ACC-1.2).
 """
 
 from urllib.parse import unquote, urlencode
@@ -9,7 +10,9 @@ from urllib.parse import unquote, urlencode
 import pytest
 from django.conf import settings
 
-from deskmate.tests.accounts import (
+from deskmate.tests.pages import CSRF_FIELD, Page
+from deskmate.tests.signing_in import (
+    MARKUP_USERNAMES,
     NOT_FOR_YOUR_ROLE,
     PASSWORD,
     REQUESTER,
@@ -18,26 +21,33 @@ from deskmate.tests.accounts import (
     SIGN_IN,
     SIGN_IN_ERROR,
     SUPPORT_OFFICER,
+    VISITORS,
     WRONG_PASSWORD,
     assert_forbidden,
+    assert_method_not_allowed,
     assert_redirects,
     assert_server_error,
     assert_sign_in_failed,
     assert_sign_in_page,
     assert_signed_in_as,
     assert_signed_out,
+    browser_as,
     csrf_token,
     get_sign_in_page,
     new_browser,
     other_role,
+    send,
     sign_in,
     sign_in_as,
     submit_sign_in,
 )
-from deskmate.tests.pages import CSRF_FIELD, Page
 
 ACCOUNT = "alice"
 LONGEST = "a" * 150
+# Four characters that NFKC turns into one, U+1F8F: Greek capital alpha with
+# dasia, perispomeni and prosgegrammeni.
+DECOMPOSED_ALPHA = "\u0391\u0314\u0342\u0345"
+COMPOSED_ALPHA = "\u1f8f"
 # Response headers whose values are the time the response was made.
 TIME_HEADERS = frozenset({"date", "expires", "last-modified"})
 
@@ -53,13 +63,24 @@ NO_MATCH = [
     pytest.param("nobody", WRONG_PASSWORD, id="both-wrong"),
 ]
 
-# Red-team usernames, stored escaped and decoded only inside the test.
-MARKUP_USERNAMES = [
-    pytest.param("%3Cscript%3Ealert(1)%3C%2Fscript%3E", id="script-element"),
-    pytest.param(
-        "%22%3E%3Cimg%20src%3Dx%20onerror%3Dalert(1)%3E", id="attribute-breakout"
-    ),
-    pytest.param("%26lt%3Bb%26gt%3B", id="character-reference"),
+# Red-team characters, stored escaped and decoded only inside the tests.
+# Invisible and format characters are not Unicode whitespace and NFKC keeps
+# them, so a username with one anywhere in it is not `alice` (ACC-1.7).
+INVISIBLE_CHARACTERS = [
+    pytest.param("%E2%80%8B", id="zero-width-space"),  # U+200B
+    pytest.param("%E2%80%8D", id="zero-width-joiner"),  # U+200D
+    pytest.param("%E2%81%A0", id="word-joiner"),  # U+2060
+    pytest.param("%EF%BB%BF", id="zero-width-no-break-space"),  # U+FEFF
+    pytest.param("%C2%AD", id="soft-hyphen"),  # U+00AD
+]
+INVISIBLE_PLACES = ["before", "after", "inside"]
+NULL_CHARACTER = "%00"
+# Usernames far over the limit (ACC-1.3), as an escaped character and how many
+# times it is typed. NFKC turns U+FDFA into 18 characters.
+OVERSIZED_USERNAMES = [
+    pytest.param("a", 100_000, id="100000-characters"),
+    pytest.param("%EF%B7%BA", 9, id="9-characters-162-after-nfkc"),
+    pytest.param("%EF%B7%BA", 100_000, id="100000-characters-nfkc-expands"),
 ]
 
 # Typed usernames that sign in as `alice` (ACC-1.7): Unicode whitespace around
@@ -88,6 +109,25 @@ USERNAME_LENGTHS = [
     pytest.param(LONGEST, LONGEST, id="150-characters"),
     pytest.param(f" {LONGEST}\u3000", LONGEST, id="150-after-trimming"),
     pytest.param("e\u0301" * 150, "\u00e9" * 150, id="150-after-nfkc"),
+    pytest.param(
+        DECOMPOSED_ALPHA * 150, COMPOSED_ALPHA * 150, id="600-typed-150-after-nfkc"
+    ),
+    pytest.param(
+        f"{DECOMPOSED_ALPHA * 150} ",
+        COMPOSED_ALPHA * 150,
+        id="601-typed-150-after-trimming-and-nfkc",
+    ),
+]
+# Typed usernames 151 characters long after trimming and NFKC, each with the
+# account whose username they would be if cut to 150 characters (ACC-1.3).
+TOO_LONG_USERNAMES = [
+    pytest.param("e\u0301" * 151, "\u00e9" * 150, id="151-after-nfkc"),
+    pytest.param(
+        DECOMPOSED_ALPHA * 150 + "\u0391",
+        COMPOSED_ALPHA * 150,
+        id="601-typed-151-after-nfkc",
+    ),
+    pytest.param("a" * 601, LONGEST, id="601-characters"),
 ]
 
 # Passwords that differ from PASSWORD only in case, spaces or by NFKC.
@@ -99,6 +139,8 @@ NON_MATCHING_PASSWORDS = [
     pytest.param("\uff33" + PASSWORD[1:], id="fullwidth-letter"),
 ]
 SPACED_PASSWORD = "  Spaced  pass 3 "
+# Methods that /sign-in/ does not list (TECHNICAL-SPEC "Routes").
+OTHER_METHODS = ["PUT", "PATCH", "DELETE"]
 
 # A `next` parameter on the sign-in page, in the submission's query, or in its
 # form data, with values that point off the site or at the other role's page.
@@ -115,6 +157,14 @@ NEXT_CASES = [
 
 def next_target(value, role):
     return ROLE_PAGES[other_role(role)] if value == OTHER_ROLE_PAGE else value
+
+
+def assert_matches_no_account(browser, username, password):
+    """Submit `username` and `password` and check the ACC-1.3 failure."""
+    page = get_sign_in_page(browser)
+    response = submit_sign_in(browser, page, username, password)
+    assert_sign_in_failed(response, username, page)
+    assert_signed_out(browser)
 
 
 @pytest.mark.ac("ACC-1.1")
@@ -154,6 +204,51 @@ def test_sign_in_failed_markup_username_kept_as_text(make_account, browser, esca
     response = submit_sign_in(browser, page, typed, PASSWORD)
     assert_sign_in_failed(response, typed, page)
     assert typed not in response.content.decode("utf-8")
+
+
+@pytest.mark.ac("ACC-1.3", "ACC-1.7")
+@pytest.mark.parametrize("place", INVISIBLE_PLACES)
+@pytest.mark.parametrize("escaped", INVISIBLE_CHARACTERS)
+def test_sign_in_username_with_invisible_character_matches_no_account(
+    make_account, browser, escaped, place
+):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    character = unquote(escaped)
+    typed = {
+        "before": character + ACCOUNT,
+        "after": ACCOUNT + character,
+        "inside": ACCOUNT[:3] + character + ACCOUNT[3:],
+    }[place]
+    assert_matches_no_account(browser, typed, PASSWORD)
+
+
+@pytest.mark.ac("ACC-1.3", "ACC-1.7")
+@pytest.mark.parametrize("field", ["username", "password"])
+def test_sign_in_null_character_matches_no_account(make_account, browser, field):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    null = unquote(NULL_CHARACTER)
+    if field == "username":
+        assert_matches_no_account(browser, ACCOUNT + null, PASSWORD)
+    else:
+        assert_matches_no_account(browser, ACCOUNT, PASSWORD + null)
+
+
+@pytest.mark.ac("ACC-1.3")
+@pytest.mark.parametrize(("escaped", "count"), OVERSIZED_USERNAMES)
+def test_sign_in_oversized_username_matches_no_account(
+    make_account, browser, escaped, count
+):
+    make_account(LONGEST, PASSWORD, REQUESTER)
+    assert_matches_no_account(browser, unquote(escaped) * count, PASSWORD)
+
+
+@pytest.mark.ac("ACC-1.3", "ACC-1.7")
+@pytest.mark.parametrize(("typed", "username"), TOO_LONG_USERNAMES)
+def test_sign_in_username_151_after_nfkc_matches_no_account(
+    make_account, browser, typed, username
+):
+    make_account(username, PASSWORD, SUPPORT_OFFICER)
+    assert_matches_no_account(browser, typed, PASSWORD)
 
 
 @pytest.mark.ac("ACC-1.3")
@@ -203,6 +298,28 @@ def test_sign_in_database_down_returns_500_signs_no_one_in(
         response = submit_sign_in(browser, page, ACCOUNT, PASSWORD)
     assert_server_error(response)
     assert_signed_out(browser)
+
+
+@pytest.mark.ac("ACC-1.1", "ACC-1.2")
+@pytest.mark.parametrize("visitor", VISITORS, ids=["signed-out", *ROLES])
+@pytest.mark.parametrize("method", OTHER_METHODS)
+def test_sign_in_method_other_than_get_or_post_returns_405_empty_signs_no_one_in(
+    make_account, method, visitor
+):
+    make_account(ACCOUNT, PASSWORD, REQUESTER)
+    browser, account = browser_as(make_account, visitor)
+    form = get_sign_in_page(new_browser()).form_with_button("Sign in")
+    credentials = {
+        form.field("Username").name: ACCOUNT,
+        form.field("Password").name: PASSWORD,
+    }
+    token = csrf_token(browser, visitor)
+    response = send(browser, method, SIGN_IN, token, data=credentials)
+    assert_method_not_allowed(response)
+    if account is None:
+        assert_signed_out(browser)
+    else:
+        assert_signed_in_as(browser, visitor, account.username)
 
 
 @pytest.mark.ac("ACC-1.5")

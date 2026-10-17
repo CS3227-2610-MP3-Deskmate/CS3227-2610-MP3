@@ -4,8 +4,8 @@ import pytest
 from django.utils.html import strip_tags
 from pytest_django.asserts import assertInHTML
 
-from deskmate.tests.accounts import REQUESTER, sign_in_as
 from deskmate.tests.helpers import media_type
+from deskmate.tests.signing_in import REQUESTER, sign_in_as
 
 
 def assert_placeholder_page(response):
