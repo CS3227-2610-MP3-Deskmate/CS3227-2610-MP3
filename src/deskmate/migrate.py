@@ -1,0 +1,139 @@
+"""Apply Deskmate's unapplied migrations, run by the Vercel production build.
+
+Run it as `python src/deskmate/migrate.py` with no arguments. It uses the settings
+module in DJANGO_SETTINGS_MODULE, or Deskmate's own when that is unset. It writes
+only the lines PLT-2.12 allows, all to standard output, ending with
+`migration: passed` and status 0 once no migration remains unapplied, or
+`migration: failed` and status 1. Nothing is retried (PLT-2.14).
+
+In a Vercel build other than production it fails before loading settings or
+connecting (PLT-2.8). Otherwise it holds a migration lock on its one database
+connection for its whole run, never waiting for it and never reconnecting
+(PLT-2.14).
+
+Unlike the `migrate` command, it sends no pre_migrate or post_migrate signal, so
+no content type or permission rows are created: their handlers can write output
+PLT-2.12 forbids, and no spec uses Django permissions.
+
+Its standard-library imports run while this script's folder is still
+`sys.path[0]`, so no file in src/deskmate may share a name with a
+standard-library module.
+"""
+
+import logging
+import os
+import re
+import sys
+import warnings
+from pathlib import Path
+
+# The line settings.py writes for each invalid variable (PLT-1.7).
+_CANNOT_START = r"Deskmate cannot start: [A-Z][A-Z0-9_]* is not set or is invalid\."
+# The key of the PostgreSQL advisory lock that only one run can hold (PLT-2.14).
+_LOCK_KEY = 3227_0011
+
+
+def _silence():
+    """Send descriptors 1 and 2 to the null device; return a writer for real stdout.
+
+    Redirecting the descriptors, not just sys.stdout and sys.stderr, also hides
+    writes made below Python, such as by the database driver.
+    """
+    sys.stdout.flush()
+    sys.stderr.flush()
+    real_stdout = os.fdopen(os.dup(1), "w")
+    null = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(null, 1)
+    os.dup2(null, 2)
+    os.close(null)
+
+    def say(line):
+        print(line, file=real_stdout, flush=True)
+
+    return say
+
+
+def _unsilenced(line):
+    """Print a line to standard output, ignoring a closed or broken stream."""
+    try:
+        print(line, flush=True)
+    except (OSError, ValueError):
+        pass
+
+
+def _no_reconnect():
+    """Stand in for the connection's `connect` once it has connected (PLT-2.14).
+
+    Defence in depth: no current path reconnects, since any database error ends
+    the run, but this stops future code that catches one and carries on.
+    """
+    raise ConnectionError
+
+
+def _lock(connection):
+    """Connect, refuse any later connection, then take the lock without waiting."""
+    connection.ensure_connection()
+    connection.connect = _no_reconnect
+    with connection.cursor() as cursor:
+        cursor.execute("SELECT pg_try_advisory_lock(%s)", [_LOCK_KEY])
+        if not cursor.fetchone()[0]:
+            raise RuntimeError
+
+
+def _unapplied(executor):
+    """Return the executor's plan to apply every migration not yet applied."""
+    return executor.migration_plan(executor.loader.graph.leaf_nodes())
+
+
+def _migrate(say):
+    """Set Django up and apply the unapplied migrations once; return if none remain."""
+    # Imported only once output is silenced and errors are caught (PLT-2.12).
+    import django  # noqa: PLC0415
+    from django.db import connection  # noqa: PLC0415
+    from django.db.migrations.executor import MigrationExecutor  # noqa: PLC0415
+
+    def report_progress(action, migration=None, fake=False):
+        if action == "apply_start":
+            say(f"migration: applying {migration.app_label}.{migration.name}")
+
+    django.setup()
+    _lock(connection)
+    executor = MigrationExecutor(connection, report_progress)
+    executor.loader.check_consistent_history(connection)
+    if executor.loader.detect_conflicts():
+        raise RuntimeError
+    plan = _unapplied(executor)
+    if not plan:
+        say("migration: nothing to apply")
+    executor.migrate(executor.loader.graph.leaf_nodes(), plan=plan)
+    return not _unapplied(MigrationExecutor(connection))
+
+
+def main():
+    """Migrate the configured database and return the exit status."""
+    if "VERCEL" in os.environ and os.environ.get("VERCEL_ENV") != "production":
+        print("migration: failed", flush=True)  # Before anything else (PLT-2.8).
+        return 1
+    # Python puts this script's own folder first; Deskmate imports from src.
+    sys.path[0] = str(Path(__file__).resolve().parents[1])
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "deskmate.settings")
+    say = _unsilenced  # Only `migration: failed` is written if silencing fails.
+    try:
+        say = _silence()
+        warnings.simplefilter("ignore")
+        logging.disable(logging.CRITICAL)
+        passed = _migrate(say)
+    except SystemExit as error:
+        message = error.code if isinstance(error.code, str) else ""
+        for line in message.splitlines():
+            if re.fullmatch(_CANNOT_START, line):
+                say(line)
+        passed = False
+    except BaseException:  # noqa: BLE001 -- errors may quote secrets or rows.
+        passed = False
+    say("migration: passed" if passed else "migration: failed")
+    return 0 if passed else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())
