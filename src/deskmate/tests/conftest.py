@@ -16,6 +16,7 @@ pytest.register_assert_rewrite(
     "deskmate.tests.signing_in",
     "deskmate.tests.pages",
     "deskmate.tests.demo_workspaces",
+    "deskmate.tests.rate_limits",
 )
 
 from django.contrib.auth import get_user_model
