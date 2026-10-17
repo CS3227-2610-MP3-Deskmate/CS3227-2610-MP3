@@ -41,7 +41,7 @@ Threat: a visitor opens a role's pages without signing in or with the other role
 - Sessions are stored on the server. Sign-in replaces the session ID and sign-out ends the session on the server. The session cookie is dropped when the browser closes, and the server ends the session 8 hours after sign-in, however active its user is (ACC-1.2, ACC-1.6).
 - With debug off, the session and CSRF cookies are sent only over HTTPS and with `SameSite=Lax`, and page scripts cannot read the session cookie (ACC-1.6).
 - No page may show the sign-in or role pages in a frame, and no browser or cache may store the role pages (ACC-1.8).
-- Sign-in attempts are rate-limited, which slows online password guessing, and no username is ever locked out: see [Rate limits](#rate-limits).
+- Sign-in attempts are rate-limited, which slows online password guessing, and no username is locked out on its own: see [Rate limits](#rate-limits).
 
 ## Demo workspaces
 
@@ -66,13 +66,14 @@ Threat: anyone, without signing in, scripts sign-in attempts or workspace creati
 - The limits for everyone depend on nothing the client sends, so however many addresses an attacker uses, they bound how fast the app hashes passwords ([free-plan limits](TECHNICAL-SPEC.md#free-plan-operating-limits)) and adds workspaces (ACC-3.1).
 - The limits apply after the CSRF and `Origin` checks and before any password is checked or hashed ([Routes](TECHNICAL-SPEC.md#routes)), so a reused CSRF token gets a script no more than the limits allow.
 - The client address is the last entry of `X-Forwarded-For`, which a proxy that adds or replaces that entry keeps out of the client's control, so entries a client puts before it change nothing. IPv6 addresses are grouped by their first 64 bits, so moving between the addresses of one network does not escape a limit, and every address that is not a valid IP address shares one group, so made-up values make no new groups (ACC-3.5).
-- Counts are kept only in the database, and attempts that arrive together are counted one after another, so neither parallel requests nor separate server instances let more through (ACC-3.6).
-- No limit is kept per username, so no one can lock a known user out. The limits still slow password guessing, and generated passwords have about 79 bits of entropy ([Demo workspaces](#demo-workspaces)).
-- The records hold the address group only as a hash keyed with the secret key, and nothing else the request sent. Each counted attempt deletes the records 10 minutes old or older, so they neither keep readable addresses nor grow without bound (ACC-3.6).
-- The limits fail closed: when the database does not answer or fails during the check, no password is hashed and nothing is created (ACC-3.7).
+- Counts are kept only in the database, and attempts that arrive together are counted one after another, so neither parallel requests nor separate server instances let more through (ACC-3.6, ACC-3.8).
+- No limit is kept per username, so no one can lock out one user without locking out everyone; see the gap below.
+- The limits' records keep no readable address or anything else the request sent, and are deleted after 10 minutes, as the [data model](TECHNICAL-SPEC.md#data-model) and ACC-3.6 say.
+- The limits fail closed: when the database does not answer or fails during the check, or an attempt waits more than 5 seconds to be checked, no password is hashed and nothing is created (ACC-3.7).
 - Gap: the limits per address group trust that Vercel's proxy adds or replaces the last entry of `X-Forwarded-For` with the client's own address, without a port; this has not been verified ([operator prerequisites](TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites)). If it does not, a client could escape those limits or get another address refused; the limits for everyone still hold.
-- Gap: anyone with a few address groups, such as several IPv6 networks, can use up the limits for everyone, so that no one can sign in or create a workspace while they keep it up, though users already signed in are unaffected. Visitors who share one public address, such as on a campus network, share its limits.
-- Gap: the limits bound how fast the app hashes, not how much it hashes in a month, so an attack kept up at the limits for everyone for days could still use up the CPU allowance; the cost of a hash in production has not been measured.
+- Gap: anyone with 3 address groups can use up the sign-in limit for everyone, and anyone with 2 the creation limit for everyone, and one IPv6 network, such as a `/56` with its 256 groups, provides that many times over. While such an attack is kept up, no one can sign in or create a workspace, though users already signed in are unaffected (ACC-3.1, ACC-3.5). Visitors who share one public address, such as on a campus network, share its limits.
+- Gap: after a refusal by a limit for everyone, `Retry-After` shows, to the second, when other visitors' attempts were counted, though no address, username or count (ACC-3.3).
+- Gap: the limits bound how fast the app hashes, not how much it hashes in a month, so an attack kept up at the limits for everyone for days could still use up the CPU allowance; the cost of a hash in production has not been measured ([operator prerequisites](TECHNICAL-SPEC.md#review-decisions-and-operator-prerequisites)).
 - Gap: refused requests, and requests to other routes, still run the app and may query the database, so a flood of them can use up the free plans' function invocations, CPU and database compute; nothing stops requests before they reach the app.
 - Gap: a password that ACC-2 did not generate, such as one an operator sets, is protected from guessing only by the limits' rate.
 
