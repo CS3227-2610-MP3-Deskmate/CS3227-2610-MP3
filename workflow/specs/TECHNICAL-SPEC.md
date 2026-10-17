@@ -11,12 +11,28 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 
 Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL only; there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
 
+## Data model
+
+Users, their passwords and their sessions use Django's built-in authentication. [Roles and workspaces](PRODUCT-SPEC.md#roles) are defined in the product spec.
+
+| Record | Holds | Rules | Criteria |
+| --- | --- | --- | --- |
+| Workspace | Only its identity | Every user belongs to exactly one workspace, and so does every record users can see | — |
+| User | Username, password hash, workspace and role | Usernames are unique across all workspaces, because signing in asks for no workspace; each is 1 to 150 characters of Unicode letters and digits and `@`, `.`, `+`, `-`, `_`, matched as ACC-1.7 says. Passwords are stored only as Django's salted hashes. Workspace and role are both required, and the role is either Requester or Support Officer | ACC-1.1, ACC-1.3, ACC-1.5, ACC-1.7 |
+| Session | The signed-in user and when the session ends | Stored in the database, so signing out ends it on the server; its lifetime is set by ACC-1.6 | ACC-1.2, ACC-1.6, ACC-1.8 |
+
 ## Routes
+
+On every route below, whether or not the visitor is signed in, these rules apply in order: a request by any method other than `GET`, `HEAD`, `OPTIONS` or `TRACE` without a valid CSRF token, or, with debug off, with an `Origin` that ACC-1.8 rejects, gets `403` (ACC-1.8); otherwise a method the route does not list gets `405` with an empty body (ACC-1.2, ACC-1.4); otherwise the route's access applies. Access `Requester` or `Support Officer` means signed-out visitors are redirected to `/sign-in/` (ACC-1.4) and the other role gets `403` (ACC-1.5).
 
 | Route | Methods | Access | Purpose | Criteria |
 | --- | --- | --- | --- | --- |
 | `/` | GET | Public | Placeholder home page | PLT-1.1 |
 | `/health/` | GET | Public | Reports whether the app can reach its database | PLT-1.2, PLT-1.3 |
+| `/sign-in/` | GET, POST | Public; signed-in users are redirected to their role's page | Sign-in page | ACC-1.1, ACC-1.3–ACC-1.8 |
+| `/sign-out/` | POST | Public | Signs the visitor out | ACC-1.2, ACC-1.8 |
+| `/requester/` | GET | Requester | Requester's placeholder page | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8 |
+| `/support/` | GET | Support Officer | Support Officer's placeholder page | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8 |
 
 ## Configuration
 
@@ -30,7 +46,7 @@ Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard develo
 | `POSTGRES_USER` | The user the app connects as | Always | Any but the empty string | PLT-1.7 |
 | `POSTGRES_PASSWORD` | That user's password | Always | Any but the empty string | PLT-1.7 |
 | `DJANGO_SECRET_KEY` | The key Django signs sessions and other data with | With debug off | At least 50 characters, at least 5 of them different, and not starting with `django-insecure-` | PLT-1.7 |
-| `DJANGO_ALLOWED_HOSTS` | The host names the app answers to, separated by commas; spaces around a name and empty items are ignored. Names match as in Django's `ALLOWED_HOSTS`, so `*` matches every host ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)) | With debug off | At least one name | PLT-1.7 |
+| `DJANGO_ALLOWED_HOSTS` | The host names the app answers to, separated by commas; spaces around a name and empty items are ignored. Names match as in Django's `ALLOWED_HOSTS`, so `*` matches every host ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)) | With debug off | At least one name | PLT-1.7, ACC-1.8 |
 | `DJANGO_DEBUG` | Turns on Django's debug pages | No | Any; only `true` turns debug on (PLT-1.6) | PLT-1.6 |
 
 The existing variables and their PLT-1 validation contract stay unchanged. Production configuration adds these constraints under PLT-2.8:
