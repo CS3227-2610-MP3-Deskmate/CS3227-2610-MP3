@@ -1,10 +1,13 @@
-"""ACC-2.5: requests to /demo-workspace/ that must create nothing, and fields
-and query parameters that must not change what a creation makes.
+"""ACC-2.5: requests to /demo-workspace/ that must create nothing, and fields,
+query parameters and request bodies that must not change what a creation
+makes.
 
 Every client enforces Django's CSRF checks, as a browser gets them, and debug
 is off. Each request that is meant to pass the checks carries
 `Origin: https://testserver`, which ACC-1.8 says is accepted.
 """
+
+import json
 
 import pytest
 from django.conf import settings
@@ -16,6 +19,7 @@ from deskmate.tests.demo_workspaces import (
     press_create,
     stored_state,
 )
+from deskmate.tests.pages import ORIGIN
 from deskmate.tests.signing_in import (
     EVIL_ORIGIN,
     FORM_EXPIRED,
@@ -39,6 +43,8 @@ from deskmate.tests.signing_in import (
     send,
     token_fault_changes,
 )
+
+pytestmark = pytest.mark.usefixtures("fast_hashing")
 
 VISITOR_IDS = ["signed-out", *ROLES]
 # Methods that /demo-workspace/ does not list (TECHNICAL-SPEC "Routes").
@@ -66,11 +72,9 @@ EXTRA_CASES = [
     pytest.param(tuple(EXTRA_FIELDS), "form", id="all-in-form"),
     pytest.param(tuple(EXTRA_FIELDS), "query", id="all-in-query"),
 ]
-
-
-@pytest.fixture(autouse=True)
-def _hash_quickly(fast_hashing):
-    """Hash the generated passwords with the tests' fast hasher."""
+# Bodies other than a form's that a valid POST may have, each sent with the
+# token in Django's CSRF header instead of a form field.
+BODY_FORMATS = ["json", "multipart"]
 
 
 def assert_visitor_unchanged(browser, visitor, account):
@@ -98,9 +102,7 @@ def test_demo_request_without_token_returns_403_creates_nothing(
 
 @pytest.mark.ac("ACC-2.5", "ACC-1.8")
 @pytest.mark.parametrize("fault", TOKEN_FAULTS)
-def test_demo_form_without_valid_token_returns_403_creates_nothing(
-    make_account, browser, fault
-):
+def test_demo_form_without_valid_token_returns_403_creates_nothing(db, browser, fault):
     before = stored_state()
     if fault == "no-csrf-cookie":
         response = press_create(browser, get_sign_in_page(new_browser()))
@@ -113,9 +115,7 @@ def test_demo_form_without_valid_token_returns_403_creates_nothing(
 
 @pytest.mark.ac("ACC-2.5", "ACC-1.8")
 @pytest.mark.parametrize("origin", REJECTED_ORIGINS)
-def test_demo_form_rejected_origin_returns_403_creates_nothing(
-    make_account, browser, origin
-):
+def test_demo_form_rejected_origin_returns_403_creates_nothing(db, browser, origin):
     assert settings.DEBUG is False
     before = stored_state()
     response = press_create(browser, headers={"Origin": origin})
@@ -188,3 +188,33 @@ def test_demo_extra_fields_or_query_parameters_create_the_same(
     accounts = assert_created(response, before)
     assert alice.username not in [account.username for account in accounts]
     assert PASSWORD not in [account.password for account in accounts]
+
+
+@pytest.mark.ac("ACC-2.5")
+@pytest.mark.parametrize("body_format", BODY_FORMATS)
+def test_demo_json_or_multipart_body_with_token_header_creates_the_same(
+    make_account, browser, body_format
+):
+    alice = make_account("alice", PASSWORD, REQUESTER)
+    fields = {
+        "username": alice.username,
+        "role": SUPPORT_OFFICER,
+        "workspace": str(alice.workspace_id),
+    }
+    headers = {"Origin": ORIGIN, "X-CSRFToken": csrf_token(browser)}
+    before = stored_state()
+    if body_format == "json":
+        response = browser.post(
+            DEMO_WORKSPACE,
+            json.dumps(fields),
+            content_type="application/json",
+            headers=headers,
+        )
+    else:
+        # The test client sends a mapping as multipart/form-data by default.
+        response = browser.post(DEMO_WORKSPACE, fields, headers=headers)
+    # assert_created checks the new workspace holds only the three accounts
+    # of ACC-2.1, with their roles, and that Alice and her workspace are as
+    # they were.
+    accounts = assert_created(response, before)
+    assert alice.username not in [account.username for account in accounts]

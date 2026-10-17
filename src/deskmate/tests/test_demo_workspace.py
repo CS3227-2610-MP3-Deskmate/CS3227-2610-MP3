@@ -13,6 +13,7 @@ import pytest
 
 from deskmate.tests.demo_workspaces import (
     ACCOUNTS,
+    CLASH_TIMES,
     DEMO_WORKSPACE,
     assert_created,
     assert_demo_form,
@@ -48,11 +49,10 @@ from deskmate.tests.signing_in import (
     submit_sign_in,
 )
 
+pytestmark = pytest.mark.usefixtures("fast_hashing")
+
 # Codes, from the 31 characters, for the tests to make Deskmate draw (ACC-2.3).
 FIRST, SECOND, THIRD = "aaaaaa", "bbbbbb", "cccccc"
-# When a clashing username is taken: before the visitor presses the button, or
-# by another creation that finishes while the accounts are being saved.
-CLASH_TIMES = ["before", "meanwhile"]
 TAKEN = [pytest.param(number, id=prefix) for number, (prefix, _) in enumerate(ACCOUNTS)]
 # Usernames like one of a code's but not the same, so the code does not clash;
 # usernames are compared case-sensitively (ACC-1.7).
@@ -63,11 +63,6 @@ NEAR_MISSES = [
 ]
 EIGHT_HOURS = timedelta(hours=8)
 ONE_SECOND = timedelta(seconds=1)
-
-
-@pytest.fixture(autouse=True)
-def _hash_quickly(fast_hashing):
-    """Hash the generated passwords with the tests' fast hasher."""
 
 
 def press_with_taken(make_account, browser, taken, when):
@@ -131,7 +126,7 @@ def test_demo_created_accounts_sign_in_to_their_role_pages(make_account, browser
 
 
 @pytest.mark.ac("ACC-2.2")
-def test_demo_creating_signs_no_one_in(make_account, browser):
+def test_demo_creating_signs_no_one_in(db, browser):
     before = stored_state()
     assert_created(press_create(browser), before)
     assert_signed_out(browser)
@@ -141,7 +136,7 @@ def test_demo_creating_signs_no_one_in(make_account, browser):
 
 
 @pytest.mark.ac("ACC-2.3")
-def test_demo_no_clash_draws_one_code_and_uses_it(make_account, browser, codes):
+def test_demo_no_clash_draws_one_code_and_uses_it(db, browser, codes):
     draws = codes(FIRST)
     before = stored_state()
     response = press_create(browser)

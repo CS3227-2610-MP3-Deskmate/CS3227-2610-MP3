@@ -10,6 +10,8 @@ which the `codes` fixture replaces with a `Draws`.
 A `Watch` records what a creation generates and what the database reports, so
 a test can look for those values where they must not appear, and it can make
 another creation take a code's usernames while the accounts are being saved.
+It learns each password hashed and its hash from the tests' hasher in
+`deskmate.tests.hashing`, which the `fast_hashing` fixture configures.
 """
 
 import re
@@ -20,13 +22,15 @@ from contextlib import contextmanager
 from importlib import import_module
 from urllib.parse import unquote, urlsplit
 
+import pytest
 from django.conf import settings
 from django.contrib.auth import SESSION_KEY, get_user_model
-from django.contrib.auth.hashers import MD5PasswordHasher, check_password
+from django.contrib.auth.hashers import check_password
 from django.core import signing
 from django.db import DatabaseError, connection, connections, transaction
 
 from deskmate.accounts.models import Workspace
+from deskmate.tests.hashing import reporting_hashes_to
 from deskmate.tests.pages import CSRF_FIELD, SITE, Page
 from deskmate.tests.signing_in import (
     REQUESTER,
@@ -60,7 +64,12 @@ PASSWORD_LENGTH = 16
 MAX_CODES = 3
 # The function the tests replace to choose the codes Deskmate draws.
 RANDOM_CODE = "deskmate.accounts.demo.random_code"
-RECORDING_HASHER = "deskmate.tests.demo_workspaces.RecordingPasswordHasher"
+# When a clashing username is taken: before the visitor presses the button, or
+# by another creation that finishes while the accounts are being saved.
+CLASH_TIMES = ["before", "meanwhile"]
+# Both debug modes, for what ACC-2.4 and ACC-2.6 require in either. A test
+# turns debug on with `settings.DEBUG = True`, which Django reads per request.
+DEBUG_MODES = [pytest.param(False, id="debug-off"), pytest.param(True, id="debug-on")]
 
 # An account the created page shows, with its stored role.
 Account = namedtuple("Account", ["username", "role", "password"])
@@ -69,8 +78,6 @@ Account = namedtuple("Account", ["username", "role", "password"])
 _GENERATED_USERNAME = re.compile(r"(?:requester1|requester2|support1)-[0-9a-z]+")
 # How long another connection may take to save accounts while a request waits.
 _MEANWHILE_SECONDS = 30
-# The Watches that are active, which RecordingPasswordHasher tells what it hashes.
-_watches = []
 
 
 def usernames_for(code):
@@ -241,9 +248,14 @@ def assert_created(response, before, elsewhere=()):
     return accounts
 
 
+def _session_store():
+    """Return the SessionStore class of the session engine Deskmate uses."""
+    return import_module(settings.SESSION_ENGINE).SessionStore
+
+
 def signed_in_account_ids():
     """Return the id, as a string, of each account a stored session signs in."""
-    store = import_module(settings.SESSION_ENGINE).SessionStore
+    store = _session_store()
     sessions = store.get_model_class().objects.all()
     signed_in = {
         store().decode(session.session_data).get(SESSION_KEY) for session in sessions
@@ -267,7 +279,7 @@ def records_holding(values):
 
 def sessions_holding(values):
     """Return the number of each stored session whose data holds one of `values`."""
-    store = import_module(settings.SESSION_ENGINE).SessionStore
+    store = _session_store()
     sessions = store.get_model_class().objects.all()
     return [
         number
@@ -289,7 +301,7 @@ def cookies_holding(values, *jars):
         for name, morsel in jar.items():
             readings = _readings(morsel.value)
             if name == settings.SESSION_COOKIE_NAME:
-                store = import_module(settings.SESSION_ENGINE).SessionStore
+                store = _session_store()
                 readings.append(repr(store(session_key=morsel.value).load()))
             if any(value in reading for value in values for reading in readings):
                 found.append(name)
@@ -312,18 +324,6 @@ def _readings(value):
 def found_in(text, values):
     """Return the description of each of `values`, a mapping, found in `text`."""
     return [label for label, value in values.items() if value in text]
-
-
-class RecordingPasswordHasher(MD5PasswordHasher):
-    """Django's salted MD5 hasher, fast enough for tests, which also tells every
-    active Watch each password it hashes and the hash it makes."""
-
-    def encode(self, password, salt):
-        """Hash `password` with `salt`, and tell every active Watch."""
-        encoded = super().encode(password, salt)
-        for watch in _watches:
-            watch.hashed(password, encoded)
-        return encoded
 
 
 class Draws:
@@ -349,7 +349,7 @@ class Draws:
 class Watch:
     """What Deskmate generates, and what its database reports, inside `watching`.
 
-    It records each password the configured hasher hashes and the hash, each
+    It records each password the tests' hasher hashes and the hash, each
     generated username sent to the database, and each database error.
     """
 
@@ -374,7 +374,15 @@ class Watch:
         a new workspace from another database connection, and committed. So
         the code clashes because a creation finished meanwhile (ACC-2.3), and
         the clash is found only when the accounts are saved.
+
+        It needs the `transactional_db` fixture, whose database is emptied
+        after the test, because the other connection commits those accounts,
+        and rolling back a test's transaction would leave them in place.
         """
+        assert not connection.in_atomic_block, (
+            "take_meanwhile needs transactional_db, not a database wrapped in a "
+            "transaction."
+        )
         for username in usernames:
             code = username.split("-", 1)[1]
             self._meanwhile.setdefault(code, []).append(username)
@@ -450,12 +458,8 @@ def watching():
     Fails on leaving if the Watch could not save accounts meanwhile.
     """
     watch = Watch()
-    _watches.append(watch)
-    try:
-        with connection.execute_wrapper(watch):
-            yield watch
-    finally:
-        _watches.remove(watch)
+    with reporting_hashes_to(watch.hashed), connection.execute_wrapper(watch):
+        yield watch
     assert not watch.problems, watch.problems
 
 
@@ -538,3 +542,44 @@ class PartwayFailure:
             cursor.execute(f"DROP TRIGGER IF EXISTS {self._NAME} ON {table}")
             cursor.execute(f"DROP FUNCTION IF EXISTS {self._NAME}()")
             cursor.execute(f"DROP SEQUENCE IF EXISTS {self._COUNTER}")
+
+
+class _InterfaceErrorOnThirdRow:
+    """A database execute wrapper that makes the statement inserting every third
+    account row fail with Django's InterfaceError, whose message holds the
+    statement's text values."""
+
+    def __init__(self):
+        self.rows = 0
+
+    def __call__(self, execute, sql, params, many, context):
+        """Run one statement for Deskmate, unless it inserts a third account row."""
+        if _saves_account(sql):
+            texts = list(_strings(params))
+            generated = [text for text in texts if _GENERATED_USERNAME.fullmatch(text)]
+            before, self.rows = self.rows, self.rows + max(1, len(generated))
+            if before // 3 != self.rows // 3:
+                database = context["connection"]
+                # As the driver's errors are: Django raises the driver's
+                # InterfaceError as its own, chained to it.
+                with database.wrap_database_errors:
+                    raise database.Database.InterfaceError(
+                        f"the connection was lost while sending ({', '.join(texts)})"
+                    )
+        return execute(sql, params, many, context)
+
+
+@contextmanager
+def interface_error_partway():
+    """Inside it, every third account row Deskmate's connection is asked to insert
+    fails with Django's InterfaceError, as when the driver loses its connection.
+
+    InterfaceError is a Django database `Error` but not a `DatabaseError`. Its
+    message holds the row's text, generated username and password hash
+    included. So a creation fails after its workspace and two of its accounts
+    are written, and so does every attempt it makes again. The connection stays
+    usable, so what was written remains unless the creation undoes it. Enter it
+    inside `watching`, so that the Watch sees each statement and the error.
+    """
+    with connection.execute_wrapper(_InterfaceErrorOnThirdRow()):
+        yield

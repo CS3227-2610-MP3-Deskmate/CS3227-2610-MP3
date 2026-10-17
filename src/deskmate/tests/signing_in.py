@@ -55,8 +55,11 @@ UNSAFE_METHODS = [method for method in METHODS if method not in SAFE_METHODS]
 # browser's, or a token from a page with no CSRF cookie sent alongside it.
 TOKEN_FAULTS = ["missing", "empty", "other-browser", "no-csrf-cookie"]
 # Origins that are not exactly https:// or http:// and an allowed host
-# (ACC-1.8).
+# (ACC-1.8). Python's URL parser drops tabs, so the tab could hide from a check
+# of the parsed host; the space-separated list is RFC 6454's form of a list;
+# and the lookalike is "testserver" with a Cyrillic letter dze, in punycode.
 EVIL_ORIGIN = "https://evil.example"
+LOOKALIKE_HOST = "test\u0455erver".encode("idna").decode("ascii")
 REJECTED_ORIGINS = [
     pytest.param(EVIL_ORIGIN, id="other-site"),
     pytest.param("null", id="null"),
@@ -67,6 +70,10 @@ REJECTED_ORIGINS = [
     pytest.param("https://testserver.", id="trailing-dot"),
     pytest.param("https://testserver/", id="trailing-slash"),
     pytest.param(f"{ORIGIN}, {EVIL_ORIGIN}", id="list-with-other-site"),
+    pytest.param(f"{ORIGIN}\u200b", id="zero-width-space-after-host"),
+    pytest.param("https://\ttestserver", id="tab-before-host"),
+    pytest.param(f"{ORIGIN} {EVIL_ORIGIN}", id="space-separated-list"),
+    pytest.param(f"https://{LOOKALIKE_HOST}", id="punycode-lookalike-host"),
 ]
 # A session key in Django's format that no session has.
 UNKNOWN_SESSION_KEY = "0123456789abcdefghijklmnopqrstuv"
@@ -301,15 +308,17 @@ def assert_server_error(response, hidden=None):
     """Assert `response` is a 500 that shows no internal details (PLT-1.4).
 
     `hidden` maps a description to another value the response must not show,
-    such as a generated password (ACC-2.4).
+    such as a generated password (ACC-2.4). Its descriptions must differ from
+    those of the values every 500 is checked for, so it cannot replace one.
     """
     assert response.status_code == 500, f"Expected 500, got {response.status_code}."
     body = response.content.decode("utf-8", "replace")
-    details = {
+    always = {
         "the secret key": settings.SECRET_KEY,
         "the database's name": settings.DATABASES["default"]["NAME"],
         "the database error's type": "OperationalError",
         "the database error's message": "connection to server",
-        **(hidden or {}),
     }
-    assert internal_details(body, details) == []
+    replaced = sorted(always.keys() & (hidden or {}).keys())
+    assert not replaced, f"`hidden` would replace these checks: {replaced}"
+    assert internal_details(body, {**always, **(hidden or {})}) == []

@@ -1,24 +1,31 @@
-"""ACC-2.4, and the part of ACC-2.6 about standard error and logs: creations
-that fail, what they leave behind, and what Deskmate writes about them.
+"""ACC-2.4, and the part of ACC-2.6 about standard output, standard error and
+logs: creations that fail, what they leave behind, and what Deskmate writes
+about them.
 
-pytest-django turns debug off when the tests start, so debug is turned on for
-one test with `settings.DEBUG = True`, which Django reads on every request.
-`written_output` captures what Deskmate writes to standard error and its logs.
+`written_output` captures what Deskmate writes to standard output, standard
+error and its logs.
 
 Tests where a creation fails partway or codes clash use a database that is not
 wrapped in a transaction, so what a failed attempt writes would really remain
-unless the attempt undoes it. Each checks first that the database's own
-errors held a generated value, so the check of what was written can find one.
+unless the attempt undoes it. Each test of what Deskmate writes when a
+creation fails checks first that an error the database raised held a
+generated value, so the check of what was written can find one.
 """
 
+import re
+
 import pytest
+from django.db import DatabaseError, InterfaceError
 
 from deskmate.tests.demo_workspaces import (
     ACCOUNTS,
+    CLASH_TIMES,
+    DEBUG_MODES,
     MAX_CODES,
     assert_created,
     assert_nothing_created,
     found_in,
+    interface_error_partway,
     press_create,
     role_of,
     stored_state,
@@ -32,28 +39,33 @@ from deskmate.tests.signing_in import (
     get_sign_in_page,
 )
 
-DEBUG_MODES = [pytest.param(False, id="debug-off"), pytest.param(True, id="debug-on")]
+pytestmark = pytest.mark.usefixtures("fast_hashing")
+
 # Codes, from the 31 characters, for the tests to make Deskmate draw. The
 # fourth is never taken, so drawing it would let a creation succeed.
 CODES = ("aaaaaa", "bbbbbb", "cccccc", "dddddd")
-CLASH_TIMES = ["before", "meanwhile"]
 TRACEBACK = "Traceback (most recent call last)"
-
-
-@pytest.fixture(autouse=True)
-def _hash_quickly(fast_hashing):
-    """Hash the generated passwords with the tests' fast hasher."""
 
 
 def not_shown(watch, error_type="IntegrityError"):
     """Return, by description, what a failed creation's 500 page must not show:
     every generated value, the start of any generated username, and the type
-    of the database's error."""
+    of the error the creation failed with."""
     return {
         **watch.generated(),
         **{f"the start of a {prefix} username": f"{prefix}-" for prefix, _ in ACCOUNTS},
-        "the database error's type": error_type,
+        "the failed creation's error type": error_type,
     }
+
+
+def assert_error_written(written, error_type):
+    """Assert `written` holds a traceback and the line that ends one, naming an
+    exception of `error_type`, by its name or its dotted path (PLT-1.4)."""
+    assert TRACEBACK in written, "No traceback was written."
+    exception_line = rf"^(?:[\w.]+\.)?{error_type}(?::|$)"
+    assert re.search(exception_line, written, re.MULTILINE), (
+        f"No line written names the {error_type} raised."
+    )
 
 
 @pytest.mark.ac("ACC-2.4")
@@ -86,6 +98,27 @@ def test_demo_database_fails_partway_returns_500_creates_nothing(
     if not debug:
         hidden = not_shown(watch, database_fails_partway.error_type)
         assert_server_error(response, hidden)
+    assert_nothing_created(before)
+
+
+@pytest.mark.ac("ACC-2.4")
+@pytest.mark.parametrize("debug", DEBUG_MODES)
+def test_demo_interface_error_partway_returns_500_creates_nothing(
+    transactional_db, make_account, browser, settings, debug
+):
+    # Django's InterfaceError is a database Error that is not a DatabaseError.
+    settings.DEBUG = debug
+    make_account("alice", PASSWORD, REQUESTER)
+    before = stored_state()
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    with watching() as watch, interface_error_partway():
+        response = press_create(browser, page)
+    assert any(isinstance(error, InterfaceError) for error in watch.errors), (
+        "No InterfaceError was raised."
+    )
+    if not debug:
+        assert_server_error(response, not_shown(watch, "InterfaceError"))
     assert_nothing_created(before)
 
 
@@ -135,10 +168,8 @@ def test_demo_all_3_codes_clash_log_keeps_type_and_traceback_not_generated_value
     assert any(found_in(str(error), generated) for error in duplicates), (
         "No database error named a generated username."
     )
-    output = written_output.text()
-    assert TRACEBACK in output
-    assert "IntegrityError" in output
-    assert found_in(output, generated) == []
+    assert_error_written(written_output.standard_error(), "IntegrityError")
+    assert found_in(written_output.text(), generated) == []
 
 
 @pytest.mark.ac("ACC-2.6", "ACC-2.4")
@@ -156,16 +187,37 @@ def test_demo_database_fails_partway_log_keeps_type_and_traceback_not_generated_
     assert any(found_in(str(error), generated) for error in rows), (
         "No database error held the row being written."
     )
-    output = written_output.text()
-    assert TRACEBACK in output
-    assert database_fails_partway.error_type in output
-    assert found_in(output, generated) == []
+    errors = written_output.standard_error()
+    assert_error_written(errors, database_fails_partway.error_type)
+    assert found_in(written_output.text(), generated) == []
+
+
+@pytest.mark.ac("ACC-2.6", "ACC-2.4")
+@pytest.mark.parametrize("debug", DEBUG_MODES)
+def test_demo_interface_error_partway_log_keeps_type_and_traceback_not_generated_values(
+    transactional_db, browser, settings, written_output, debug
+):
+    settings.DEBUG = debug
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    with watching() as watch, interface_error_partway():
+        press_create(browser, page)
+    generated = watch.generated()
+    failures = [error for error in watch.errors if isinstance(error, InterfaceError)]
+    assert failures, "No InterfaceError was raised."
+    assert not any(isinstance(error, DatabaseError) for error in failures)
+    held = [label for error in failures for label in found_in(str(error), generated)]
+    assert any(label.startswith("generated username") for label in held), (
+        "No InterfaceError named a generated username."
+    )
+    assert_error_written(written_output.standard_error(), "InterfaceError")
+    assert found_in(written_output.text(), generated) == []
 
 
 @pytest.mark.ac("ACC-2.6")
 @pytest.mark.parametrize("debug", DEBUG_MODES)
-def test_demo_created_writes_no_generated_value_to_stderr_or_logs(
-    make_account, browser, settings, written_output, debug
+def test_demo_created_writes_no_generated_value_to_stdout_stderr_or_logs(
+    db, browser, settings, written_output, debug
 ):
     settings.DEBUG = debug
     page = get_sign_in_page(browser)

@@ -109,8 +109,8 @@ class Control:
 class Form:
     """A form on a page: where and how it is sent, its controls and labels.
 
-    `text` is the text inside the form, and `text_after` the page's text after
-    the form ends, both with whitespace normalised.
+    `text_after` is the page's text after the form ends, with whitespace
+    normalised.
     """
 
     def __init__(self, page_url, attributes):
@@ -119,10 +119,8 @@ class Form:
         self.action = attributes.get("action") or ""
         self.controls = []
         self.labels = []
-        self.text = ""
         self.text_after = ""
-        # Where the form's text starts and ends among the parser's text parts.
-        self.text_start = 0
+        # Where the form's text ends among the parser's text parts.
         self.text_end = None
 
     @property
@@ -315,7 +313,6 @@ class _Parser(HTMLParser):
             self.handle_data(" ")
         if tag == "form":
             self._form = Form(self.url, attributes)
-            self._form.text_start = len(self.text)
             self.forms.append(self._form)
         elif tag == "table":
             self.tables.append([])
@@ -379,11 +376,10 @@ class _Parser(HTMLParser):
 
     def close(self):
         """Finish the page, then give each label the control its `for` names
-        and each form its text and the text after it."""
+        and each form the text after it."""
         super().close()
         for form in self.forms:
             end = len(self.text) if form.text_end is None else form.text_end
-            form.text = normalise("".join(self.text[form.text_start : end]))
             form.text_after = normalise("".join(self.text[end:]))
         by_id = {}
         for control in self.controls:

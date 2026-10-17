@@ -1,6 +1,6 @@
 """Fixtures that put Deskmate's database into the states the criteria name, make
 accounts, control the clock and the codes Deskmate draws, and capture what
-Deskmate writes to standard error and its logs."""
+Deskmate writes to standard output, standard error and its logs."""
 
 import functools
 import io
@@ -23,12 +23,8 @@ from django.db import DEFAULT_DB_ALIAS, connections
 from django.utils import timezone
 
 from deskmate.accounts.models import Workspace
-from deskmate.tests.demo_workspaces import (
-    RANDOM_CODE,
-    RECORDING_HASHER,
-    Draws,
-    PartwayFailure,
-)
+from deskmate.tests.demo_workspaces import RANDOM_CODE, Draws, PartwayFailure
+from deskmate.tests.hashing import RECORDING_HASHER
 from deskmate.tests.helpers import unused_port
 from deskmate.tests.signing_in import new_browser
 
@@ -110,7 +106,8 @@ def database_fails_partway(request, transactional_db):
 
 @pytest.fixture
 def fast_hashing(settings):
-    """Hash passwords with a fast salted hasher that tells each Watch what it hashes."""
+    """Hash passwords with the tests' fast salted hasher, RecordingPasswordHasher
+    in deskmate.tests.hashing."""
     settings.PASSWORD_HASHERS = [RECORDING_HASHER]
 
 
@@ -183,17 +180,34 @@ def codes(monkeypatch):
 
 
 class WrittenOutput:
-    """Everything Deskmate writes to standard error or its logs during a test."""
+    """Everything Deskmate writes to standard output, standard error or its logs
+    during a test.
+
+    `stream` is where its logs' stream handlers write, which stand for
+    standard error.
+    """
 
     def __init__(self, capsys):
         self.stream = io.StringIO()
         self._capsys = capsys
+        self._stdout = []
         self._stderr = []
 
-    def text(self):
-        """Return what has been written so far."""
-        self._stderr.append(self._capsys.readouterr().err)
+    def _read(self):
+        """Collect what has been written to sys.stdout and sys.stderr so far."""
+        captured = self._capsys.readouterr()
+        self._stdout.append(captured.out)
+        self._stderr.append(captured.err)
+
+    def standard_error(self):
+        """Return what has been written so far to standard error and the logs."""
+        self._read()
         return self.stream.getvalue() + "".join(self._stderr)
+
+    def text(self):
+        """Return everything written so far, standard output included."""
+        errors = self.standard_error()
+        return errors + "".join(self._stdout)
 
 
 def _writes_output(handler):
@@ -213,7 +227,8 @@ def written_output(capsys):
     as the one that writes server errors to standard error (PLT-1.4), writes
     to it instead of its stream. So does a handler for warnings and errors on
     the root logger, which stands in for the one Python uses when no other
-    handles a record. What is written to sys.stderr is captured too.
+    handles a record. What is written to sys.stdout and sys.stderr is
+    captured too, because the host records both (ACC-2.6).
     """
     output = WrittenOutput(capsys)
     root = logging.getLogger()

@@ -1,8 +1,8 @@
 """ACC-2.6: a demo workspace's passwords appear only in the response to the POST
 that created it, which no browser or cache may store and no page may frame.
 
-What Deskmate writes to standard error and its logs is checked in
-test_demo_failures.py.
+What Deskmate writes to standard output, standard error and its logs is
+checked in test_demo_failures.py.
 """
 
 import pytest
@@ -11,14 +11,18 @@ from django.contrib.auth.hashers import check_password, identify_hasher
 
 from deskmate.tests.demo_workspaces import (
     CREATE,
+    DEBUG_MODES,
     DEMO_WORKSPACE,
+    MAX_CODES,
     assert_created,
     cookies_holding,
     found_in,
     press_create,
     records_holding,
+    role_of,
     sessions_holding,
     stored_state,
+    usernames_for,
 )
 from deskmate.tests.helpers import cache_directives
 from deskmate.tests.pages import CSRF_FIELD
@@ -38,6 +42,8 @@ from deskmate.tests.signing_in import (
     sign_in_as,
 )
 
+pytestmark = pytest.mark.usefixtures("fast_hashing")
+
 # Every route, each requested by GET afterwards (TECHNICAL-SPEC "Routes").
 ROUTES = ["/", "/health/", SIGN_IN, SIGN_OUT, DEMO_WORKSPACE, *ROLE_PAGES.values()]
 # (case, status): responses from /demo-workspace/.
@@ -50,11 +56,8 @@ RESPONSE_CASES = [
     ("head", 405),
     ("options", 405),
 ]
-
-
-@pytest.fixture(autouse=True)
-def _hash_quickly(fast_hashing):
-    """Hash the generated passwords with the tests' fast hasher."""
+# Codes, from the 31 characters, for the tests to make Deskmate draw.
+CODES = ("aaaaaa", "bbbbbb", "cccccc")
 
 
 def shown_in(response, values):
@@ -66,6 +69,13 @@ def shown_in(response, values):
         response.cookies.output(),
     ]
     return found_in("\n".join(sent), values)
+
+
+def assert_not_stored_and_denies_framing(response):
+    """Assert `response` carries `Cache-Control: no-store` and
+    `X-Frame-Options: DENY`."""
+    assert "no-store" in cache_directives(response)
+    assert response.get("X-Frame-Options") == "DENY"
 
 
 def demo_response(make_account, case):
@@ -84,7 +94,7 @@ def demo_response(make_account, case):
 
 
 @pytest.mark.ac("ACC-2.6")
-def test_demo_passwords_stored_only_as_salted_hashes(make_account, browser):
+def test_demo_passwords_stored_only_as_salted_hashes(db, browser):
     before = stored_state()
     accounts = assert_created(press_create(browser), before)
     for account in accounts:
@@ -116,7 +126,7 @@ def test_demo_passwords_in_no_session_cookie_or_other_record(make_account, brows
 
 
 @pytest.mark.ac("ACC-2.6")
-def test_demo_passwords_shown_by_no_route_afterwards(make_account, browser):
+def test_demo_passwords_shown_by_no_route_afterwards(db, browser):
     before = stored_state()
     accounts = assert_created(press_create(browser), before)
     passwords = {f"the password of {each.username}": each.password for each in accounts}
@@ -133,7 +143,7 @@ def test_demo_passwords_shown_by_no_route_afterwards(make_account, browser):
 
 @pytest.mark.ac("ACC-2.6")
 def test_demo_same_submission_sent_again_creates_another_workspace_shows_only_it(
-    make_account, browser
+    db, browser
 ):
     # A reload that resends the form sends the same data, CSRF token included.
     form = get_sign_in_page(browser).form_with_button(CREATE)
@@ -157,18 +167,48 @@ def test_demo_same_submission_sent_again_creates_another_workspace_shows_only_it
 def test_demo_response_is_not_stored_and_denies_framing(make_account, case, status):
     response = demo_response(make_account, case)
     assert response.status_code == status
-    assert "no-store" in cache_directives(response)
-    assert response.get("X-Frame-Options") == "DENY"
+    assert_not_stored_and_denies_framing(response)
 
 
 @pytest.mark.ac("ACC-2.6")
-def test_demo_server_error_is_not_stored_and_denies_framing(
-    make_account, browser, database_outage
+def test_demo_database_down_server_error_is_not_stored_and_denies_framing(
+    transactional_db, browser, database_outage
 ):
     page = get_sign_in_page(browser)
     browser.raise_request_exception = False
     with database_outage():
         response = press_create(browser, page)
     assert response.status_code == 500
-    assert "no-store" in cache_directives(response)
-    assert response.get("X-Frame-Options") == "DENY"
+    assert_not_stored_and_denies_framing(response)
+
+
+@pytest.mark.ac("ACC-2.6")
+@pytest.mark.parametrize("debug", DEBUG_MODES)
+def test_demo_all_3_codes_clash_server_error_is_not_stored_and_denies_framing(
+    make_account, browser, settings, codes, debug
+):
+    settings.DEBUG = debug
+    draws = codes(*CODES)
+    for code in CODES:
+        username = usernames_for(code)[0]
+        make_account(username, PASSWORD, role_of(username))
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    response = press_create(browser, page)
+    assert draws.count == MAX_CODES
+    assert response.status_code == 500
+    assert_not_stored_and_denies_framing(response)
+
+
+@pytest.mark.ac("ACC-2.6")
+@pytest.mark.parametrize("debug", DEBUG_MODES)
+def test_demo_database_fails_partway_server_error_is_not_stored_and_denies_framing(
+    browser, settings, database_fails_partway, debug
+):
+    settings.DEBUG = debug
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    with database_fails_partway:
+        response = press_create(browser, page)
+    assert response.status_code == 500
+    assert_not_stored_and_denies_framing(response)
