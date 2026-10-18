@@ -9,6 +9,8 @@ the other tests does, so all of them are in one address group. The clock is
 stopped, so every attempt is counted at one moment.
 """
 
+from urllib.parse import unquote
+
 import pytest
 
 from deskmate.tests.demo_workspaces import (
@@ -77,6 +79,7 @@ SUBMISSIONS = [
     pytest.param("alice", PASSWORD, False, id="signs-in"),
     pytest.param("alice", WRONG_PASSWORD, False, id="wrong-password"),
     pytest.param("nobody", WRONG_PASSWORD, False, id="unknown-username"),
+    pytest.param("%EF%BD%81lice", PASSWORD, False, id="invalid-fullwidth-username"),
     pytest.param("", WRONG_PASSWORD, False, id="empty-username"),
     pytest.param("a" * 151, WRONG_PASSWORD, False, id="too-long-username"),
     pytest.param("alice", "", False, id="empty-password"),
@@ -229,6 +232,7 @@ def test_limit_unlisted_methods_are_not_counted(db, kind):
 def test_limit_counts_every_allowed_sign_in_attempt_however_it_ends(
     make_account, clock, username, password, left_out
 ):
+    username = unquote(username)
     make_account("alice", PASSWORD, REQUESTER)
     signs_in = username == "alice" and password == PASSWORD and not left_out
     visitor = Visitor()

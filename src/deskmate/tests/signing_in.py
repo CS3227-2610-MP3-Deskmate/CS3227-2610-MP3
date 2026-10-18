@@ -225,7 +225,7 @@ def assert_sign_in_page(response):
 
     Neither field may be `required` or have a `maxlength`: every submission
     must reach the server (ACC-1.3), and a username that is 150 characters
-    only after NFKC must be typeable (ACC-1.7).
+    only after trimming must be typeable (ACC-1.7).
     """
     assert response.status_code == 200
     page = Page(response)
