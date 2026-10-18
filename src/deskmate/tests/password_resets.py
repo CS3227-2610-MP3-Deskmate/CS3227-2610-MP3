@@ -107,7 +107,7 @@ class Resetter:
 
 
 @pytest.fixture(name="resetter")
-def reset_fixture(make_account):
+def reset_fixture(make_account, clock):
     """An officer and an eligible Requester in the existing shared workspace fixture."""
     browser, officer = sign_in_as(make_account, SUPPORT_OFFICER, "officer")
     requester = make_account("alice", PASSWORD, REQUESTER)

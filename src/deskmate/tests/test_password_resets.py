@@ -478,10 +478,11 @@ def test_reset_failures_preserve_old_hash_sessions_and_hide_sensitive_logs(
                     raise error_type(detail) from cause
         return execute(sql, params, many, context)
 
-    if failure == "random":
-        monkeypatch.setattr("secrets.choice", broken_random)
-    with reporting_hashes_to(hashed), connection.execute_wrapper(broken_save):
-        response = sender.post(target.username)
+    with monkeypatch.context() as patch:
+        if failure == "random":
+            patch.setattr("secrets.choice", broken_random)
+        with reporting_hashes_to(hashed), connection.execute_wrapper(broken_save):
+            response = sender.post(target.username)
     assert failed, "The requested failure was not reached."
     protected(response)
     hidden = {
