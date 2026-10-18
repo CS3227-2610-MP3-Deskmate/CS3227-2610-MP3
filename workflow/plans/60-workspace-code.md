@@ -1,0 +1,9 @@
+Goal: Show `Workspace: <code>` first after the heading of the **Demo workspace created** page, as [ACC-2.1](../specs/product/accounts.md#acc-2-create-a-demo-workspace) says, without storing anything new.
+
+- [ ] **implementer**: Change `src/deskmate/accounts/demo.py`, `src/deskmate/accounts/views.py` and `src/deskmate/accounts/templates/accounts/demo_workspace.html`. Makes the page-text assertion in `read_created_page` (`src/deskmate/tests/demo_workspaces.py`) pass in `test_demo_workspace.py`, `test_demo_passwords.py`, `test_demo_requests.py`, `test_demo_failures.py` and the `test_rate_limit*.py` files that create workspaces.
+  - In `demo.py`, have `create_workspace()` return the code its accounts were saved under together with those accounts, such as a `Created(code, accounts)` namedtuple. `_save_under_free_code` already draws that code for `_accounts`; keep it and return it with what `_save` returns. Drawing, clash retries, hashing, error hiding and saving stay as they are. Update the two docstrings.
+  - In the `demo_workspace` view, put the code and the accounts in the template context.
+  - In the template, add `<p>Workspace: {{ code }}</p>` before the copy-now `<p>`. Use plain text, not a heading, with no trailing period.
+  - Add no model field, migration, session value, log line or dependency. Leave `src/deskmate/tests/` alone.
+  - Run the [verify command](../../AGENTS.md#commands) and report the actual result.
+- [ ] **implementer**: In the Getting accounts section of `docs/UserGuide.md`, change the sentence about the **Demo workspace created** page, and the quote after it, so the page shows `Workspace: `*code* and then the copy-now line, a table and a **Sign in** link. Keep the next paragraph's *code* consistent with this. No new tests. Read the section back, and run the verify command again.
