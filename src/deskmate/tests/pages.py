@@ -66,7 +66,7 @@ def normalise(text):
 
 
 class Control:
-    """An input or button on a page, with the attributes a browser reads."""
+    """An input, textarea or button, with the attributes a browser reads."""
 
     def __init__(self, tag, attributes, form):
         self.tag = tag
@@ -99,11 +99,17 @@ class Control:
 
     def is_field(self):
         """Return whether this control is a field a user types into."""
-        return self.tag == "input" and self.type not in _NOT_SENT | {"hidden"}
+        return self.tag == "textarea" or (
+            self.tag == "input" and self.type not in _NOT_SENT | {"hidden"}
+        )
 
     def is_sent(self):
         """Return whether a browser sends this control's value with its form."""
-        return self.tag == "input" and bool(self.name) and self.type not in _NOT_SENT
+        return (
+            self.tag in ("input", "textarea")
+            and bool(self.name)
+            and self.type not in _NOT_SENT
+        )
 
 
 class Form:
@@ -341,7 +347,7 @@ class _Parser(HTMLParser):
             link = (attributes["href"], [])
             self.links.append(link)
             self._open.append((tag, link[1]))
-        elif tag in ("input", "button"):
+        elif tag in ("input", "button", "textarea"):
             self._add_control(tag, attributes)
         elif tag == "label":
             label = _Label(attributes.get("for"))
@@ -359,11 +365,19 @@ class _Parser(HTMLParser):
         self.controls.append(control)
         if self._form is not None:
             self._form.controls.append(control)
-        if tag == "button":
+        if tag in ("button", "textarea"):
             self._open.append((tag, control.parts))
 
     def handle_endtag(self, tag):
         """Record an element as it closes."""
+        if tag == "textarea":
+            control = self.controls[-1]
+            control.value = (
+                "".join(control.parts)
+                .replace("\r\n", "\n")
+                .replace("\r", "\n")
+                .removeprefix("\n")
+            )
         if tag not in _INLINE:
             self.handle_data(" ")
         if tag == "form" and self._form is not None:
