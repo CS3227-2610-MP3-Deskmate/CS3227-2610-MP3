@@ -3,6 +3,7 @@
 The provider is faked at the `urlopen` boundary, so no test contacts SoC LLM.
 """
 
+import http.client
 import json
 from urllib.error import URLError
 
@@ -37,10 +38,11 @@ class FakeProvider:
         self.requests = []
         self.body = body
         self.status = status
+        self.make_response = FakeResponse
 
     def __call__(self, request, timeout=None):
         self.requests.append((request, timeout))
-        return FakeResponse(self.status, self.body)
+        return self.make_response(self.status, self.body)
 
 
 class FakeResponse:
@@ -49,9 +51,15 @@ class FakeResponse:
     def __init__(self, status, body):
         self.status = status
         self.body = body
+        self.position = 0
 
     def read(self, amount):
-        return self.body[:amount]
+        chunk = self.body[self.position : self.position + amount]
+        self.position += len(chunk)
+        return chunk
+
+    def read1(self, amount):
+        return self.read(amount)
 
     def __enter__(self):
         return self
@@ -99,6 +107,12 @@ def test_llm_probe_valid_token_sends_fixed_request_and_returns_ok(client, provid
     assert request.get_header("Authorization") == f"Bearer {KEY}"
     assert request.get_header("Content-type") == "application/json"
     assert request.get_header("Accept") == "application/json"
+    headers = {name.lower(): value for name, value in request.header_items()}
+    assert headers == {
+        "authorization": f"Bearer {KEY}",
+        "content-type": "application/json",
+        "accept": "application/json",
+    }
     assert timeout == 10
 
 
@@ -119,6 +133,7 @@ def test_llm_probe_accepts_any_non_empty_content(client, provider):
         (b'{"choices": [{"message": {"content": "   "}}]}', 200),
         (provider_body(), 500),
         (provider_body(), 429),
+        pytest.param(b"x" * 70000, 200, id="oversized"),
     ],
 )
 def test_llm_probe_bad_provider_answer_returns_error(client, provider, body, status):
@@ -159,6 +174,7 @@ def test_llm_probe_missing_key_returns_error_without_provider_call(
         {"Authorization": f"Bearer {TOKEN} "},
         {"Authorization": f"Token {TOKEN}"},
         {"Authorization": TOKEN},
+        {"Authorization": "Bearer \u00e9" * 40},
     ],
 )
 def test_llm_probe_bad_token_returns_generic_404(client, provider, headers):
@@ -265,6 +281,39 @@ def test_llm_probe_app_starts_without_either_variable(monkeypatch):
     environment.pop("SOC_LLM_PROBE_TOKEN", None)
     process = run_manage(["check"], environment)
     assert process.returncode == 0, process.stderr
+
+
+@pytest.mark.ac("PLT-3.2")
+def test_llm_probe_incomplete_read_returns_error(client, provider, monkeypatch):
+    def truncated(*args, **kwargs):
+        raise http.client.IncompleteRead(b"partial")
+
+    monkeypatch.setattr("deskmate.llm.urlopen", truncated)
+    response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
+    assert_probe(response, 503, {"status": "error"})
+
+
+@pytest.mark.ac("PLT-3.6")
+def test_llm_probe_total_deadline_stops_a_trickling_response(
+    client, provider, monkeypatch
+):
+    clock = [0.0]
+
+    def now():
+        return clock[0]
+
+    class Trickle(FakeResponse):
+        def read1(self, amount):
+            clock[0] += 0.6
+            return b"x"
+
+    provider.body = provider_body()
+    provider.status = 200
+    provider.make_response = Trickle
+    monkeypatch.setattr("deskmate.llm.time.monotonic", now)
+    response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
+    assert_probe(response, 503, {"status": "error"})
+    assert clock[0] <= 10.8
 
 
 @pytest.mark.ac("PLT-3.6")

@@ -1,16 +1,25 @@
 """The one fixed SoC LLM production probe (PLT-3, AI contract llm-health.md).
 
 The probe sends one server-authored request with no user input, then checks
-only the response's shape. It never retries, follows no redirect and never
-logs the key, the token or the provider's text.
+only the response's shape. It never retries, follows no redirect, uses no
+proxy, enforces a total deadline, and never logs the key, the token or the
+provider's text.
 """
 
 import hmac
+import http.client
 import json
 import os
 import ssl
+import time
 from urllib.error import HTTPError, URLError
-from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_opener
+from urllib.request import (
+    HTTPRedirectHandler,
+    HTTPSHandler,
+    ProxyHandler,
+    Request,
+    build_opener,
+)
 
 PROVIDER_URL = "https://soclaas-api.comp.nus.edu.sg/v1/chat/completions"
 MODEL = "llama3.1:8b"
@@ -42,12 +51,18 @@ class _NoRedirect(HTTPRedirectHandler):
 
 
 def _opener():
-    """Return an opener that uses the system CA store and follows no redirect."""
-    return build_opener(_NoRedirect, HTTPSHandler(context=ssl.create_default_context()))
+    """Return an opener with system TLS, no redirect, no proxy and no User-Agent."""
+    opener = build_opener(
+        ProxyHandler({}),
+        _NoRedirect,
+        HTTPSHandler(context=ssl.create_default_context()),
+    )
+    opener.addheaders = []
+    return opener
 
 
 def urlopen(request, timeout=None):
-    """Open `request` with the probe's TLS and redirect rules.
+    """Open `request` with the probe's TLS, proxy and redirect rules.
 
     Tests replace this function, so no test contacts SoC LLM.
     """
@@ -61,7 +76,11 @@ def token_matches(header):
         return False
     if any(not 0x20 <= ord(character) <= 0x7E for character in expected):
         return False
-    return hmac.compare_digest(header, f"Bearer {expected}")
+    try:
+        supplied = header.encode("latin-1")
+    except UnicodeEncodeError:
+        return False
+    return hmac.compare_digest(supplied, f"Bearer {expected}".encode("ascii"))
 
 
 def _shape_ok(body):
@@ -85,6 +104,33 @@ def _shape_ok(body):
     return isinstance(content, str) and content.strip() != ""
 
 
+def _read_body(response, deadline):
+    """Read at most MAX_BODY bytes, giving up when `deadline` passes.
+
+    Each read is bounded by the time left, so a provider that trickles bytes
+    cannot hold the request past the total limit.
+    """
+    chunks = []
+    total = 0
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        socket = getattr(getattr(response, "fp", None), "raw", None)
+        socket = getattr(socket, "_sock", None)
+        if socket is not None:
+            socket.settimeout(remaining)
+        read = getattr(response, "read1", response.read)
+        chunk = read(min(65536, MAX_BODY + 1 - total))
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > MAX_BODY:
+            return None
+    return b"".join(chunks)
+
+
 def probe():
     """Return whether one provider call returned an allowed answer."""
     key = os.environ.get("SOC_LLM_API_KEY", "")
@@ -100,12 +146,15 @@ def probe():
             "Accept": "application/json",
         },
     )
+    deadline = time.monotonic() + TIMEOUT_SECONDS
     try:
         response = urlopen(request, timeout=TIMEOUT_SECONDS)
         with response:
             if response.status != 200:
                 return False
-            body = response.read(MAX_BODY + 1)
-    except (HTTPError, URLError, OSError, ValueError):
+            body = _read_body(response, deadline)
+    except (HTTPError, URLError, OSError, http.client.HTTPException, ValueError):
         return False
-    return len(body) <= MAX_BODY and _shape_ok(body)
+    if body is None or time.monotonic() > deadline:
+        return False
+    return _shape_ok(body)
