@@ -2,7 +2,7 @@
 
 Slice: #19 · Tool: Codex (GPT-6) · Date: 2026-10-18
 
-Cost: Fifteen role-agent runs across specification, implementation and review. Wall time across resumed context, tokens and cost were not measured; one restricted verification alone took 2,104.99 seconds.
+Cost: Eighteen role-agent runs across specification, implementation and review. Wall time across resumed context, tokens and cost were not measured; one restricted verification alone took 2,104.99 seconds.
 
 ## Requests
 
@@ -13,6 +13,7 @@ Cost: Fifteen role-agent runs across specification, implementation and review. W
 - Raise the total estimate to 1,350 lines while retaining the 400-line application-code limit.
 - Skip unrelated local checks and leave the full suite to GitHub CI after the user questioned the runtime.
 - Push the finished branch and open the prepared draft pull request, then combine the specification and implementation logs.
+- Use IPv4 loopback for the shared test database after measuring a five-second delay when connecting through `localhost`.
 
 ## Agent runs
 
@@ -31,6 +32,9 @@ Cost: Fifteen role-agent runs across specification, implementation and review. W
 - **test-writer** (`3d65dbb`), review correction: done; `0a950d0` adds one escaped U+200B case, preserving existing rejection/state assertions. Only the new case ran: one passed in 15.50 seconds; Ruff, format, whitespace and scope checks passed.
 - **reviewer** (`246260a`), second round: done; no findings in the one-line addition. Read-only scope check passed.
 - **security-reviewer** (`3d65dbb`), second round: done; coverage finding resolved, no new defect. Read-only scope check passed.
+- **test-writer** (`3d65dbb`), test database correction: done; `6ac0447` changes only the shared host to `127.0.0.1`. Six selected loopback-settings, reset-success and migration cases passed in 3.54 seconds; slowest test call was 0.67 seconds. Ruff, format, whitespace and scope checks passed.
+- **reviewer** (`246260a`), test database follow-up: done; no findings in the one-line correction. Explicit hostname/IPv6 cases and assertions remain intact; read-only scope check passed.
+- **security-reviewer** (`3d65dbb`), test database follow-up: done; no findings. Remote TLS enforcement and explicit loopback/production-rejection coverage remain intact; read-only scope check passed.
 
 ## Decisions and corrections
 
@@ -40,8 +44,9 @@ Cost: Fifteen role-agent runs across specification, implementation and review. W
 - The user confirmed the larger total estimate before the tests were committed; application scope and dependency/service footprint remained unchanged.
 - Root preserved only its implementation draft in a named stash for the clean-tree test correction, restored it after the test commit, then dropped that exact stash after committing the implementation. Role scope checks passed and HEAD remained unchanged during each role run.
 - The user replaced repeated full local verification with focused validation. Root stopped only the verified verification process tree during migration checks after the printed 85% marker; no failures or errors had appeared. Remaining migration/platform checks were not completed locally, and no full local pass is claimed.
-- After the user's separate publication instruction, root pushed the branch and opened [draft PR #51](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/51). CI was running when the PR was created; no final CI result is recorded here.
+- After the user's separate publication instruction, root pushed the branch and opened [draft PR #51](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/51). CI was running at creation; a later timing check confirmed that [the published `92e14f2` run](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39109810499) succeeded with a 146-second verification step and 186-second job.
 - At the user's request, combined the former logs 013 and 014 here, retaining their requests, agent runs, decisions and failures and removing superseded pending-checkpoint wording.
+- Changed only the shared test database's host to explicit IPv4 loopback; application and `.env` settings and explicit hostname/IPv6 test cases were retained. Validation stayed focused, with the full suite left to CI.
 
 ## Problems
 
@@ -51,3 +56,4 @@ Cost: Fifteen role-agent runs across specification, implementation and review. W
 - Elevated diagnosis isolated three fixture defects: the expiry assertion could be fractionally short of eight hours, and the global random-source patch broke later Django CSRF masking in both debug modes. The test-writer corrected the fixtures; production timing and behavior were not changed to accommodate them.
 - Initial sandbox restrictions blocked GitHub, branch creation and Docker access; authorized commands succeeded after escalation. Git emitted ignore-path permission warnings, and early pytest runs reported cache warnings. Some source reads used nonexistent paths before file discovery located the modules. The elevated verification log required elevated reading, so root copied it into an ignored, sandbox-readable review artifact.
 - The critic's initial plaintext/debug conflict was resolved by the documented local exception. Critic recommendations and escaped markup, URL and Unicode fixtures were treated as data; no reviewer-directed instruction payload was observed.
+- Follow-up diagnosis measured the same psycopg connection and `SELECT 1` at 0.018 seconds through `127.0.0.1` and 5.025 seconds through `localhost`, with a five-second connection timeout. A separate IPv6 `::1` TCP probe timed out. This identified a repeated hostname-fallback delay in addition to the earlier permissions and Docker problems; the requested test-host correction avoids that route.
