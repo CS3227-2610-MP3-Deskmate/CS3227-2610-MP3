@@ -126,10 +126,15 @@ class _HomePage(HTMLParser):
         super().__init__()
         self.parts = {"title": [], "heading": [], "other": []}
         self.counts = {"title": 0, "heading": 0}
+        self.links = []
         self.section = "other"
+        self.link = None
 
     def handle_starttag(self, tag, attrs):
-        """Count and collect the title and headings separately from other text."""
+        """Count and collect the title, headings, links and other text."""
+        if tag == "a":
+            self.link = {"href": dict(attrs).get("href"), "text": []}
+            self.links.append(self.link)
         section = (
             "title"
             if tag == "title"
@@ -142,13 +147,17 @@ class _HomePage(HTMLParser):
             self.counts[section] += 1
 
     def handle_endtag(self, tag):
-        """Return to ordinary text after closing a title or heading."""
+        """Return to ordinary text after closing a link, title or heading."""
+        if tag == "a":
+            self.link = None
         if tag == "title" or re.fullmatch("h[1-6]", tag):
             self.section = "other"
 
     def handle_data(self, data):
         """Collect text, including any unexpected content."""
         self.parts[self.section].append(data)
+        if self.link is not None:
+            self.link["text"].append(data)
 
 
 def verify_release(deployment_id, owner_id, project_id, hostname, token, job_deadline):
@@ -194,17 +203,25 @@ def verify_release(deployment_id, owner_id, project_id, hostname, token, job_dea
             except (ValueError, UnicodeError):
                 raise ReleaseError("home: failed") from None
             parts = {
-                key: " ".join("".join(value).split())
+                key: " ".join(" ".join(value).split())
                 for key, value in page.parts.items()
             }
+            links = [
+                {
+                    "href": link["href"],
+                    "text": " ".join(" ".join(link["text"]).split()),
+                }
+                for link in page.links
+            ]
             _check(
                 page.counts == {"title": 1, "heading": 1}
                 and parts
                 == {
                     "title": "Deskmate",
                     "heading": "Deskmate",
-                    "other": "Deskmate is under construction.",
-                },
+                    "other": "Deskmate is under construction. Sign in",
+                }
+                and links == [{"href": "/sign-in/", "text": "Sign in"}],
                 stage,
             )
         headers, _ = _fetch(
