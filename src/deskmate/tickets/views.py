@@ -1,4 +1,4 @@
-"""Workspace ticket reading and Requester submission (RQ-1, RQ-2)."""
+"""Workspace ticket submission, reading and resolution (RQ-1, RQ-2, RQ-3)."""
 
 from functools import wraps
 
@@ -8,7 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from deskmate.accounts.models import Role
-from deskmate.tickets.forms import TicketForm
+from deskmate.tickets.forms import ResolutionForm, TicketForm
 from deskmate.tickets.models import Ticket
 from deskmate.views import forbidden
 
@@ -36,6 +36,7 @@ def _navigation(role):
         "role_route": "support" if support else "requester",
         "role_label": Role(role).label,
         "can_create_ticket": not support,
+        "can_resolve_ticket": support,
     }
 
 
@@ -97,4 +98,25 @@ def ticket_detail(request, ticket_id):
         request,
         "tickets/detail.html",
         {"title": "Ticket", "ticket": ticket, **_navigation(request.user.role)},
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@_ticket_role
+def ticket_resolve(request, ticket_id):
+    """Save one reply and close only a still-open workspace ticket (RQ-3)."""
+    tickets = Ticket.objects.filter(workspace_id=request.user.workspace_id)
+    ticket = get_object_or_404(tickets, pk=_ticket_id(ticket_id))
+    if not ticket.open:
+        return redirect("support-ticket-detail", ticket_id=ticket.pk)
+    form = ResolutionForm(data=request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        tickets.filter(pk=ticket.pk, open=True).update(
+            reply=form.cleaned_data["reply"], open=False
+        )
+        return redirect("support-ticket-detail", ticket_id=ticket.pk)
+    return render(
+        request,
+        "tickets/resolve.html",
+        {"title": "Resolve ticket", "ticket": ticket, "form": form.redisplay()},
     )
