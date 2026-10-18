@@ -160,7 +160,7 @@ def test_articles_requester_cannot_read_another_workspace(
     reader, officer, make_account
 ):
     author, _ = officer
-    save(author, "Own", "Own body")
+    own = save(author, "Own", "Own body")
     foreign = Workspace.objects.create()
     outsider, account = sign_in_as(make_account, SUPPORT_OFFICER)
     move_workspace(account, foreign)
@@ -170,7 +170,7 @@ def test_articles_requester_cannot_read_another_workspace(
     assert response.status_code == 404
     assert response.content == browser.get(MISSING).content
     assert b"Foreign body" not in response.content
-    assert [title for title, _ in article_links(browser)] == ["Own"]
+    assert article_links(browser) == [("Own", own)]
     assert browser.get(f"{their}?workspace={foreign.pk}").status_code == 404
     assert browser.get(LONG_ID).status_code == 404
 
@@ -207,16 +207,16 @@ def test_articles_requester_query_parameters_cannot_select_article_or_workspace(
 
 
 @pytest.mark.ac("KB-2.3")
-@pytest.mark.django_db(reset_sequences=True)
 def test_articles_requester_leading_zero_id_reads_the_same_article(reader, officer):
     author, _ = officer
-    save(author, "Guide", "Steps")
-    article = Article.objects.get(pk=1)
+    path = save(author, "Guide", "Steps")
+    article = Article.objects.get(pk=int(path.strip("/").split("/")[-1]))
     browser, _ = reader
-    page = article_page(browser, f"{LIST}0001/")
+    padded = f"{LIST}0{article.pk}/"
+    page = article_page(browser, padded)
     assert page.title == "Article"
     assert article.title in page.text and article.body in page.text
-    assert browser.get(f"{LIST}0001/").content == browser.get(f"{LIST}1/").content
+    assert browser.get(padded).content == browser.get(path).content
 
 
 @pytest.mark.ac("KB-2.3")
