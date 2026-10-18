@@ -12,11 +12,13 @@ Choose **Sign in** on the home page, or go to `/sign-in/`. Below the sign-in for
 
 > No account? Create a demo workspace with 2 Requesters and 1 Support Officer.
 
-Press **Create demo workspace**. A new workspace is created, and a page headed **Demo workspace created** shows this line, a table and a **Sign in** link:
+Press **Create demo workspace**. A new workspace is created, and a page headed **Demo workspace created** shows these lines, a table and a **Sign in** link:
 
+> Workspace: *code*
+>
 > Copy these passwords now. They will not be shown again.
 
-The table's **Username**, **Role** and **Password** columns list the workspace's two Requesters, `requester1-`*code* and `requester2-`*code*, and its Support Officer, `support1-`*code*, where *code* is the same in all three.
+The table's **Username**, **Role** and **Password** columns list the workspace's two Requesters, `requester1-`*code* and `requester2-`*code*, and its Support Officer, `support1-`*code*, where *code* is the workspace's code from the first line.
 
 Creating a workspace signs no one in. Press **Sign in** to go to the sign-in page.
 
