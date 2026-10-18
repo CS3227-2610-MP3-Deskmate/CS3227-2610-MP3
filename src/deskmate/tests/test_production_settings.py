@@ -91,7 +91,7 @@ print(json.dumps(result))
     assertInHTML("<title>Deskmate</title>", result["body"], count=1)
     assertInHTML("<h1>Deskmate</h1>", result["body"], count=1)
     assert " ".join(strip_tags(result["body"]).split()) == (
-        "Deskmate Deskmate Deskmate is under construction."
+        "Deskmate Deskmate Deskmate is under construction. Sign in"
     )
 
 
