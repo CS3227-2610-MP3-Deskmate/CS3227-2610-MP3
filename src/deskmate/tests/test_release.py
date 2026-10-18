@@ -26,7 +26,8 @@ HOST = "deskmate-synthetic.vercel.app"
 CLI_HOST = "deployment-synthetic.vercel.app"
 HOME = (
     b"<!doctype html><html><head><title>Deskmate</title></head>"
-    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p></body></html>"
+    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p>"
+    b'<p><a href="/sign-in/">Sign in</a></p></body></html>'
 )
 
 
@@ -232,6 +233,37 @@ def test_release_invalid_tls_fails_immediately(release, scenario, error):
         ),
         ("home", response(HOME + b"<h2>Extra heading</h2>", content_type="text/html")),
         ("home", response(HOME + b"Extra text", content_type="text/html")),
+        (
+            "home",
+            response(
+                HOME.replace(b'<a href="/sign-in/">Sign in</a>', b"Sign in"),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(b'href="/sign-in/"', b'href="/sign-in"'),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(
+                    b'<a href="/sign-in/">Sign in</a>',
+                    b'<a href="/sign-in/">Sign in</a><a href="/sign-in/">Sign in</a>',
+                ),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(b'<a href="/sign-in/">', b'<a href="/other/">'),
+                content_type="text/html",
+            ),
+        ),
         ("http_home", response(b"", 200)),
         ("http_health", response(b"", 308, Location=f"https://{HOST}/")),
         ("http_home", response(b"", 308, Location="https://other.vercel.app/")),
