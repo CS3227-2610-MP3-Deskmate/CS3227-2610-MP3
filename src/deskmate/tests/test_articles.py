@@ -34,6 +34,7 @@ pytestmark = pytest.mark.django_db
 LIST = "/support/articles/"
 NEW = f"{LIST}new/"
 MISSING = f"{LIST}999999999/edit/"
+LONG_ID = f"{LIST}{'9' * 5000}/edit/"
 ROUTES = (LIST, NEW, MISSING)
 EDIT = re.compile(r"/support/articles/[0-9]+/edit/")
 TITLE_ERROR = "Enter a valid title (1 to 200 characters)."
@@ -272,13 +273,22 @@ def test_articles_self_exclusion_case_preservation_and_no_unicode_normalisation(
 @pytest.mark.parametrize("visitor", [None, REQUESTER])
 @pytest.mark.parametrize(
     ("method", "path"),
-    [("GET", p) for p in ROUTES] + [("POST", NEW), ("POST", MISSING)],
+    [("GET", p) for p in ROUTES]
+    + [("POST", NEW), ("POST", MISSING), pytest.param("GET", LONG_ID, id="long-id")],
 )
 def test_articles_access_denied_before_lookup(
     make_account, records, visitor, method, path
 ):
     browser, _ = browser_as(make_account, visitor)
-    response = send(browser, method, path, csrf_token(browser, visitor))
+    browser.cookies["role"] = SUPPORT_OFFICER
+    response = send(
+        browser,
+        method,
+        f"{path}?role={SUPPORT_OFFICER}&workspace=999",
+        csrf_token(browser, visitor),
+        data={"role": SUPPORT_OFFICER},
+        headers={"Role": SUPPORT_OFFICER},
+    )
     if visitor is None:
         assert_redirects(response, "/sign-in/")
     else:
@@ -346,7 +356,7 @@ def test_articles_workspace_isolation_and_forged_fields(author, make_account, re
     their = create(other, "Shared title", "Foreign body")
     assert article_links(browser) == [("Shared title", own)]
     assert article_links(other) == [("Shared title", their)]
-    for path in (their, MISSING):
+    for path in (their, MISSING, LONG_ID, f"{LIST}{2**63}/edit/"):
         get = browser.get(path)
         post = send(browser, "POST", path, csrf_token(browser, SUPPORT_OFFICER))
         assert get.status_code == post.status_code == 404
@@ -360,7 +370,7 @@ def test_articles_workspace_isolation_and_forged_fields(author, make_account, re
     }
     created = create(browser, "Own creation", workspace=foreign.pk, role=REQUESTER)
     response = form_at(browser, own).submit(
-        browser, {"Title": "Changed", "Body": "Updated"}, changes=forged
+        browser, {"Title": "Changed", "Body": "Updated"}, changes=forged, query=forged
     )
     assert_redirects(response, own)
     assert values(other, their) == ("Shared title", "Foreign body")
