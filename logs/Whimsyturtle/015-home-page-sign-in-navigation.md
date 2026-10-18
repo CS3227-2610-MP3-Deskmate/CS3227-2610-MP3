@@ -9,6 +9,7 @@ Cost: Ten role-agent runs. Full pytest runs took 301.85, 299.20 and 279.94 secon
 - Run `/slice 39`, [Lead visitors from the home page to sign-in](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/issues/39).
 - Confirm Standard tier and a visible **Sign in** link to the existing sign-in page.
 - Approve the specification checkpoint: one changed criterion, 30–60 application-code lines and 150–250 total changed lines, including the smoke check, tests, guide, plan and session log; no added service or dependency.
+- Commit the session log, then separately push the branch and open its pull request.
 
 ## Agent runs
 
@@ -31,7 +32,7 @@ Cost: Ten role-agent runs. Full pytest runs took 301.85, 299.20 and 279.94 secon
 - Reused the existing named sign-in URL and public home rendering. The production smoke check needed to follow the changed criterion; deployment request, deadline and authentication behavior were unchanged.
 - Kept both plan tasks within the confirmed budget. The final application diff is 26 changed lines; no dependency, credential, service or migration was added.
 - Ran the unchanged `ruff check . && ruff format --check . && pytest` command in Git Bash with `.venv` active, outside the Windows sandbox against the existing local PostgreSQL container. The last run passed all 1,543 tests; no repeat was needed for this log-only addition.
-- Prepared the repository's PR template with the criterion's passing automated checks, local manual steps and unticked human checkboxes. Publication remains subject to the human's separate push/PR instruction; no PR or hosted deployment result is claimed.
+- Prepared the repository's PR template with the criterion's passing automated checks, local manual steps and unticked human checkboxes. After the human's separate publication instruction, refreshed origin, confirmed the clean branch and unchanged `main`, pushed the branch and opened [PR #55](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/55) for review. No repeat tests were needed for the unchanged code and log-only publication record; no hosted deployment result is claimed.
 
 ## Problems
 
