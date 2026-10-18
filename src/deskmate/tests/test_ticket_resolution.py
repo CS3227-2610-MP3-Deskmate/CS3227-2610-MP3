@@ -114,7 +114,9 @@ def test_resolution_form_save_plaintext_and_readers_refresh(c, make_account, kin
 
 
 @pytest.mark.ac("RQ-3.3", "RQ-3.7")
-@pytest.mark.parametrize("kind", ["missing", "empty", "space", "long", "null", "raw"])
+@pytest.mark.parametrize(
+    "kind", ["missing", "empty", "space", "long", "null", "raw", "long-null"]
+)
 def test_resolution_invalid_reply_retains_raw_text(c, kind):
     attack = unquote("%3C%2Ftextarea%3E%3Cscript%3Ealert%281%29%3C%2Fscript%3E")
     raw = {
@@ -122,6 +124,7 @@ def test_resolution_invalid_reply_retains_raw_text(c, kind):
         "empty": "",
         "space": " \u3000\t\r\n",
         "long": "x" * 10001,
+        "long-null": "x" * 10000 + "\x00",
         "null": "a\x00b",
         "raw": " \n" + attack + "\r\nline\rend\x00 ",
     }[kind]
