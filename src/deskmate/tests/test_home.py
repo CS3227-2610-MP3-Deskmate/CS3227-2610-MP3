@@ -5,6 +5,7 @@ from django.utils.html import strip_tags
 from pytest_django.asserts import assertInHTML
 
 from deskmate.tests.helpers import media_type
+from deskmate.tests.pages import Page
 from deskmate.tests.signing_in import REQUESTER, sign_in_as
 
 
@@ -14,9 +15,23 @@ def assert_placeholder_page(response):
     html = response.content.decode("utf-8")
     assertInHTML("<title>Deskmate</title>", html, count=1)
     assertInHTML("<h1>Deskmate</h1>", html, count=1)
-    # All the page's text: the title, the heading, then the one sentence.
+    assert Page(response).heading_texts == ["Deskmate"]
+    assertInHTML('<a href="/sign-in/">Sign in</a>', html, count=1)
+    # All the page's text: the title, heading, sentence and navigation link.
     text = " ".join(strip_tags(html).split())
-    assert text == "Deskmate Deskmate Deskmate is under construction."
+    assert text == "Deskmate Deskmate Deskmate is under construction. Sign in"
+
+
+@pytest.mark.ac("PLT-1.1")
+def test_home_sign_in_link_opens_sign_in_form_without_query(browser):
+    page = Page(browser.get("/"))
+    links = [url for text, url in page.links if text == "Sign in"]
+    assert len(links) == 1
+    response = browser.get(links[0])
+    assert response.status_code == 200
+    assert response.wsgi_request.path == "/sign-in/"
+    assert response.wsgi_request.META["QUERY_STRING"] == ""
+    Page(response).form_with_button("Sign in")
 
 
 @pytest.mark.ac("PLT-1.1")

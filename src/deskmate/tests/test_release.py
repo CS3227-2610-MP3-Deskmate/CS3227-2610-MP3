@@ -24,9 +24,12 @@ OWNER = "team_synthetic"
 PROJECT = "prj_synthetic"
 HOST = "deskmate-synthetic.vercel.app"
 CLI_HOST = "deployment-synthetic.vercel.app"
+SIGN_IN_LINK = b'<a href="/sign-in/">Sign in</a>'
 HOME = (
     b"<!doctype html><html><head><title>Deskmate</title></head>"
-    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p></body></html>"
+    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p> "
+    + SIGN_IN_LINK
+    + b"</body></html>"
 )
 
 
@@ -115,12 +118,35 @@ def verify(release, scenario):
     )
 
 
-@pytest.mark.ac("PLT-2.2", "PLT-2.3", "PLT-2.7")
+@pytest.mark.ac("PLT-1.1", "PLT-2.2", "PLT-2.3", "PLT-2.7")
 def test_release_valid_identity_mapping_and_public_pages_succeed(release, scenario):
     verify(release, scenario)
     stages = [call[0] for call in scenario.calls]
     assert stages[:2] == ["deployment", "mapping"]
     assert set(stages[2:]) == {"home", "health", "http_home", "http_health"}
+
+
+@pytest.mark.ac("PLT-1.1", "PLT-2.3", "PLT-2.7")
+@pytest.mark.parametrize(
+    "link",
+    [
+        b"",
+        b"Sign in",
+        b'<a href="/support/">Sign in</a>',
+        b'<a href="/sign-in/?next=/">Sign in</a>',
+        b'<a href="/sign-in/">Log in</a>',
+    ],
+    ids=["missing-link", "plain-text", "wrong-target", "query-string", "wrong-text"],
+)
+def test_release_missing_or_wrong_sign_in_link_fails_without_retry(
+    release, scenario, link
+):
+    scenario.replies["home"] = [
+        response(HOME.replace(SIGN_IN_LINK, link), content_type="text/html")
+    ]
+    with pytest.raises(release.ReleaseError, match="home: failed"):
+        verify(release, scenario)
+    assert [call[0] for call in scenario.calls] == ["deployment", "mapping", "home"]
 
 
 @pytest.mark.ac("PLT-2.3", "PLT-2.5")

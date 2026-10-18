@@ -90,8 +90,9 @@ print(json.dumps(result))
     assert result["headers"]["Content-Type"].split(";")[0] == "text/html"
     assertInHTML("<title>Deskmate</title>", result["body"], count=1)
     assertInHTML("<h1>Deskmate</h1>", result["body"], count=1)
+    assertInHTML('<a href="/sign-in/">Sign in</a>', result["body"], count=1)
     assert " ".join(strip_tags(result["body"]).split()) == (
-        "Deskmate Deskmate Deskmate is under construction."
+        "Deskmate Deskmate Deskmate is under construction. Sign in"
     )
 
 
