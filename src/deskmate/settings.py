@@ -89,6 +89,7 @@ ALLOWED_HOSTS = _host_names(os.environ.get("DJANGO_ALLOWED_HOSTS", ""))
 INSTALLED_APPS = [
     "deskmate",
     "deskmate.accounts",
+    "deskmate.knowledge",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",

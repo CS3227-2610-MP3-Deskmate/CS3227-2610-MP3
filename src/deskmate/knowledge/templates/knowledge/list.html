@@ -1,0 +1,12 @@
+{% extends "deskmate/base.html" %}
+{% block content %}
+  <p><a href="{% url 'article-new' %}">New article</a></p>
+  <ul>
+    {% for article in articles %}
+      <li><a href="{% url 'article-edit' article.pk %}">{{ article.title }}</a></li>
+    {% empty %}
+      <li>No articles yet.</li>
+    {% endfor %}
+  </ul>
+  <p><a href="{% url 'support' %}">Support Officer</a></p>
+{% endblock %}
