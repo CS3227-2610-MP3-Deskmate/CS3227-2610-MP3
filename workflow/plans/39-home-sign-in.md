@@ -7,6 +7,6 @@ Goal: Lead home-page visitors to the existing sign-in page under [PLT-1.1](../sp
   - Make `test_release_valid_identity_mapping_and_public_pages_succeed` and `test_release_missing_or_wrong_sign_in_link_fails_without_retry` in `src/deskmate/tests/test_release.py` pass; retain the full release suite, including wrong-content checks.
   - Make `test_production_wsgi_loaded_by_path_without_src_import_path_serves_home` in `src/deskmate/tests/test_production_settings.py` pass (PLT-1.1, PLT-2.7).
   - Run the full [verify command](../../AGENTS.md#commands) in Git Bash with `.venv` active; stop and report any conflict or confirmed scope/budget expansion without changing tests.
-- [ ] **implementer**: Update only `docs/UserGuide.md` after the application task passes.
+- [x] **implementer**: Update only `docs/UserGuide.md` after the application task passes.
   - Describe the built home-page **Sign in** link and replace the instruction that the home page does not link to `/sign-in/`; use the exact UI words and read the changed sections back.
   - No new tests; retain the application task's passing test mappings and rerun the full verify command before ticking this task.

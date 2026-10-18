@@ -2,13 +2,15 @@
 
 Deskmate lets you create a demo workspace and sign in and out. Support Officers can also write and edit knowledge-base articles and reset Requester passwords in their workspace.
 
-Its home page shows only the heading **Deskmate** and this line:
+Its home page shows the heading **Deskmate** and this line:
 
 > Deskmate is under construction.
 
+Choose **Sign in** to open the sign-in page at `/sign-in/`.
+
 ## Getting accounts
 
-Go to `/sign-in/`; the home page does not link to it. Below the sign-in form, the page shows:
+Below the form on the sign-in page, you see:
 
 > No account? Create a demo workspace with 2 Requesters and 1 Support Officer.
 
