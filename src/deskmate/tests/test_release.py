@@ -135,8 +135,16 @@ def test_release_valid_identity_mapping_and_public_pages_succeed(release, scenar
         b'<a href="/support/">Sign in</a>',
         b'<a href="/sign-in/?next=/">Sign in</a>',
         b'<a href="/sign-in/">Log in</a>',
+        b'<a hidden href="/sign-in/">Sign in</a>',
     ],
-    ids=["missing-link", "plain-text", "wrong-target", "query-string", "wrong-text"],
+    ids=[
+        "missing-link",
+        "plain-text",
+        "wrong-target",
+        "query-string",
+        "wrong-text",
+        "hidden-link",
+    ],
 )
 def test_release_missing_or_wrong_sign_in_link_fails_without_retry(
     release, scenario, link
