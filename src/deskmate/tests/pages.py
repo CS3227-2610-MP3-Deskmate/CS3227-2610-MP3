@@ -321,12 +321,19 @@ class _Parser(HTMLParser):
         self.links = []
         self._open = []
         self._form = None
+        # Elements whose contents a browser does not show as page text.
+        self._hidden = 0
 
     def handle_starttag(self, tag, attrs):
         """Record an element as it opens; a browser uses an attribute's first value."""
         attributes = {}
         for name, value in attrs:
             attributes.setdefault(name, "" if value is None else value)
+        if tag in ("style", "script", "template"):
+            self._hidden += 1
+            return
+        if self._hidden:
+            return
         if tag not in _INLINE:
             self.handle_data(" ")
         if tag == "form":
@@ -370,6 +377,11 @@ class _Parser(HTMLParser):
 
     def handle_endtag(self, tag):
         """Record an element as it closes."""
+        if tag in ("style", "script", "template"):
+            self._hidden = max(0, self._hidden - 1)
+            return
+        if self._hidden:
+            return
         if tag == "textarea":
             control = self.controls[-1]
             control.value = (
@@ -396,6 +408,8 @@ class _Parser(HTMLParser):
 
     def handle_data(self, data):
         """Add text to the page and to every open element whose text is kept."""
+        if self._hidden:
+            return
         self.text.append(data)
         for _, parts in self._open:
             parts.append(data)

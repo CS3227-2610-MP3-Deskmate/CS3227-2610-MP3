@@ -2,6 +2,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 
@@ -91,7 +92,10 @@ print(json.dumps(result))
     assertInHTML("<title>Deskmate</title>", result["body"], count=1)
     assertInHTML("<h1>Deskmate</h1>", result["body"], count=1)
     assertInHTML('<a href="/sign-in/">Sign in</a>', result["body"], count=1)
-    assert " ".join(strip_tags(result["body"]).split()) == (
+    visible = re.sub(
+        r"<(style|script|template)\b.*?</\1>", "", result["body"], flags=re.DOTALL
+    )
+    assert " ".join(strip_tags(visible).split()) == (
         "Deskmate Deskmate Deskmate is under construction. Sign in"
     )
 

@@ -1,5 +1,6 @@
 """PLT-1.1: the placeholder home page, whether or not the database answers."""
 
+import re
 from html.parser import HTMLParser
 
 import pytest
@@ -30,8 +31,9 @@ def assert_placeholder_page(response):
     links = _Links()
     links.feed(html)
     assert links.hrefs == ["/sign-in/"]
-    # All the page's text: the title, the heading, the sentence and the link.
-    text = " ".join(strip_tags(html).split())
+    # All the page's visible text: the title, the heading, the sentence and the link.
+    visible = re.sub(r"<(style|script|template)\b.*?</\1>", "", html, flags=re.DOTALL)
+    text = " ".join(strip_tags(visible).split())
     assert text == "Deskmate Deskmate Deskmate is under construction. Sign in"
 
 

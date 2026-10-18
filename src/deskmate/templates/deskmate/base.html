@@ -2,10 +2,91 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ title }}</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --ink: #1f2933;
+      --muted: #52606d;
+      --line: #cbd2d9;
+      --paper: #ffffff;
+      --canvas: #f4f6f8;
+      --accent: #1f5f8b;
+    }
+    * { box-sizing: border-box; }
+    html { background: var(--canvas); }
+    body {
+      margin: 0;
+      color: var(--ink);
+      background: var(--canvas);
+      font: 1rem/1.6 system-ui, -apple-system, "Segoe UI", sans-serif;
+    }
+    main {
+      width: min(100% - 2rem, 46rem);
+      margin: 2rem auto;
+      padding: 2rem;
+      background: var(--paper);
+      border: 1px solid var(--line);
+      border-radius: 0.5rem;
+    }
+    h1, h2, h3, h4, h5, h6 {
+      margin: 1.25em 0 0.5em;
+      line-height: 1.25;
+    }
+    h1 { margin-top: 0; font-size: 2rem; }
+    h2 { font-size: 1.4rem; }
+    h3 { font-size: 1.2rem; }
+    p, ul, ol, table, form { margin: 0 0 1rem; }
+    ul, ol { padding-left: 1.5rem; }
+    a { color: var(--accent); text-underline-offset: 0.15em; }
+    a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 3px solid var(--accent);
+      outline-offset: 2px;
+    }
+    label { display: block; margin: 0.75rem 0 0.25rem; font-weight: 600; }
+    input, textarea, button {
+      font: inherit;
+      max-width: 100%;
+    }
+    input, textarea {
+      width: 100%;
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--muted);
+      border-radius: 0.25rem;
+      background: var(--paper);
+      color: var(--ink);
+    }
+    textarea { min-height: 8rem; resize: vertical; }
+    button {
+      padding: 0.55rem 1rem;
+      border: 1px solid var(--accent);
+      border-radius: 0.25rem;
+      background: var(--accent);
+      color: var(--paper);
+      cursor: pointer;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      overflow-wrap: anywhere;
+    }
+    th, td {
+      padding: 0.5rem 0.6rem;
+      border: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: var(--canvas); }
+    @media (max-width: 36rem) {
+      main { width: 100%; margin: 0; padding: 1rem; border: 0; border-radius: 0; }
+    }
+  </style>
 </head>
 <body>
-  <h1>{{ title }}</h1>
-  {% block content %}{% endblock %}
+  <main>
+    <h1>{{ title }}</h1>
+    {% block content %}{% endblock %}
+  </main>
 </body>
 </html>
