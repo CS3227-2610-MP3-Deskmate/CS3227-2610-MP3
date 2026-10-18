@@ -1,6 +1,6 @@
 Goal: Lead home-page visitors to the existing sign-in page under [PLT-1.1](../specs/product/platform.md#plt-1-run-a-safe-placeholder-site).
 
-- [ ] **implementer**: Update `src/deskmate/templates/deskmate/home.html` and `src/deskmate/release.py`.
+- [x] **implementer**: Update `src/deskmate/templates/deskmate/home.html` and `src/deskmate/release.py`.
   - Add the ordinary **Sign in** link using the existing `sign-in` named URL and template pattern; preserve the title, heading, construction sentence and database-independent home rendering.
   - Extend the existing `_HomePage` parser and home smoke check to validate the anchor's text and exact target alongside the existing page content; retain current request, failure and deadline behavior.
   - Make every test in `src/deskmate/tests/test_home.py` pass: link navigation, healthy database, unavailable database and unavailable database with a session cookie (PLT-1.1).

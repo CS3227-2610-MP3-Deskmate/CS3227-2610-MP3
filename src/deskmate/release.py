@@ -124,26 +124,31 @@ def _identity(document, deployment_id, owner_id, project_id):
 class _HomePage(HTMLParser):
     def __init__(self):
         super().__init__()
-        self.parts = {"title": [], "heading": [], "other": []}
-        self.counts = {"title": 0, "heading": 0}
+        self.parts = {"title": [], "heading": [], "other": [], "link": []}
+        self.counts = {"title": 0, "heading": 0, "link": 0}
+        self.hrefs = []
         self.section = "other"
 
     def handle_starttag(self, tag, attrs):
-        """Count and collect the title and headings separately from other text."""
+        """Collect the title, headings and links separately from other text."""
         section = (
             "title"
             if tag == "title"
             else "heading"
             if re.fullmatch("h[1-6]", tag)
+            else "link"
+            if tag == "a"
             else None
         )
         if section:
             self.section = section
             self.counts[section] += 1
+        if tag == "a":
+            self.hrefs.append(dict(attrs).get("href"))
 
     def handle_endtag(self, tag):
-        """Return to ordinary text after closing a title or heading."""
-        if tag == "title" or re.fullmatch("h[1-6]", tag):
+        """Return to ordinary text after closing a title, heading or link."""
+        if tag in ("title", "a") or re.fullmatch("h[1-6]", tag):
             self.section = "other"
 
     def handle_data(self, data):
@@ -198,12 +203,14 @@ def verify_release(deployment_id, owner_id, project_id, hostname, token, job_dea
                 for key, value in page.parts.items()
             }
             _check(
-                page.counts == {"title": 1, "heading": 1}
+                page.counts == {"title": 1, "heading": 1, "link": 1}
+                and page.hrefs == ["/sign-in/"]
                 and parts
                 == {
                     "title": "Deskmate",
                     "heading": "Deskmate",
                     "other": "Deskmate is under construction.",
+                    "link": "Sign in",
                 },
                 stage,
             )
