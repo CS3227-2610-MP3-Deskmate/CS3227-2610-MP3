@@ -92,13 +92,15 @@ def article_links(browser):
 @pytest.mark.ac("KB-1.1", "KB-1.2", "KB-1.3", "PLT-2.8")
 def test_articles_navigation_creation_and_reopening(author, records):
     browser, account = author
-    assert ("Knowledge base", f"{ORIGIN}{LIST}") in Page(browser.get("/support/")).links
-    page = Page(browser.get(LIST))
+    assert ("Knowledge base", f"{ORIGIN}{LIST}") in Page(
+        browser.get("/support/", secure=True)
+    ).links
+    page = Page(browser.get(LIST, secure=True))
     assert page.title == "Knowledge base" and page.h1s == ["Knowledge base"]
     assert "No articles yet." in page.text
     assert ("New article", f"{ORIGIN}{NEW}") in page.links
     assert ("Support Officer", f"{ORIGIN}/support/") in page.links
-    page = Page(browser.get(NEW))
+    page = Page(browser.get(NEW, secure=True))
     assert page.title == "New article" and page.h1s == ["New article"]
     form = page.form_with_button("Save article")
     assert form.field("Title").tag == "input"
@@ -109,7 +111,7 @@ def test_articles_navigation_creation_and_reopening(author, records):
     second = create(browser, "Alpha", "Second steps")
     assert article_links(browser) == [("Zulu", first), ("Alpha", second)]
     assert values(browser, first) == ("Zulu", "First steps")
-    page = Page(browser.get(first))
+    page = Page(browser.get(first, secure=True))
     assert page.title == "Edit article" and page.h1s == ["Edit article"]
     assert ("Knowledge base", f"{ORIGIN}{LIST}") in page.links
     assert (
