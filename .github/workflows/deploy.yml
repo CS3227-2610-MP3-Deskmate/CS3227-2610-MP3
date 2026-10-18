@@ -84,7 +84,7 @@ jobs:
             rm -f "$deployment_url_file" "$provider_log_file"
             if (( status != 0 )); then
               printf '%s: failed\n' "$stage"
-              echo 'Pause automatic deployments, cancel queued deployment runs, check Vercel and reconcile any unknown outcome, and confirm no earlier operation can complete later before resuming.'
+              echo 'Pause automatic deployments, cancel queued deployment runs, check Vercel and reconcile any unknown outcome, confirm which migrations are applied, confirm that no database session still holds the migration lock, ending any stale one, and confirm no earlier operation or migration can complete later before resuming.'
             fi
           }
           trap finish EXIT

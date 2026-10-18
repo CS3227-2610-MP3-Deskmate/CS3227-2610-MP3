@@ -1,0 +1,14 @@
+"""Deskmate's settings plus an app whose middle migration waits for the test.
+
+migfix_gate.0001_before creates a table. migfix_gate.0002_wait creates another,
+then reads a table the test creates, `migfix_gate_source`, so it waits for as long
+as the test holds a lock on that table. migfix_gate.0003_after creates a third.
+"""
+
+from deskmate.settings import *
+
+ROOT_URLCONF = "deskmate.tests.migration_fixtures"
+INSTALLED_APPS = [
+    "deskmate",
+    "deskmate.tests.migration_fixtures.gate",
+]

@@ -44,9 +44,14 @@ def is_configuration_variable(name):
     (TECHNICAL-SPEC "Configuration"). libpq, which connects to the database,
     also reads `PG` variables such as `PGSSLMODE` for every setting Django
     leaves unset, and their names have no underscore after `PG`. Provider
-    metadata is isolated too, so a developer's production mode cannot affect tests.
+    metadata is isolated too, so a developer's production mode cannot affect
+    tests: `VERCEL_` variables and `VERCEL` itself, which `vercel env pull`
+    writes and which makes the migration entry point refuse to run (PLT-2.8).
     """
-    return name.upper().startswith(("POSTGRES_", "DJANGO_", "PG", "VERCEL_"))
+    upper = name.upper()
+    return upper == "VERCEL" or upper.startswith(
+        ("POSTGRES_", "DJANGO_", "PG", "VERCEL_")
+    )
 
 
 def valid_environment(overrides=None):

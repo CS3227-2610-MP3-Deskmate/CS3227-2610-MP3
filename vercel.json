@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "django",
+  "buildCommand": "python src/deskmate/migrate.py",
   "regions": ["sin1"],
   "functions": {
     "src/deskmate/wsgi.py": {
