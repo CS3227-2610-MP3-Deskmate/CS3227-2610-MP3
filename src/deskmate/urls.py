@@ -9,6 +9,11 @@ from deskmate.knowledge import views as knowledge
 from deskmate.tickets import views as tickets
 
 urlpatterns = [
+    path(
+        "support/reset-requester-password/",
+        accounts.reset_requester_password,
+        name="reset-requester-password",
+    ),
     path("support/articles/", knowledge.article_list, name="article-list"),
     path("support/articles/new/", knowledge.article_form, name="article-new"),
     re_path(

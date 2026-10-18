@@ -1,9 +1,13 @@
-"""The sign-in form (ACC-1.1, ACC-1.3, ACC-1.7)."""
+"""Sign-in and Requester reset forms (ACC-1, ACC-4)."""
 
 from django import forms
 from django.contrib.auth.forms import AuthenticationForm
 from django.contrib.auth.validators import ASCIIUsernameValidator
 from django.core.validators import MaxLengthValidator
+
+from deskmate.accounts.models import User
+
+RESET_REJECTED = "No Requester with that username was found in your workspace."
 
 
 class SignInForm(AuthenticationForm):
@@ -46,3 +50,30 @@ class SignInForm(AuthenticationForm):
         if self.errors:
             for field in self.fields.values():
                 field.widget.attrs["aria-describedby"] = self.error_id
+
+
+class ResetRequesterPasswordForm(forms.Form):
+    """Validate an ASCII username without normalising it or suggesting accounts."""
+
+    username = forms.CharField(
+        validators=[
+            User.username_validator,
+            MaxLengthValidator(User._meta.get_field(User.USERNAME_FIELD).max_length),
+        ],
+        widget=forms.TextInput(
+            attrs={"autofocus": True, "autocapitalize": "none", "autocomplete": "off"}
+        ),
+    )
+    use_required_attribute = False
+    error_id = "reset-error"
+
+    def redisplay(self):
+        """Safely redisplay raw input after validation, using the generic error."""
+        if self.is_bound:
+            self.data = self.data.copy()
+            value = self.data.get("username", "").replace("\x00", "\ufffd")
+            self.data["username"] = (
+                value.replace("\r\n", "\n").replace("\r", "\n").replace("\n", " ")
+            )
+            self.fields["username"].widget.attrs["aria-describedby"] = self.error_id
+        return self

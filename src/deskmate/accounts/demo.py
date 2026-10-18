@@ -41,6 +41,11 @@ def random_code():
     return _random_string(CODE_LENGTH)
 
 
+def random_password():
+    """Draw a fresh password for a demo account or reset (ACC-2.3, ACC-4.2)."""
+    return _random_string(PASSWORD_LENGTH)
+
+
 def _draw_passwords():
     """Return one password per account, none equal to another (ACC-2.3).
 
@@ -49,7 +54,7 @@ def _draw_passwords():
     """
     passwords = []
     while len(passwords) < len(ACCOUNTS):
-        password = _random_string(PASSWORD_LENGTH)
+        password = random_password()
         if password not in passwords:
             passwords.append(password)
     return passwords
