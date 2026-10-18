@@ -6,5 +6,5 @@ Implement [RQ-3](../specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply)
   Reuse the ticket multiline normalization, validation and safe redisplay code, role and identifier helpers, navigation and template patterns; preserve existing behavior and error handling.
   Make `src/deskmate/tests/test_ticket_resolution.py` pass, including migration preservation, overlapping submissions and rejected writes; retain `src/deskmate/tests/test_support_tickets.py` and `src/deskmate/tests/test_tickets.py`.
   Run those three suites, then `ruff check . && ruff format --check . && pytest` in the [required environment](../../AGENTS.md#commands).
-- [ ] implementer: Own `docs/UserGuide.md`; update its introduction and Tickets section after the app task for the built resolution flow and both roles' saved replies, using exact UI labels and validation text.
+- [x] implementer: Own `docs/UserGuide.md`; update its introduction and Tickets section after the app task for the built resolution flow and both roles' saved replies, using exact UI labels and validation text.
   Read the changed sections back, compare labels with the templates, and run `ruff check . && ruff format --check . && pytest` in the [required environment](../../AGENTS.md#commands), supplying final pre-review verification.
