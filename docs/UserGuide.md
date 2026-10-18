@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Support Officers can also write and edit their workspace's knowledge-base articles.
+Deskmate lets you create a demo workspace and sign in and out. Support Officers write and edit their workspace's knowledge-base articles, and Requesters read them.
 
 Its home page shows only the heading **Deskmate** and this line:
 
@@ -66,6 +66,12 @@ Validation errors keep you on the form with your input and show the relevant mes
 > Enter a valid body (1 to 10000 characters).
 >
 > An article with this title already exists.
+
+## Reading articles
+
+As a Requester, choose **Knowledge base** on your role's page. The list shows your workspace's article titles, or **No articles yet.** Choose a title to read the article; **Knowledge base** takes you back to the list.
+
+Articles are plain text. The reading page shows an article's title and body as saved, with its line breaks.
 
 ## Forbidden pages
 
