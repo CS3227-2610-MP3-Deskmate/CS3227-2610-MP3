@@ -270,10 +270,12 @@ def test_user_validation_username_outside_allowlist_rejected(
     # Exercise the User rule through Django's existing model-validation API;
     # the invalid username is never saved or treated as an existing account.
     account = make_account(ACCOUNT, PASSWORD, REQUESTER)
-    account.username = unquote(escaped)
+    rejected_username = unquote(escaped)
+    account.username = rejected_username
     with pytest.raises(ValidationError) as error:
         account.full_clean()
     assert "username" in error.value.message_dict
+    assert account.username == rejected_username
 
 
 @pytest.mark.ac("ACC-1.7")
