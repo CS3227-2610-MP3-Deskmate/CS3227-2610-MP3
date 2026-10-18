@@ -2,7 +2,9 @@
 count (TECHNICAL-SPEC "Data model")."""
 
 from django.contrib.auth.models import AbstractUser
+from django.contrib.auth.validators import ASCIIUsernameValidator
 from django.db import models
+from django.utils.translation import gettext_lazy as _
 
 
 class Workspace(models.Model):
@@ -19,10 +21,23 @@ class Role(models.TextChoices):
 class User(AbstractUser):
     """A person who signs in, with one role in exactly one workspace.
 
-    `AbstractUser` gives the unique username, its validation and NFKC
-    normalisation, and the salted password hash.
+    Django validates the unique ASCII username without normalisation
+    (ACC-1.7); `AbstractUser` supplies the salted password hash.
     """
 
+    username_validator = ASCIIUsernameValidator()
+    username = models.CharField(
+        _("username"),
+        max_length=150,
+        unique=True,
+        help_text=_(
+            "Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only."
+        ),
+        validators=[username_validator],
+        error_messages={
+            "unique": _("A user with that username already exists."),
+        },
+    )
     role = models.CharField(max_length=32, choices=Role)
     workspace = models.ForeignKey(
         Workspace, on_delete=models.PROTECT, related_name="users"
@@ -34,6 +49,11 @@ class User(AbstractUser):
                 condition=models.Q(role__in=Role.values), name="accounts_user_role"
             )
         ]
+
+    @classmethod
+    def normalize_username(cls, username):
+        """Keep usernames unchanged; field validation enforces ACC-1.7."""
+        return username
 
 
 class Kind(models.TextChoices):
