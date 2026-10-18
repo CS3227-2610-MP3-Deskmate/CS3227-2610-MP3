@@ -291,17 +291,21 @@ def recording_statements():
         yield statements
 
 
-def check_statements(kind, visitor):
+def check_statements(kind, visitor, *, after_access=False):
     """Send an allowed attempt of `kind` from `visitor`, and return the SQL of
     each statement it ran before it first read or wrote an account or a
     workspace, in order: those that check it against the limits and count it.
 
+    `after_access` leaves out the caller-account read on protected routes.
     Fails if it ran none, because then the limits could keep no count in the
     database (ACC-3.6).
     """
     with recording_statements() as statements:
         response = visitor.attempt(kind)
     assert_allowed(response, kind)
+    if after_access:
+        first = next(i for i, sql in enumerate(statements) if touches_accounts(sql))
+        statements = statements[first + 1 :]
     before = []
     for sql in statements:
         if touches_accounts(sql):
