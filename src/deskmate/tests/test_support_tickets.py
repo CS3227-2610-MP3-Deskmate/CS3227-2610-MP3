@@ -77,7 +77,7 @@ def page_at(browser, path=LIST):
     assert not any(control.is_field() for control in page.controls)
     assert not any("/requester/" in url for _, url in page.links)
     assert all(
-        re.fullmatch(f"{LIST}([0-9]+/)?", urlsplit(url).path)
+        re.fullmatch(f"{LIST}([0-9]+/(resolve/)?)?", urlsplit(url).path)
         for _, url in page.links
         if "/tickets/" in url
     )
@@ -128,6 +128,9 @@ def test_support_tickets_navigation_order_duplicates_and_refresh(officer):
             assert ("Open" if item.open else "Closed") in detail.text.split()
             assert ("Closed" if item.open else "Open") not in detail.text.split()
             assert ("Tickets", f"{ORIGIN}{LIST}") in detail.links
+            assert (
+                ("Resolve ticket", f"{ORIGIN}{LIST}{item.pk}/resolve/") in detail.links
+            ) == item.open
 
 
 @pytest.mark.ac("RQ-2.2", "RQ-2.7")
