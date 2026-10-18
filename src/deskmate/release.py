@@ -144,7 +144,9 @@ class _HomePage(HTMLParser):
             self.section = section
             self.counts[section] += 1
         if tag == "a":
-            self.hrefs.append(dict(attrs).get("href"))
+            attributes = dict(attrs)
+            _check("hidden" not in attributes, "home")
+            self.hrefs.append(attributes.get("href"))
 
     def handle_endtag(self, tag):
         """Return to ordinary text after closing a title, heading or link."""
