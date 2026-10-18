@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers write and edit those articles and reset Requester passwords.
+Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, write and edit its knowledge-base articles, and reset Requester passwords.
 
 Its home page shows the heading **Deskmate**, this text and a **Sign in** link:
 
@@ -102,6 +102,22 @@ Tickets need not have unique titles: each valid submission creates a new ticket.
 > Enter a valid title (1 to 200 characters).
 >
 > Enter a valid description (1 to 10000 characters).
+
+As a Support Officer, choose **Tickets** on your role's page. Your list shows every ticket in your workspace, earliest first, or **No tickets yet.** Choose a title to open **Ticket**, showing its saved title and description and its stored status, **Open** or **Closed**. Choose **Tickets** to return to your list, or **Support Officer** on the list to return to your role's page.
+
+Opening or refreshing ticket lists and detail pages changes no ticket.
+
+As a Support Officer, choose **Resolve ticket** on an **Open** ticket to open the separate **Resolve ticket** form. Enter a **Reply**, then press **Resolve ticket**. Choose **Ticket** to return without submitting.
+
+A successful submission opens **Ticket**, showing **Closed** and the saved answer under **Reply**. Requesters and Support Officers in the workspace see the same reply as plain text with its line breaks. A ticket without a saved reply has no **Reply** heading.
+
+**Reply** is required. Invalid input stays in the form with:
+
+> Enter a valid reply (1 to 10000 characters).
+
+A closed ticket has no **Resolve ticket** link. Repeated submissions, including from an older open form, keep the first saved answer. There are no controls to edit the reply or reopen the ticket.
+
+See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer) and [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) for the complete rules.
 
 ## Forbidden pages
 

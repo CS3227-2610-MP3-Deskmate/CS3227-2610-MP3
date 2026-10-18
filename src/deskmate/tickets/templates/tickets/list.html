@@ -1,12 +1,14 @@
 {% extends "deskmate/base.html" %}
 {% block content %}
-  <p><a href="{% url 'ticket-new' %}">New ticket</a></p>
+  {% if can_create_ticket %}
+    <p><a href="{% url 'ticket-new' %}">New ticket</a></p>
+  {% endif %}
   <ul>
     {% for ticket in tickets %}
-      <li><a href="{% url 'ticket-detail' ticket.pk %}">{{ ticket.title }}</a></li>
+      <li><a href="{% url ticket_detail_route ticket.pk %}">{{ ticket.title }}</a></li>
     {% empty %}
       <li>No tickets yet.</li>
     {% endfor %}
   </ul>
-  <p><a href="{% url 'requester' %}">Requester</a></p>
+  <p><a href="{% url role_route %}">{{ role_label }}</a></p>
 {% endblock %}

@@ -1,4 +1,4 @@
-"""Requester ticket submission and reading within the current workspace (RQ-1)."""
+"""Workspace ticket submission, reading and resolution (RQ-1, RQ-2, RQ-3)."""
 
 from functools import wraps
 
@@ -8,23 +8,36 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.views.decorators.http import require_GET, require_http_methods
 
 from deskmate.accounts.models import Role
-from deskmate.tickets.forms import TicketForm
+from deskmate.tickets.forms import ResolutionForm, TicketForm
 from deskmate.tickets.models import Ticket
 from deskmate.views import forbidden
 
 
-def _requester(view):
-    """Apply the existing sign-in and role responses to a ticket view."""
+def _ticket_role(view):
+    """Require the route's fixed role, defaulting to Requester."""
 
     @wraps(view)
     @login_required(login_url="sign-in", redirect_field_name=None)
-    def guarded(request, *args, **kwargs):
+    def guarded(request, *args, role=Role.REQUESTER, **kwargs):
         """Check the stored role before any ticket is read."""
-        if request.user.role != Role.REQUESTER:
+        if request.user.role != role:
             return forbidden(request, "This page is not for your role.")
         return view(request, *args, **kwargs)
 
     return guarded
+
+
+def _navigation(role):
+    """Return fixed route names and labels for an authorised ticket reader."""
+    support = role == Role.SUPPORT_OFFICER
+    return {
+        "ticket_list_route": "support-ticket-list" if support else "ticket-list",
+        "ticket_detail_route": "support-ticket-detail" if support else "ticket-detail",
+        "role_route": "support" if support else "requester",
+        "role_label": Role(role).label,
+        "can_create_ticket": not support,
+        "can_resolve_ticket": support,
+    }
 
 
 def _ticket_id(value):
@@ -41,7 +54,7 @@ def _ticket_id(value):
 
 
 @require_GET
-@_requester
+@_ticket_role
 def ticket_list(request):
     """List only the current stored workspace's tickets in creation order."""
     return render(
@@ -50,12 +63,13 @@ def ticket_list(request):
         {
             "title": "Tickets",
             "tickets": Ticket.objects.filter(workspace_id=request.user.workspace_id),
+            **_navigation(request.user.role),
         },
     )
 
 
 @require_http_methods(["GET", "POST"])
-@_requester
+@_ticket_role
 def ticket_create(request):
     """Create a ticket in the current stored workspace (RQ-1.2, RQ-1.5)."""
     form = TicketForm(data=request.POST if request.method == "POST" else None)
@@ -72,7 +86,7 @@ def ticket_create(request):
 
 
 @require_GET
-@_requester
+@_ticket_role
 def ticket_detail(request, ticket_id):
     """Show a ticket in the current stored workspace, or the generic 404."""
     ticket = get_object_or_404(
@@ -83,5 +97,26 @@ def ticket_detail(request, ticket_id):
     return render(
         request,
         "tickets/detail.html",
-        {"title": "Ticket", "ticket": ticket},
+        {"title": "Ticket", "ticket": ticket, **_navigation(request.user.role)},
+    )
+
+
+@require_http_methods(["GET", "POST"])
+@_ticket_role
+def ticket_resolve(request, ticket_id):
+    """Save one reply and close only a still-open workspace ticket (RQ-3)."""
+    tickets = Ticket.objects.filter(workspace_id=request.user.workspace_id)
+    ticket = get_object_or_404(tickets, pk=_ticket_id(ticket_id))
+    if not ticket.open:
+        return redirect("support-ticket-detail", ticket_id=ticket.pk)
+    form = ResolutionForm(data=request.POST if request.method == "POST" else None)
+    if request.method == "POST" and form.is_valid():
+        tickets.filter(pk=ticket.pk, open=True).update(
+            reply=form.cleaned_data["reply"], open=False
+        )
+        return redirect("support-ticket-detail", ticket_id=ticket.pk)
+    return render(
+        request,
+        "tickets/resolve.html",
+        {"title": "Resolve ticket", "ticket": ticket, "form": form.redisplay()},
     )

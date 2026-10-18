@@ -3,5 +3,12 @@
   <h2>{{ ticket.title }}</h2>
   <p>{{ ticket.description|linebreaksbr }}</p>
   <p>{% if ticket.open %}Open{% else %}Closed{% endif %}</p>
-  <p><a href="{% url 'ticket-list' %}">Tickets</a></p>
+  {% if ticket.reply %}
+    <h2>Reply</h2>
+    <p>{{ ticket.reply|linebreaksbr }}</p>
+  {% endif %}
+  {% if can_resolve_ticket and ticket.open %}
+    <p><a href="{% url 'support-ticket-resolve' ticket.pk %}">Resolve ticket</a></p>
+  {% endif %}
+  <p><a href="{% url ticket_list_route %}">Tickets</a></p>
 {% endblock %}
