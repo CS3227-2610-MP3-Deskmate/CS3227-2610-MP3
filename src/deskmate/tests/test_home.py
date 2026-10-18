@@ -14,9 +14,10 @@ def assert_placeholder_page(response):
     html = response.content.decode("utf-8")
     assertInHTML("<title>Deskmate</title>", html, count=1)
     assertInHTML("<h1>Deskmate</h1>", html, count=1)
-    # All the page's text: the title, the heading, then the one sentence.
+    assertInHTML('<a href="/sign-in/">Sign in</a>', html, count=1)
+    # All the page's text: the title, the heading, the sentence and the link.
     text = " ".join(strip_tags(html).split())
-    assert text == "Deskmate Deskmate Deskmate is under construction."
+    assert text == "Deskmate Deskmate Deskmate is under construction. Sign in"
 
 
 @pytest.mark.ac("PLT-1.1")
