@@ -35,7 +35,7 @@ def _ticket_id(value):
     name one, so it gets the same generic 404 as a missing ticket.
     """
     value = value.lstrip("0") or "0"
-    if len(value) > 19:
+    if len(value) > 19 or int(value) > 2**63 - 1:
         raise Http404
     return value
 

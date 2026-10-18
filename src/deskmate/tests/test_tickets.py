@@ -139,7 +139,9 @@ def test_tickets_description_line_breaks_are_shown(requester):
     ],
     ids=["minimum", "maximum", "whitespace-and-crlf"],
 )
-def test_tickets_valid_boundaries_and_normalisation(requester, title, description):
+def test_tickets_valid_boundaries_and_normalisation(
+    requester, tickets, title, description
+):
     browser, _ = requester
     path = submit(browser, title, description)
     page = ticket_page(browser, path)
@@ -305,6 +307,8 @@ def test_tickets_cannot_read_another_workspace(requester, make_account, tickets)
     for query in (f"?id={own}", f"?role={REQUESTER}", f"?workspace={foreign.pk}"):
         assert browser.get(f"{their}{query}", secure=True).status_code == 404
     assert browser.get(LONG_ID, secure=True).status_code == 404
+    overflow = f"{LIST}9999999999999999999/"
+    assert browser.get(overflow, secure=True).status_code == 404
 
 
 @pytest.mark.ac("RQ-1.7")
