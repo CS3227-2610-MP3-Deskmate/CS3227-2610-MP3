@@ -32,6 +32,7 @@ On every route below, whether or not the visitor is signed in, these rules apply
 | --- | --- | --- | --- | --- |
 | `/` | GET | Public | Placeholder home page | PLT-1.1 |
 | `/health/` | GET | Public | Reports whether the app can reach its database | PLT-1.2, PLT-1.3 |
+| `/health/llm/` | GET | Operator probe token | Makes the one SoC LLM production probe call and reports only `ok` or `error` | PLT-3.1–PLT-3.6 |
 | `/sign-in/` | GET, POST | Public; signed-in users are redirected to their role's page | Sign-in page, with the **Create demo workspace** button | ACC-1.1, ACC-1.3–ACC-1.8, ACC-2.1, ACC-3.1–ACC-3.8 |
 | `/sign-out/` | POST | Public | Signs the visitor out | ACC-1.2, ACC-1.8 |
 | `/demo-workspace/` | POST | Public; signed-in users are redirected to their role's page | Creates a demo workspace and shows its accounts' passwords once | ACC-1.8, ACC-2.1–ACC-2.8, ACC-3.1–ACC-3.8 |
@@ -49,7 +50,7 @@ On every route below, whether or not the visitor is signed in, these rules apply
 
 ## Configuration
 
-Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard developer settings as described in [Environments](#environments). Provider-supplied `VERCEL_ENV=production` activates production validation in [settings](../../src/deskmate/settings.py), and provider-supplied `VERCEL` with any other `VERCEL_ENV` makes the migration entry point refuse to run (PLT-2.8); Vercel's system environment variables must remain enabled. Provider credentials are protected deployment-job inputs, not app settings.
+Application-supplied settings use `DJANGO_`, `POSTGRES_` or `SOC_LLM_`; tests discard developer settings as described in [Environments](#environments). Provider-supplied `VERCEL_ENV=production` activates production validation in [settings](../../src/deskmate/settings.py), and provider-supplied `VERCEL` with any other `VERCEL_ENV` makes the migration entry point refuse to run (PLT-2.8); Vercel's system environment variables must remain enabled. Provider credentials are protected deployment-job inputs, not app settings.
 
 | Variable | Meaning | Required | Valid values | Criteria |
 | --- | --- | --- | --- | --- |
@@ -61,13 +62,15 @@ Application-supplied settings use `DJANGO_` or `POSTGRES_`; tests discard develo
 | `DJANGO_SECRET_KEY` | The key Django signs sessions and other data with | With debug off | At least 50 characters, at least 5 of them different, and not starting with `django-insecure-` | PLT-1.7 |
 | `DJANGO_ALLOWED_HOSTS` | The host names the app answers to, separated by commas; spaces around a name and empty items are ignored. Names match as in Django's `ALLOWED_HOSTS`, so `*` matches every host ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)) | With debug off | At least one name | PLT-1.7, ACC-1.8 |
 | `DJANGO_DEBUG` | Turns on Django's debug pages | No | Any; only `true` turns debug on (PLT-1.6) | PLT-1.6 |
+| `SOC_LLM_API_KEY` | The SoC LLM key the production probe authenticates with | No | Any non-empty value; unset or empty makes the probe return `503` | PLT-3.1, PLT-3.2, PLT-3.5 |
+| `SOC_LLM_PROBE_TOKEN` | The operator secret that gates the production probe route | No | Any non-empty value; unset or empty makes the route return `404` | PLT-3.1–PLT-3.3, PLT-3.5 |
 
 The existing variables and their PLT-1 validation contract stay unchanged. Production configuration adds these constraints under PLT-2.8:
 
 - `POSTGRES_HOST` is the exact Neon direct endpoint hostname; connection pooling and persistent Django database connections are disabled. The existing 5-second connection timeout remains.
 - Database transport is fixed by the host: literal `localhost`, `127.0.0.1` and `::1` may use plaintext for development or isolated CI; every other host uses `sslmode=verify-full` with the system CA trust store (`sslrootcert=system`). Production requires the selected Neon hostname and verified TLS. There is no setting that permits plaintext for a remote host, disables certificate verification or falls back after TLS failure.
 - `DJANGO_ALLOWED_HOSTS` contains only the exact public production hostname, without wildcards, schemes, paths or ports. No deployment URL, `VERCEL_URL` value or request header expands it.
-- `DJANGO_DEBUG` is off; production database credentials and the strong `DJANGO_SECRET_KEY` are configured directly in provider production settings. They are not copied into CI settings or written into source or built artifacts.
+- `DJANGO_DEBUG` is off; production database credentials, the strong `DJANGO_SECRET_KEY`, `SOC_LLM_API_KEY` and `SOC_LLM_PROBE_TOKEN` are configured directly in provider production settings. They are not copied into CI settings or written into source or built artifacts.
 
 ## Environments
 

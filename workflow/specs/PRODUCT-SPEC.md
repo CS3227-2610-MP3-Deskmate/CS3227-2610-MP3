@@ -18,6 +18,8 @@ Every user has exactly one of these roles and belongs to exactly one **workspace
 | `KB` | Knowledge base: Support Officers writing and editing articles in their workspace | [`product/knowledge-base.md`](product/knowledge-base.md) |
 | `RQ` | Tickets: Requesters submitting tickets in their workspace | [`product/tickets.md`](product/tickets.md) |
 
+AI feature contracts live under [`ai/`](ai/); the SoC LLM production probe is [`ai/llm-health.md`](ai/llm-health.md).
+
 ## Requirements
 
 Each area's file holds its requirements in the form set in [`spec-writer.md`](../agents/spec-writer.md). A requirement's ID is its area's prefix and a number, such as `PLT-1`; each acceptance criterion adds a second number, such as `PLT-1.2`, and the tests that check a criterion are marked with its ID.
