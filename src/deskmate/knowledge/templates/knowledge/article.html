@@ -1,0 +1,6 @@
+{% extends "deskmate/base.html" %}
+{% block content %}
+  <h2>{{ article.title }}</h2>
+  <p>{{ article.body|linebreaksbr }}</p>
+  <p><a href="{% url 'article-read-list' %}">Knowledge base</a></p>
+{% endblock %}

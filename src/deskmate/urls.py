@@ -15,6 +15,16 @@ urlpatterns = [
         knowledge.article_form,
         name="article-edit",
     ),
+    path(
+        "requester/articles/",
+        knowledge.article_reading_list,
+        name="article-read-list",
+    ),
+    re_path(
+        r"^requester/articles/(?P<article_id>[0-9]+)/$",
+        knowledge.article_reading,
+        name="article-read",
+    ),
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),
     path("sign-in/", accounts.sign_in, name="sign-in"),
