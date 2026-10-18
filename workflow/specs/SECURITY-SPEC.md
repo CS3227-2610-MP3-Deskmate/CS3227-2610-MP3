@@ -91,6 +91,17 @@ Threat: a Requester or signed-out visitor reaches an authoring page; a Support O
 - Gap: database error messages can quote article titles or bodies in app logs under existing error handling; the database provider may also log SQL or row details.
 - Gap: there is no article quota, rate limit or deletion, so a signed-in Support Officer can grow the shared database until its storage cap prevents further writes, and the unpaginated list grows with their workspace. No additional storage or request-control subsystem is included.
 
+## Knowledge-base reading
+
+Threat: a Requester reads another workspace's article by guessing its identifier or supplying a different workspace, or stored article text executes markup in a reader's browser.
+
+- Requester article routes reuse the stored-account access decision, session expiry, CSRF and Origin checks in [Sign-in and access control](#sign-in-and-access-control), with method and access checks before article lookup as [Routes](TECHNICAL-SPEC.md#routes) specifies (KB-2.4).
+- The server takes the workspace only from the current stored account, and both the list and each reading page select articles within that workspace; an unknown identifier and an identifier in another workspace give the same generic error (KB-2.3).
+- Article titles and bodies are untrusted plain text. They are escaped in the list and the reading page and never rendered as HTML or Markdown (KB-2.2).
+- Reading responses carry the existing `Cache-Control: no-store` and `X-Frame-Options: DENY` headers, and reading changes no article (KB-2.4).
+- Failed reads reuse [Error pages, health check and logs](#error-pages-health-check-and-logs), with failure behavior in KB-2.5.
+- Gap: as for authoring, database error messages can quote article titles or bodies in app logs under existing error handling; the database provider may also log SQL or row details.
+
 ## Container image
 
 Threat: a tampered base image, a secret baked into an image layer, or a compromised app taking over its container.
