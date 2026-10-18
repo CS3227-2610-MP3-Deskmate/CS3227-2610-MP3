@@ -257,7 +257,7 @@ def test_resolution_csrf_method_access_precedence(
 @pytest.mark.parametrize(
     "state", ["before", "expired", "past", "deleted", "role", "workspace"]
 )
-def test_resolution_next_request_uses_current_account(c, clock, state):
+def test_resolution_next_request_uses_current_account(clock, c, state):
     form_at(c)
     if state in ("before", "expired", "past"):
         clock.set_elapsed(
@@ -293,7 +293,8 @@ def test_resolution_overrides_cannot_change_target_or_other_fields(c):
         "title": "Changed",
         "description": "Changed",
     }
-    c.b.cookies.update({"workspace": str(c.f.workspace_id), "role": auth.REQUESTER})
+    c.b.cookies["workspace"] = str(c.f.workspace_id)
+    c.b.cookies["role"] = auth.REQUESTER
     headers = {"Role": auth.REQUESTER, "Workspace": str(c.f.workspace_id)}
     response = submit(c, form, "Answer", changes=extra, query=extra, headers=headers)
     auth.assert_redirects(response, c.detail)
