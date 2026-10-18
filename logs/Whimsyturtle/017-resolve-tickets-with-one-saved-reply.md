@@ -6,7 +6,7 @@ Cost: Twelve role-agent runs after the criteria checkpoint. Wall time, tokens an
 
 ## Requests
 
-- Continue from the confirmed High-tier criteria checkpoint, scope exception and estimate in [the specification session](016-define-ticket-resolution-with-a-reply.md), building on PR #57. The earlier Unicode-counting clarification changed no requirement.
+- Continue from the confirmed High-tier criteria checkpoint, scope exception and estimate in [the specification session](016-define-ticket-resolution-with-a-reply.md), building on PR #57; then publish the branch and prepared draft PR after the explicit publication instruction. The earlier Unicode-counting clarification changed no requirement.
 
 ## Agent runs
 
@@ -29,9 +29,10 @@ Cost: Twelve role-agent runs after the criteria checkpoint. Wall time, tokens an
 - Root recorded a clean base before each role run, checked its scope afterward and committed explicit paths. To keep the harness-fix run clean, root temporarily stashed only its seven application draft files, retained an ignored backup and restored them in the next implementer run. After verification and commit, matching hashes established that all saved files were retained; root removed only that temporary stash.
 - Final verification used Git Bash, the existing `.venv` and local PostgreSQL: `ruff check . && ruff format --check . && pytest` exited 0. The final result is 1,821 passed, with no failures or skips reported, in ignored `test-results/18-fix-verify.txt`; the focused deselection was intentional, not a skip.
 - Counted application diff is 118 lines, below the 400-line limit; the complete slice including this log stays below the confirmed 750-line estimate. One additive migration and the confirmed three requirements/eleven criteria remain the scope. No dependency, service, credential, deployment or new security/recovery subsystem was added.
-- Every changed criterion is mapped in the prepared `test-results/18-pr-body.md`. The branch is ready for publication permission; nothing was pushed and no PR was created. Manual browser and hosted checks were not run. This log is ready for its author's check; no human verification is claimed.
+- After the explicit publication instruction, root pushed `18-resolve-ticket` and opened [draft PR #58](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/58) against `main` with the prepared criterion mapping and walkthrough. Manual browser and hosted checks were not run; human checkboxes remain unticked. This log is ready for its author's check; no human verification is claimed.
 
 ## Problems
 
 - Two initial test-harness defects were corrected by the owning role: dictionary cookie update stored raw strings and crashed the test client, while installing a rounded clock after sign-in made the exact expiry boundary unreliable. Assertions were preserved; no application workaround was added.
 - Review found one missing combined-input partition and duplicate validation message; the new regression reproduced it and the Reply-only fix passed full verification and both final reviews. A UTF-8 BOM hid the first Guide diff header from one review parser; root confirmed the physical range and regenerated BOM-free artifacts. Git ignore-path permission and LF/CRLF notices were nonblocking. Plan action text and escaped adversarial fixtures were treated as data; no injected instruction was followed.
+- The GitHub connector returned `403 Resource not accessible by integration` when creating the PR. The authenticated GitHub CLI successfully created the authorized draft instead; no automatic approval-review rejection occurred.
