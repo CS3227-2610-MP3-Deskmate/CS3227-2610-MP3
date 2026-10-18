@@ -67,10 +67,18 @@ class TicketForm(_TicketForm):
         return title
 
 
+class _ReplyField(_MultilineField):
+    def validate(self, value):
+        """Reject nulls before length validation can add a second field error."""
+        super().validate(value)
+        if "\x00" in value:
+            raise forms.ValidationError(REPLY_ERROR)
+
+
 class ResolutionForm(_TicketForm):
     """Validate the required plain-text resolution reply (RQ-3.3)."""
 
-    reply = _MultilineField(
+    reply = _ReplyField(
         max_length=10000, widget=forms.Textarea, error_messages=_errors(REPLY_ERROR)
     )
 
