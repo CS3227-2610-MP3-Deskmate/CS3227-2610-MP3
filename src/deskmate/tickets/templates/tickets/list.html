@@ -1,0 +1,12 @@
+{% extends "deskmate/base.html" %}
+{% block content %}
+  <p><a href="{% url 'ticket-new' %}">New ticket</a></p>
+  <ul>
+    {% for ticket in tickets %}
+      <li><a href="{% url 'ticket-detail' ticket.pk %}">{{ ticket.title }}</a></li>
+    {% empty %}
+      <li>No tickets yet.</li>
+    {% endfor %}
+  </ul>
+  <p><a href="{% url 'requester' %}">Requester</a></p>
+{% endblock %}

@@ -6,6 +6,7 @@ from deskmate import views
 from deskmate.accounts import views as accounts
 from deskmate.accounts.models import Role
 from deskmate.knowledge import views as knowledge
+from deskmate.tickets import views as tickets
 
 urlpatterns = [
     path(
@@ -19,6 +20,13 @@ urlpatterns = [
         r"^support/articles/(?P<article_id>[0-9]+)/edit/$",
         knowledge.article_form,
         name="article-edit",
+    ),
+    path("requester/tickets/", tickets.ticket_list, name="ticket-list"),
+    path("requester/tickets/new/", tickets.ticket_create, name="ticket-new"),
+    re_path(
+        r"^requester/tickets/(?P<ticket_id>[0-9]+)/$",
+        tickets.ticket_detail,
+        name="ticket-detail",
     ),
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),

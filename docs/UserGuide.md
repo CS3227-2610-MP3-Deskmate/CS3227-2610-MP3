@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Support Officers can also write and edit knowledge-base articles and reset Requester passwords in their workspace.
+Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets, Support Officers write and edit their workspace's knowledge-base articles, and Support Officers can reset Requester passwords.
 
 Its home page shows only the heading **Deskmate** and this line:
 
@@ -84,6 +84,18 @@ Validation errors keep you on the form with your input and show the relevant mes
 > Enter a valid body (1 to 10000 characters).
 >
 > An article with this title already exists.
+
+## Tickets
+
+As a Requester, choose **Tickets** on your role's page. The list shows your workspace's tickets, earliest first, or **No tickets yet.**
+
+Choose **New ticket**, enter **Title** and **Description**, then press **Submit ticket**. The new ticket opens under **Ticket**, showing **Open** and its saved text; **Tickets** takes you back to the list. Tickets are plain text, and their line breaks are shown.
+
+Tickets need not have unique titles: each valid submission creates a new ticket. Validation errors keep you on the form with your input and show the relevant message:
+
+> Enter a valid title (1 to 200 characters).
+>
+> Enter a valid description (1 to 10000 characters).
 
 ## Forbidden pages
 

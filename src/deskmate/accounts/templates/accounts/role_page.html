@@ -4,6 +4,8 @@
   {% if title == "Support Officer" %}
     <p><a href="{% url 'article-list' %}">Knowledge base</a></p>
     <p><a href="{% url 'reset-requester-password' %}">Reset Requester password</a></p>
+  {% elif title == "Requester" %}
+    <p><a href="{% url 'ticket-list' %}">Tickets</a></p>
   {% endif %}
   <form method="post" action="{% url 'sign-out' %}">
     {% csrf_token %}

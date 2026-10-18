@@ -104,6 +104,18 @@ Threat: a Requester or signed-out visitor reaches an authoring page; a Support O
 - Gap: database error messages can quote article titles or bodies in app logs under existing error handling; the database provider may also log SQL or row details.
 - Gap: there is no article quota, rate limit or deletion, so a signed-in Support Officer can grow the shared database until its storage cap prevents further writes, and the unpaginated list grows with their workspace. No additional storage or request-control subsystem is included.
 
+## Tickets
+
+Threat: a Requester reads or creates tickets in another workspace by guessing an identifier or supplying a different workspace, another site submits an unwanted ticket, or stored ticket text executes markup in a reader's browser.
+
+- Requester ticket routes reuse the stored-account access decision, session expiry, CSRF and Origin checks in [Sign-in and access control](#sign-in-and-access-control), with method and access checks before ticket lookup as [Routes](TECHNICAL-SPEC.md#routes) specifies (RQ-1.6).
+- The server takes the workspace only from the current stored account, and both the list and each ticket page select tickets within that workspace; an unknown identifier and an identifier in another workspace give the same generic error (RQ-1.7).
+- Ticket titles and descriptions are untrusted plain text. They are escaped in lists, pages and form values and never rendered as HTML or Markdown (RQ-1.3, RQ-1.7).
+- Ticket responses carry the existing `Cache-Control: no-store` and `X-Frame-Options: DENY` headers, and rejected requests create no ticket (RQ-1.6).
+- Failed reads and creations reuse [Error pages, health check and logs](#error-pages-health-check-and-logs), with failure behavior in RQ-1.8.
+- Gap: database error messages can quote ticket titles or descriptions in app logs under existing error handling; the database provider may also log SQL or row details.
+- Gap: there is no ticket quota, rate limit or deletion, so a signed-in Requester can grow the shared database until its storage cap prevents further writes, and the unpaginated list grows with their workspace.
+
 ## Container image
 
 Threat: a tampered base image, a secret baked into an image layer, or a compromised app taking over its container.
