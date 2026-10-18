@@ -127,14 +127,31 @@ class _HomePage(HTMLParser):
         self.parts = {"title": [], "heading": [], "other": []}
         self.counts = {"title": 0, "heading": 0}
         self.links = []
+        self.invalid = False
         self.section = "other"
         self.link = None
+        self.ignored = 0
 
     def handle_starttag(self, tag, attrs):
-        """Count and collect the title, headings, links and other text."""
+        """Collect the title, headings, links and other rendered text."""
+        if self.ignored:
+            if tag in ("template", "noscript", "script", "style"):
+                self.ignored += 1
+            return
+        if tag in ("template", "noscript", "script", "style"):
+            self.ignored = 1
+            return
+        if tag == "base":
+            self.invalid = True
+            return
         if tag == "a":
-            self.link = {"href": dict(attrs).get("href"), "text": []}
-            self.links.append(self.link)
+            hrefs = [value for name, value in attrs if name == "href"]
+            if len(hrefs) > 1 or self.link is not None:
+                self.invalid = True
+            if hrefs:
+                self.link = {"href": hrefs[0], "text": []}
+                self.links.append(self.link)
+            return
         section = (
             "title"
             if tag == "title"
@@ -148,6 +165,10 @@ class _HomePage(HTMLParser):
 
     def handle_endtag(self, tag):
         """Return to ordinary text after closing a link, title or heading."""
+        if self.ignored:
+            if tag in ("template", "noscript", "script", "style"):
+                self.ignored -= 1
+            return
         if tag == "a":
             self.link = None
         if tag == "title" or re.fullmatch("h[1-6]", tag):
@@ -155,6 +176,8 @@ class _HomePage(HTMLParser):
 
     def handle_data(self, data):
         """Collect text, including any unexpected content."""
+        if self.ignored:
+            return
         self.parts[self.section].append(data)
         if self.link is not None:
             self.link["text"].append(data)
@@ -203,18 +226,20 @@ def verify_release(deployment_id, owner_id, project_id, hostname, token, job_dea
             except (ValueError, UnicodeError):
                 raise ReleaseError("home: failed") from None
             parts = {
-                key: " ".join(" ".join(value).split())
+                key: " ".join("".join(value).split())
                 for key, value in page.parts.items()
             }
             links = [
                 {
                     "href": link["href"],
-                    "text": " ".join(" ".join(link["text"]).split()),
+                    "text": " ".join("".join(link["text"]).split()),
                 }
                 for link in page.links
             ]
             _check(
-                page.counts == {"title": 1, "heading": 1}
+                not page.invalid
+                and page.ignored == 0
+                and page.counts == {"title": 1, "heading": 1}
                 and parts
                 == {
                     "title": "Deskmate",

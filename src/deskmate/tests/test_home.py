@@ -1,11 +1,23 @@
 """PLT-1.1: the placeholder home page, whether or not the database answers."""
 
+from html.parser import HTMLParser
+
 import pytest
 from django.utils.html import strip_tags
 from pytest_django.asserts import assertInHTML
 
 from deskmate.tests.helpers import media_type
 from deskmate.tests.signing_in import REQUESTER, sign_in_as
+
+
+class _Links(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.hrefs = []
+
+    def handle_starttag(self, tag, attrs):
+        if tag == "a":
+            self.hrefs.append(dict(attrs).get("href"))
 
 
 def assert_placeholder_page(response):
@@ -15,6 +27,9 @@ def assert_placeholder_page(response):
     assertInHTML("<title>Deskmate</title>", html, count=1)
     assertInHTML("<h1>Deskmate</h1>", html, count=1)
     assertInHTML('<a href="/sign-in/">Sign in</a>', html, count=1)
+    links = _Links()
+    links.feed(html)
+    assert links.hrefs == ["/sign-in/"]
     # All the page's text: the title, the heading, the sentence and the link.
     text = " ".join(strip_tags(html).split())
     assert text == "Deskmate Deskmate Deskmate is under construction. Sign in"

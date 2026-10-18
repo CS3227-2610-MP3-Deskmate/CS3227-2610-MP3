@@ -26,7 +26,7 @@ HOST = "deskmate-synthetic.vercel.app"
 CLI_HOST = "deployment-synthetic.vercel.app"
 HOME = (
     b"<!doctype html><html><head><title>Deskmate</title></head>"
-    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p>"
+    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p>\n"
     b'<p><a href="/sign-in/">Sign in</a></p></body></html>'
 )
 
@@ -122,6 +122,25 @@ def test_release_valid_identity_mapping_and_public_pages_succeed(release, scenar
     stages = [call[0] for call in scenario.calls]
     assert stages[:2] == ["deployment", "mapping"]
     assert set(stages[2:]) == {"home", "health", "http_home", "http_health"}
+
+
+@pytest.mark.ac("PLT-2.3")
+@pytest.mark.parametrize("wrapper", ["template", "noscript"])
+def test_release_home_ignores_inert_link_markup(release, scenario, wrapper):
+    scenario.replies["home"] = [
+        response(
+            HOME.replace(
+                b'<a href="/sign-in/">Sign in</a>',
+                b"<"
+                + wrapper.encode()
+                + b'><a href="/other/">Other</a></'
+                + wrapper.encode()
+                + b'><a href="/sign-in/">Sign in</a>',
+            ),
+            content_type="text/html",
+        )
+    ]
+    verify(release, scenario)
 
 
 @pytest.mark.ac("PLT-2.3", "PLT-2.5")
@@ -252,7 +271,7 @@ def test_release_invalid_tls_fails_immediately(release, scenario, error):
             response(
                 HOME.replace(
                     b'<a href="/sign-in/">Sign in</a>',
-                    b'<a href="/sign-in/">Sign in</a><a href="/sign-in/">Sign in</a>',
+                    b'<a href="/sign-in/">Sign in</a><a href="/other/"></a>',
                 ),
                 content_type="text/html",
             ),
@@ -261,6 +280,46 @@ def test_release_invalid_tls_fails_immediately(release, scenario, error):
             "home",
             response(
                 HOME.replace(b'<a href="/sign-in/">', b'<a href="/other/">'),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(
+                    b'<a href="/sign-in/">',
+                    b'<a href="/other/" href="/sign-in/">',
+                ),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(
+                    b"<head>",
+                    b'<head><base href="https://evil.example/">',
+                ),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(
+                    b'<a href="/sign-in/">Sign in</a>',
+                    b'<template><a href="/sign-in/">Sign in</a></template>',
+                ),
+                content_type="text/html",
+            ),
+        ),
+        (
+            "home",
+            response(
+                HOME.replace(
+                    b'<a href="/sign-in/">Sign in</a>',
+                    b'<a name="top"></a>',
+                ),
                 content_type="text/html",
             ),
         ),
