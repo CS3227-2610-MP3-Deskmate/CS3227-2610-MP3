@@ -16,6 +16,7 @@ Every user has exactly one of these roles and belongs to exactly one **workspace
 | `PLT` | Platform: the home page, health check, error pages, startup checks and releases that every feature relies on | [`product/platform.md`](product/platform.md) |
 | `ACC` | Accounts: demo workspace creation, sign-in, sign-out, role access and [Requester password resets](product/accounts.md#acc-4-reset-a-requesters-password), with rate limits on creation, sign-in and resets | [`product/accounts.md`](product/accounts.md) |
 | `KB` | Knowledge base: Support Officers writing and editing articles in their workspace | [`product/knowledge-base.md`](product/knowledge-base.md) |
+| `RQ` | Tickets: Requesters submitting tickets in their workspace | [`product/tickets.md`](product/tickets.md) |
 
 ## Requirements
 
