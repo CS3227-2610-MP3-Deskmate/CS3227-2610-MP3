@@ -8,6 +8,7 @@ Cost: Two role-agent runs. Full pytest took 322.51 seconds; total wall time, tok
 
 - Assess whether the embedded Python identified in the PR review comment can be fixed and prevented through Ruff or agent instructions.
 - Proceed with extracting that script into a normal test helper and adding the agent rule.
+- Create a pull request for the reviewed change.
 
 ## Agent runs
 
@@ -19,9 +20,10 @@ Cost: Two role-agent runs. Full pytest took 322.51 seconds; total wall time, tok
 - Verified the comment's author association was MEMBER before reading its body through GitHub CLI. A local diagnostic confirmed Ruff 0.17.0 accepts invalid Python syntax inside a string.
 - Fetched origin and created `47-extract-migration-test-helper` from clean, current `main` at `0d3c571`. This maintenance change leaves acceptance criteria unchanged and adds no dependency or CI check.
 - The test-writer owned the two test files; the coordinating session added the executable-Python rule in [AGENTS.md](../../AGENTS.md#writing). The existing subprocess isolation, assertions and criterion markers remain intact.
-- Committed the change locally as `7b2e157`. It changes 52 lines across three files, with no production-code changes. No push or pull request creation was requested or performed.
+- Committed the change locally as `7b2e157`. It changes 52 lines across three files, with no production-code changes.
 - The coordinating session ran the unchanged `ruff check . && ruff format --check . && pytest` command in Git Bash with `.venv` active, outside the Windows sandbox against the existing local PostgreSQL container. Ruff passed, formatting reported 93 files already formatted, and all 1,536 tests passed in 322.51 seconds. This includes the three existing PLT-2.13 helper checks and the workflow tests.
 - Read back the changed agent-rule section and checked the diff for whitespace errors. No repeat test run was needed for this Markdown-only session log.
+- On the subsequent PR request, fetched origin again: `origin/main` remained at `0d3c571`, the working tree was clean, and no open PR existed for the branch. Prepared the repository's PR template with the existing PLT-2.13 results and unticked human checkboxes. No merge or repeat test run was needed because the reviewed code and base were unchanged.
 
 ## Problems
 
