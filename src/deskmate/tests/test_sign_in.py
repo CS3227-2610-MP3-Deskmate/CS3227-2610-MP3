@@ -9,7 +9,7 @@ from urllib.parse import unquote, urlencode
 
 import pytest
 from django.conf import settings
-from django.contrib.auth import forms as auth_forms
+from django.core.exceptions import ValidationError
 
 from deskmate.tests.pages import CSRF_FIELD, Page
 from deskmate.tests.signing_in import (
@@ -46,10 +46,7 @@ from deskmate.tests.signing_in import (
 
 ACCOUNT = "alice"
 LONGEST = "a" * 150
-# Four characters that NFKC turns into one, U+1F8F: Greek capital alpha with
-# dasia, perispomeni and prosgegrammeni.
-DECOMPOSED_ALPHA = "\u0391\u0314\u0342\u0345"
-COMPOSED_ALPHA = "\u1f8f"
+ASCII_ALPHABET = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789@.+-_"
 # Response headers whose values are the time the response was made.
 TIME_HEADERS = frozenset({"date", "expires", "last-modified"})
 
@@ -66,8 +63,7 @@ NO_MATCH = [
 ]
 
 # Red-team characters, stored escaped and decoded only inside the tests.
-# Invisible and format characters are not Unicode whitespace and NFKC keeps
-# them, so a username with one anywhere in it is not `alice` (ACC-1.7).
+# Invisible and format characters are outside ACC-1.7's trim set and allowlist.
 INVISIBLE_CHARACTERS = [
     pytest.param("%E2%80%8B", id="zero-width-space"),  # U+200B
     pytest.param("%E2%80%8D", id="zero-width-joiner"),  # U+200D
@@ -77,59 +73,72 @@ INVISIBLE_CHARACTERS = [
 ]
 INVISIBLE_PLACES = ["before", "after", "inside"]
 NULL_CHARACTER = "%00"
-# Usernames far over the limit (ACC-1.3), as an escaped character and how many
-# times it is typed. NFKC turns U+FDFA into 18 characters.
-OVERSIZED_USERNAMES = [
-    pytest.param("a", 100_000, id="100000-characters"),
-    pytest.param("%EF%B7%BA", 9, id="9-characters-162-after-nfkc"),
-    pytest.param("%EF%B7%BA", 100_000, id="100000-characters-nfkc-expands"),
-]
+# Every whitespace code point ACC-1.7 trims, decoded only inside the test.
+TRIM_CODEPOINTS = (
+    *range(0x0009, 0x000E),
+    *range(0x001C, 0x0021),
+    0x0085,
+    0x00A0,
+    0x1680,
+    *range(0x2000, 0x200B),
+    0x2028,
+    0x2029,
+    0x202F,
+    0x205F,
+    0x3000,
+)
 
-# Typed usernames that sign in as `alice` (ACC-1.7): Unicode whitespace around
-# them is ignored, and they are compared after NFKC normalisation.
+# Trimming does not otherwise change the ASCII username (ACC-1.7).
 MATCHING_USERNAMES = [
     pytest.param("  alice  ", id="ascii-spaces"),
     pytest.param("\t\r\n alice\n", id="ascii-control-whitespace"),
     pytest.param("\u00a0\u3000alice\u2003", id="unicode-spaces"),
     pytest.param("\u0085\u2028alice\u2029", id="unicode-line-breaks"),
-    pytest.param("\uff41\uff4c\uff49\uff43\uff45", id="fullwidth"),
-    pytest.param("\u3000\uff41\uff4c\uff49\uff43\uff45 ", id="fullwidth-and-spaces"),
 ]
 
-# Typed usernames that do not sign in as `alice`: comparison is case-sensitive,
-# and only whitespace around the username is ignored (ACC-1.7).
+# Invalid typed usernames and a valid ASCII account with the right password.
+# Compatibility forms would sign in to that account if NFKC were applied.
+# Non-ASCII/red-team inputs stay escaped until each test decodes them.
+INVALID_USERNAMES = [
+    pytest.param("ali%21ce", ACCOUNT, id="ascii-exclamation"),
+    pytest.param("ali%2Fce", ACCOUNT, id="ascii-slash"),
+    pytest.param("ali%3Ace", ACCOUNT, id="ascii-colon"),
+    pytest.param("ali%5Cce", ACCOUNT, id="ascii-backslash"),
+    pytest.param("ali%7Fce", ACCOUNT, id="ascii-delete"),
+    pytest.param("ali%09ce", ACCOUNT, id="inner-tab"),
+    pytest.param("ali%0Ace", ACCOUNT, id="inner-newline"),
+    pytest.param("ali%1Fce", ACCOUNT, id="inner-control-separator"),
+    pytest.param("ali%20ce", ACCOUNT, id="inner-space"),
+    pytest.param("ali%C2%A0ce", ACCOUNT, id="inner-nonbreaking-space"),
+    pytest.param("alic%C3%A9", ACCOUNT, id="non-ascii-letter"),
+    pytest.param("%D0%B0lice", ACCOUNT, id="cyrillic-lookalike"),
+    pytest.param("alice%D9%A1", "alice1", id="non-ascii-digit"),
+    pytest.param("alice%CC%81", ACCOUNT, id="combining-mark"),
+    pytest.param(
+        "%EF%BD%81%EF%BD%8C%EF%BD%89%EF%BD%83%EF%BD%85", ACCOUNT, id="fullwidth"
+    ),
+    pytest.param("%E3%80%80%EF%BD%81lice%20", ACCOUNT, id="fullwidth-after-trimming"),
+    pytest.param("a%E2%84%93ice", ACCOUNT, id="compatibility-letter"),
+    pytest.param("%E2%93%90lice", ACCOUNT, id="circled-letter"),
+    pytest.param("%F0%9D%90%9Alice", ACCOUNT, id="mathematical-letter"),
+    pytest.param("alice%C2%B2", "alice2", id="superscript-digit"),
+    pytest.param("alice%EF%BC%91", "alice1", id="fullwidth-digit"),
+    pytest.param("alice%EF%BC%8B", "alice+", id="fullwidth-punctuation"),
+]
+
+# Accepted usernames are still compared case-sensitively (ACC-1.7).
 NON_MATCHING_USERNAMES = [
     pytest.param("Alice", id="capitalised"),
     pytest.param("ALICE", id="upper-case"),
-    pytest.param("ali ce", id="inner-space"),
 ]
 
-# The username limit is 150 characters after trimming and NFKC normalisation
-# (ACC-1.3): (typed, the account's username).
+# The username limit is measured after trimming (ACC-1.3, ACC-1.7).
 USERNAME_LENGTHS = [
     pytest.param("a", "a", id="1-character"),
+    pytest.param(ASCII_ALPHABET, ASCII_ALPHABET, id="entire-allowed-alphabet"),
+    pytest.param("a" * 149, "a" * 149, id="149-characters"),
     pytest.param(LONGEST, LONGEST, id="150-characters"),
     pytest.param(f" {LONGEST}\u3000", LONGEST, id="150-after-trimming"),
-    pytest.param("e\u0301" * 150, "\u00e9" * 150, id="150-after-nfkc"),
-    pytest.param(
-        DECOMPOSED_ALPHA * 150, COMPOSED_ALPHA * 150, id="600-typed-150-after-nfkc"
-    ),
-    pytest.param(
-        f"{DECOMPOSED_ALPHA * 150} ",
-        COMPOSED_ALPHA * 150,
-        id="601-typed-150-after-trimming-and-nfkc",
-    ),
-]
-# Typed usernames 151 characters long after trimming and NFKC, each with the
-# account whose username they would be if cut to 150 characters (ACC-1.3).
-TOO_LONG_USERNAMES = [
-    pytest.param("e\u0301" * 151, "\u00e9" * 150, id="151-after-nfkc"),
-    pytest.param(
-        DECOMPOSED_ALPHA * 150 + "\u0391",
-        COMPOSED_ALPHA * 150,
-        id="601-typed-151-after-nfkc",
-    ),
-    pytest.param("a" * 601, LONGEST, id="601-characters"),
 ]
 
 # Passwords that differ from PASSWORD only in case, spaces or by NFKC.
@@ -141,17 +150,10 @@ NON_MATCHING_PASSWORDS = [
     pytest.param("\uff33" + PASSWORD[1:], id="fullwidth-letter"),
 ]
 SPACED_PASSWORD = "  Spaced  pass 3 "
+# Unicode passwords are allowed, and normalization must not change them.
+UNICODE_PASSWORD = "%20%20Synthe%CC%81tic%20%EF%BC%91%20%F0%9F%94%90%20"
 # Methods that /sign-in/ does not list (TECHNICAL-SPEC "Routes").
 OTHER_METHODS = methods_not_listed("GET", "POST")
-# NFKC turns at most 4 characters into 1, so no typed username longer than 4
-# times the 150-character limit can be 150 characters after NFKC (ACC-1.3).
-# Longer input is refused without being normalised, because NFKC is slow on
-# huge input.
-LONGEST_NORMALISED = 4 * len(LONGEST)
-OVER_LONGEST_NORMALISED = [
-    pytest.param(LONGEST_NORMALISED + 1, id="601-characters"),
-    pytest.param(100_000, id="100000-characters"),
-]
 
 # A `next` parameter on the sign-in page, in the submission's query, or in its
 # form data, with values that point off the site or at the other role's page.
@@ -176,25 +178,6 @@ def assert_matches_no_account(browser, username, password):
     response = submit_sign_in(browser, page, username, password)
     assert_sign_in_failed(response, username, page)
     assert_signed_out(browser)
-
-
-@pytest.fixture
-def normalised_lengths(monkeypatch):
-    """Return a list of the length of each string normalised during the test.
-
-    It patches `unicodedata.normalize` as `django.contrib.auth.forms` reaches
-    it, so the list grows each time anything calls it, and the string is
-    still normalised.
-    """
-    lengths = []
-    normalize = auth_forms.unicodedata.normalize
-
-    def recording_normalize(form, text):
-        lengths.append(len(text))
-        return normalize(form, text)
-
-    monkeypatch.setattr(auth_forms.unicodedata, "normalize", recording_normalize)
-    return lengths
 
 
 @pytest.mark.ac("ACC-1.1", "ACC-1.3", "ACC-1.7")
@@ -264,47 +247,50 @@ def test_sign_in_null_character_matches_no_account(make_account, browser, field)
 
 
 @pytest.mark.ac("ACC-1.3")
-@pytest.mark.parametrize(("escaped", "count"), OVERSIZED_USERNAMES)
-def test_sign_in_oversized_username_matches_no_account(
-    make_account, browser, escaped, count
-):
+@pytest.mark.parametrize("length", [151, 100_000], ids=["151", "100000"])
+def test_sign_in_oversized_username_matches_no_account(make_account, browser, length):
     make_account(LONGEST, PASSWORD, REQUESTER)
-    assert_matches_no_account(browser, unquote(escaped) * count, PASSWORD)
-
-
-@pytest.mark.ac("ACC-1.3")
-@pytest.mark.parametrize("length", OVER_LONGEST_NORMALISED)
-def test_sign_in_username_over_600_characters_never_normalised_matches_no_account(
-    make_account, browser, normalised_lengths, length
-):
-    make_account(LONGEST, PASSWORD, REQUESTER)
-    assert_matches_no_account(browser, "a" * length, PASSWORD)
-    assert max(normalised_lengths, default=0) <= LONGEST_NORMALISED, (
-        f"NFKC was applied to {max(normalised_lengths)} characters."
-    )
+    assert_matches_no_account(browser, f" {('a' * length)}\u3000", PASSWORD)
 
 
 @pytest.mark.ac("ACC-1.3", "ACC-1.7")
-def test_sign_in_username_600_characters_normalised_signs_in(
-    make_account, browser, normalised_lengths
+@pytest.mark.parametrize(("escaped", "username"), INVALID_USERNAMES)
+def test_sign_in_username_outside_allowlist_shows_generic_error(
+    make_account, browser, escaped, username
 ):
-    username = COMPOSED_ALPHA * 150
-    make_account(username, PASSWORD, SUPPORT_OFFICER)
-    typed = DECOMPOSED_ALPHA * 150
-    assert len(typed) == LONGEST_NORMALISED
-    response = sign_in(browser, typed, PASSWORD)
-    assert LONGEST_NORMALISED in normalised_lengths
-    assert_redirects(response, ROLE_PAGES[SUPPORT_OFFICER])
-    assert_signed_in_as(browser, SUPPORT_OFFICER, username)
+    make_account(username, PASSWORD, REQUESTER)
+    assert_matches_no_account(browser, unquote(escaped), PASSWORD)
 
 
 @pytest.mark.ac("ACC-1.3", "ACC-1.7")
-@pytest.mark.parametrize(("typed", "username"), TOO_LONG_USERNAMES)
-def test_sign_in_username_151_after_nfkc_matches_no_account(
-    make_account, browser, typed, username
+@pytest.mark.parametrize(("escaped", "_username"), INVALID_USERNAMES)
+def test_user_validation_username_outside_allowlist_rejected(
+    make_account, escaped, _username
 ):
-    make_account(username, PASSWORD, SUPPORT_OFFICER)
-    assert_matches_no_account(browser, typed, PASSWORD)
+    # Exercise the User rule through Django's existing model-validation API;
+    # the invalid username is never saved or treated as an existing account.
+    account = make_account(ACCOUNT, PASSWORD, REQUESTER)
+    rejected_username = unquote(escaped)
+    account.username = rejected_username
+    with pytest.raises(ValidationError) as error:
+        account.full_clean()
+    assert "username" in error.value.message_dict
+    assert account.username == rejected_username
+
+
+@pytest.mark.ac("ACC-1.7")
+@pytest.mark.parametrize("length", [0, 1, 150, 151])
+def test_sign_in_username_all_specified_whitespace_trimmed(
+    make_account, browser, length
+):
+    make_account("a" if length <= 1 else LONGEST, PASSWORD, REQUESTER)
+    whitespace = "".join(chr(codepoint) for codepoint in TRIM_CODEPOINTS)
+    typed = whitespace + "a" * length + whitespace[::-1]
+    if length in (1, 150):
+        assert_redirects(sign_in(browser, typed, PASSWORD), ROLE_PAGES[REQUESTER])
+        assert_signed_in_as(browser, REQUESTER, "a" * length)
+    else:
+        assert_matches_no_account(browser, typed, PASSWORD)
 
 
 @pytest.mark.ac("ACC-1.3")
@@ -445,6 +431,7 @@ def test_sign_in_signed_in_get_with_next_redirects_to_own_page(
         pytest.param("other-account", SUPPORT_OFFICER, id="other-account-officer"),
         pytest.param("wrong-password", SUPPORT_OFFICER, id="wrong-password"),
         pytest.param("empty", REQUESTER, id="empty"),
+        pytest.param("invalid-username", REQUESTER, id="invalid-username"),
     ],
 )
 def test_sign_in_signed_in_post_redirects_to_own_page_as_same_account(
@@ -456,6 +443,7 @@ def test_sign_in_signed_in_post_redirects_to_own_page_as_same_account(
         "other-account": (other.username, WRONG_PASSWORD),
         "wrong-password": (account.username, WRONG_PASSWORD),
         "empty": ("", ""),
+        "invalid-username": (unquote("%EF%BD%81lice"), PASSWORD),
     }[submission]
     # The form as the sign-in page serves it, sent with this browser's token.
     form = get_sign_in_page(new_browser()).form_with_button("Sign in")
@@ -471,7 +459,7 @@ def test_sign_in_signed_in_post_redirects_to_own_page_as_same_account(
 
 @pytest.mark.ac("ACC-1.7")
 @pytest.mark.parametrize("typed", MATCHING_USERNAMES)
-def test_sign_in_username_trimmed_and_normalised_signs_in(make_account, browser, typed):
+def test_sign_in_username_trimmed_signs_in(make_account, browser, typed):
     make_account(ACCOUNT, PASSWORD, REQUESTER)
     assert_redirects(sign_in(browser, typed, PASSWORD), ROLE_PAGES[REQUESTER])
     assert_signed_in_as(browser, REQUESTER, ACCOUNT)
@@ -479,9 +467,7 @@ def test_sign_in_username_trimmed_and_normalised_signs_in(make_account, browser,
 
 @pytest.mark.ac("ACC-1.3", "ACC-1.7")
 @pytest.mark.parametrize("typed", NON_MATCHING_USERNAMES)
-def test_sign_in_username_other_case_or_inner_space_matches_no_account(
-    make_account, browser, typed
-):
+def test_sign_in_username_other_case_matches_no_account(make_account, browser, typed):
     make_account(ACCOUNT, PASSWORD, REQUESTER)
     page = get_sign_in_page(browser)
     response = submit_sign_in(browser, page, typed, PASSWORD)
@@ -494,7 +480,9 @@ def test_sign_in_username_other_case_or_inner_space_matches_no_account(
 def test_sign_in_username_up_to_150_characters_signs_in(
     make_account, browser, typed, username
 ):
-    make_account(username, PASSWORD, SUPPORT_OFFICER)
+    account = make_account(username, PASSWORD, SUPPORT_OFFICER)
+    account.full_clean()
+    assert account.username == username
     assert_redirects(sign_in(browser, typed, PASSWORD), ROLE_PAGES[SUPPORT_OFFICER])
     assert_signed_in_as(browser, SUPPORT_OFFICER, username)
 
@@ -504,6 +492,26 @@ def test_sign_in_password_with_spaces_typed_exactly_signs_in(make_account, brows
     make_account(ACCOUNT, SPACED_PASSWORD, REQUESTER)
     response = sign_in(browser, ACCOUNT, SPACED_PASSWORD)
     assert_redirects(response, ROLE_PAGES[REQUESTER])
+
+
+@pytest.mark.ac("ACC-1.3", "ACC-1.7")
+@pytest.mark.parametrize("variant", ["exact", "composed", "ascii-digit", "trimmed"])
+def test_sign_in_unicode_password_matches_only_exact_input(
+    make_account, browser, variant
+):
+    password = unquote(UNICODE_PASSWORD)
+    make_account(ACCOUNT, password, REQUESTER)
+    typed = {
+        "exact": password,
+        "composed": password.replace("e\u0301", "\u00e9"),
+        "ascii-digit": password.replace("\uff11", "1"),
+        "trimmed": password.strip(),
+    }[variant]
+    if variant == "exact":
+        assert_redirects(sign_in(browser, ACCOUNT, typed), ROLE_PAGES[REQUESTER])
+        assert_signed_in_as(browser, REQUESTER, ACCOUNT)
+    else:
+        assert_matches_no_account(browser, ACCOUNT, typed)
 
 
 @pytest.mark.ac("ACC-1.3", "ACC-1.7")
