@@ -5,7 +5,7 @@ Deskmate is a service desk web app: Requesters raise tickets, Support Officers r
 ## Roles
 
 - **Requester:** raises tickets.
-- **Support Officer:** resolves tickets.
+- **Support Officer:** resolves tickets and [writes and edits knowledge-base articles](product/knowledge-base.md#kb-1-write-and-edit-knowledge-base-articles).
 
 Every user has exactly one of these roles and belongs to exactly one **workspace**, a group of users who see only their own workspace's records.
 
@@ -15,6 +15,7 @@ Every user has exactly one of these roles and belongs to exactly one **workspace
 | --- | --- | --- |
 | `PLT` | Platform: the home page, health check, error pages, startup checks and releases that every feature relies on | [`product/platform.md`](product/platform.md) |
 | `ACC` | Accounts: creating demo workspaces and signing in, with rate limits on both, signing out, and which role may open which pages | [`product/accounts.md`](product/accounts.md) |
+| `KB` | Knowledge base: Support Officers writing and editing articles in their workspace | [`product/knowledge-base.md`](product/knowledge-base.md) |
 
 ## Requirements
 

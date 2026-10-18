@@ -79,6 +79,17 @@ Threat: anyone, without signing in, scripts sign-in attempts or workspace creati
 - Gap: if an attempt stalls while it is being checked, such as on a server instance that is frozen or torn down without closing its database connection, every later attempt of its kind gets `500` after waiting 5 seconds (ACC-3.7), until PostgreSQL notices that the client is gone. Revisit once production has been measured.
 - Gap: a password that ACC-2 did not generate, such as one an operator sets, is protected from guessing only by the limits' rate.
 
+## Knowledge-base authoring
+
+Threat: a Requester or signed-out visitor reaches an authoring page; a Support Officer guesses another workspace's article identifier or submits a different workspace; another site submits an unwanted save; or stored or reflected article text executes markup in an author's browser.
+
+- Article routes reuse the stored-account access decision, session expiry, CSRF and Origin checks in [Sign-in and access control](#sign-in-and-access-control), with method and access checks before article lookup as [Routes](TECHNICAL-SPEC.md#routes) specifies (KB-1.6).
+- The server takes the workspace only from the current stored account. Both reads and writes select articles within that workspace, and an unknown identifier and an identifier in another workspace give the same generic error; extra client-supplied fields cannot select a different workspace or article (KB-1.7).
+- Article titles and bodies are untrusted plain text, including when a failed validation shows them again. They are escaped in lists and form values and never rendered as HTML or Markdown (KB-1.7).
+- Article responses carry the existing `Cache-Control: no-store` and `X-Frame-Options: DENY` headers; rejected requests change no article (KB-1.6).
+- Failed reads and saves reuse [Error pages, health check and logs](#error-pages-health-check-and-logs); a save writes the title/body pair together, with failure behavior in KB-1.8.
+- Gap: there is no article quota, rate limit or deletion, so a signed-in Support Officer can grow the shared database until its storage cap prevents further writes, and the unpaginated list grows with their workspace. No additional storage or request-control subsystem is included.
+
 ## Container image
 
 Threat: a tampered base image, a secret baked into an image layer, or a compromised app taking over its container.
