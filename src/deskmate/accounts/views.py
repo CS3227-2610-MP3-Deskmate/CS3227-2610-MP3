@@ -93,7 +93,8 @@ def sign_out(request):
 @require_POST
 @rate_limited(Kind.CREATION)
 def demo_workspace(request):
-    """Create a demo workspace and show its accounts' passwords, this once (ACC-2).
+    """Create a demo workspace and show its code and its accounts' passwords,
+    this once (ACC-2).
 
     A signed-in user goes to their own role's page and nothing is created
     (ACC-2.7). Nothing the request sends is read, and nothing is put in the
@@ -101,7 +102,12 @@ def demo_workspace(request):
     """
     if request.user.is_authenticated:
         return redirect(ROLE_PAGES[request.user.role])
-    context = {"title": "Demo workspace created", "accounts": demo.create_workspace()}
+    created = demo.create_workspace()
+    context = {
+        "title": "Demo workspace created",
+        "code": created.code,
+        "accounts": created.accounts,
+    }
     return render(request, "accounts/demo_workspace.html", context)
 
 
