@@ -55,3 +55,15 @@ Chat models and their prices in US dollars per million tokens:
 | `qwen3-coder-next` | 0.210 | 1.040 | 262,144 |
 | `qwen3.6:35b` | 0.412 | 1.457 | 262,144 |
 | `qwen3.8:27b` | 0.425 | 2.550 | 262,144 |
+
+### Production probe
+
+The app has one operator-only probe, `GET /health/llm/` (PLT-3). It makes one fixed call to SoC LLM with the `llama3.1:8b` model and returns only `{"status": "ok"}` or `{"status": "error"}`.
+
+1. Generate a token of at least 32 printable ASCII characters with a cryptographically secure random source.
+2. In the Vercel project's production settings, set `SOC_LLM_API_KEY` to the SoC LLM key and `SOC_LLM_PROBE_TOKEN` to the token. Do not add either to Preview or Development. Where Vercel allows it, mark both Sensitive.
+3. Deploy, then run `curl -i -H "Authorization: Bearer $SOC_LLM_PROBE_TOKEN" https://<hostname>/health/llm/` and expect `200` and `{"status": "ok"}`.
+4. Record only the result, never the key or token. Rotate the token if it may have leaked.
+
+The probe writes no database record, never retries and gives up after 10 seconds. A missing key makes it return `503`; a missing or wrong token makes it return `404`.
+
