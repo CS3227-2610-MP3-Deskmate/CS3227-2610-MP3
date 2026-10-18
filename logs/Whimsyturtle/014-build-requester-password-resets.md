@@ -10,6 +10,7 @@ Cost: Twelve role-agent runs since the [spec checkpoint](013-define-requester-pa
 - Help recover Docker Desktop and the local database; the user confirmed shutting down all WSL instances after saving their work.
 - Raise the total slice estimate to 1,350 lines while retaining the 400-line application-code limit.
 - Skip unrelated local checks and leave the full suite to GitHub CI after the user questioned the runtime.
+- Push the finished branch and open the prepared draft pull request.
 
 ## Agent runs
 
@@ -32,7 +33,7 @@ Cost: Twelve role-agent runs since the [spec checkpoint](013-define-requester-pa
 - The user confirmed the larger total estimate before the tests were committed; application scope and dependency/service footprint remained unchanged.
 - Root preserved only its implementation draft in a named stash for the clean-tree test correction, restored it after the test commit, then dropped that exact stash after committing the implementation. Role scope checks passed and HEAD remained unchanged during each role run.
 - The user explicitly replaced repeated full local verification with focused validation. Root stopped only the verified verification process tree during migration checks after the printed 85% marker; no failures or errors had appeared. Remaining migration/platform checks were not completed locally; CI results are pending.
-- No push or pull request was created; publication awaits a separate confirmation.
+- Publication was held for a separate instruction; the user then requested pushing the branch and opening the prepared draft pull request.
 
 ## Problems
 
