@@ -129,6 +129,7 @@ def test_reset_malformed_and_compatibility_usernames_rejected_without_normalisin
         "a" * 151,
         "Alice",
         "unknown",
+        "ali%E2%80%8Bce",
         "%3Cscript%3Ealert%281%29%3C%2Fscript%3E",
         "%22%3E%3Cimg%20src%3Dx%20onerror%3Dalert%281%29%3E",
         "a%0D%0Ab%0Dc%0Ad%00",
