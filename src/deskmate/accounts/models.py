@@ -57,10 +57,11 @@ class User(AbstractUser):
 
 
 class Kind(models.TextChoices):
-    """What a counted attempt was (ACC-3.1)."""
+    """What a counted attempt was (ACC-3.1, ACC-4.8)."""
 
     SIGN_IN = "sign_in", "Sign-in attempt"
     CREATION = "creation", "Creation"
+    RESET = "reset", "Reset attempt"
 
 
 class CountedAttempt(models.Model):

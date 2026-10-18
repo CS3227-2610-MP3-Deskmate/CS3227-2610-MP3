@@ -1,4 +1,4 @@
-"""The rate limits on sign-in attempts and demo workspace creations (ACC-3).
+"""Rate limits on sign-ins, demo creations and Requester resets (ACC-3, ACC-4.8).
 
 Each attempt is checked against its kind's limits, and counted if they allow
 it, in one transaction that every other attempt of its kind waits its turn
@@ -17,8 +17,8 @@ from django.utils.crypto import salted_hmac
 from deskmate.accounts.models import CountedAttempt, Kind
 
 # For each kind, how many attempts counted in the window refuse the next one:
-# from its client's address group, and from everyone (ACC-3.1).
-LIMITS = {Kind.SIGN_IN: (10, 30), Kind.CREATION: (3, 5)}
+# from its client's address group, and from everyone (ACC-3.1, ACC-4.8).
+LIMITS = {Kind.SIGN_IN: (10, 30), Kind.CREATION: (3, 5), Kind.RESET: (3, 5)}
 WINDOW = timedelta(minutes=10)
 # How long an attempt may wait to be checked, or a statement in its check
 # may run, before it fails (ACC-3.7).

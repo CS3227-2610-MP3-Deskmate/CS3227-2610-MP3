@@ -66,6 +66,7 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 ## Writing
 
 - Be concise, and link instead of restating.
+- Keep executable Python in `.py` files, including subprocess test helpers. Invoke helpers by file path or `python -m`; avoid embedding Python source in strings.
 - The User Guide describes only what is built, in the exact words the product shows; nothing planned appears as available.
 - After editing a long document, read the changed section back for duplicated headings, orphaned fragments and lost rules.
 - `docs/Reflections.md` is written by the team; edit it only when asked.
