@@ -9,6 +9,7 @@ Cost: 12 role-agent runs; total wall time, tokens and monetary cost were not rec
 - Run `/slice 48`, using the High tier and the agreed ASCII username checkpoint.
 - Omit legacy-account handling because the human stated there are no production users.
 - Rely on GitHub CI for full verification when local database checks proved slow.
+- Publish the branch and create a draft PR; leave the log for review in the PR.
 
 ## Agent runs
 
@@ -31,9 +32,9 @@ Cost: 12 role-agent runs; total wall time, tokens and monetary cost were not rec
 - The human agreed to the [criteria changes](../../workflow/specs/product/accounts.md#acc-1-sign-in-and-out-by-role). No dependency, service, credential, database constraint, account conversion or recovery capability was added; demo generation remains unchanged.
 - Root independently reproduced two intended failures and one valid-alphabet pass before implementation. After implementation, demo creation, generated-account sign-in and invalid-fullwidth attempt counting all passed: three focused checks in 15.65 seconds.
 - Root independently checked migration SQL (`BEGIN`, no-op, `COMMIT`) and migration drift (`No changes detected`). The generated migration changes validator state only. Final root lint/format checks passed with 83 files already formatted.
-- The human preferred full verification in GitHub CI after the local full run became slow. That one-slice direction replaced further local full-suite runs; the plan's original verification step was not rewritten. Full CI remains pending publication, and no full-suite pass is claimed.
+- The human preferred full verification in GitHub CI after the local full run became slow. That one-slice direction replaced further local full-suite runs; the plan's original verification step was not rewritten. Full-suite results are recorded by the PR's GitHub checks; no full local-suite pass is claimed.
 - The only review finding required a test assertion, not an implementation change. Production-source changes total 55 lines; only ACC-1.3 and ACC-1.7 changed, within the agreed estimate and slice budget.
-- The session log is ready for its author to check. Publishing and creating the pull request still require explicit permission; nothing was pushed or merged in this session.
+- The human chose to review the log in the PR, so its author checkbox remains unticked. After the request to publish, `git push -u origin 48-ascii-usernames` and `gh pr create --draft` both exited 0, creating draft [PR #49](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/49). No merge or deployment was performed.
 
 ## Problems
 
