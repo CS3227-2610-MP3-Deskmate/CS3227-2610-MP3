@@ -33,6 +33,12 @@ urlpatterns = [
         {"role": Role.SUPPORT_OFFICER},
         name="support-ticket-detail",
     ),
+    re_path(
+        r"^support/tickets/(?P<ticket_id>[0-9]+)/resolve/$",
+        tickets.ticket_resolve,
+        {"role": Role.SUPPORT_OFFICER},
+        name="support-ticket-resolve",
+    ),
     path(
         "requester/articles/",
         knowledge.article_reading_list,
