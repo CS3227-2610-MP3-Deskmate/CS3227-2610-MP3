@@ -8,6 +8,7 @@ Cost: Nine role-agent runs. Wall time, tokens and cost were not measured. Full v
 
 - Run `/slice 17`; confirm High tier and read-only Support Officer ticket list and detail views within the account's workspace, using existing ticket data.
 - Confirm the RQ-2 checkpoint and the estimate of 100–180 application-code lines and 400–650 total changed lines before tests and implementation.
+- Push the finished branch and open the prepared draft pull request.
 
 ## Agent runs
 
@@ -29,7 +30,8 @@ Cost: Nine role-agent runs. Wall time, tokens and cost were not measured. Full v
 - Main advanced to `854e436` with Requester article reading. Root merged it in `668d0f9`, resolving overlaps in the Guide intro, URL additions and technical model/route rows by retaining both features. Changed sections were reread; the diff against updated main contains only this slice's intended changes.
 - Root ran `ruff check . && ruff format --check . && pytest` in elevated Git Bash with `.venv` active on the merged state: Ruff and formatting passed; all 1,743 tests passed in 348.78 seconds. No failures or skips were reported. Output is in ignored `test-results/17-merged-verify.txt`. A final fetch confirmed main remained `854e436`.
 - Correctness and security reviews were parallel and read-only. No fixes or second review round were needed. The manual browser walkthrough and hosted checks were not run.
-- Prepared the repository PR template locally with every RQ-2 criterion mapped to passing tests, manual walkthrough steps and unticked human checkboxes. Publication awaits an explicit push/PR instruction; no branch was pushed or PR created during this session. The log is ready for its author's check; no human verification is claimed.
+- Before publication, main advanced again to `b7b8f11` with the home-page sign-in feature. Root merged it without conflicts in `96a50ce`; comparison of this slice's additions and removals confirmed they still matched the reviewed change. Required verification passed Ruff, formatting and all 1,753 tests in 348.94 seconds, exit 0; output is in ignored `test-results/17-publish-verify.txt`.
+- After the explicit publication instruction, pushed `17-workspace-tickets` and opened [draft PR #57](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/57) from the prepared template. Every RQ-2 criterion maps to passing tests; manual walkthrough steps are provided and human checkboxes remain unticked. The log is ready for its author's check; no human verification is claimed.
 
 ## Problems
 
