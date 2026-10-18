@@ -14,6 +14,7 @@ Cost: Eighteen role-agent runs across specification, implementation and review. 
 - Skip unrelated local checks and leave the full suite to GitHub CI after the user questioned the runtime.
 - Push the finished branch and open the prepared draft pull request, then combine the specification and implementation logs.
 - Use IPv4 loopback for the shared test database after measuring a five-second delay when connecting through `localhost`.
+- Run the full local suite after the IPv4 fix and compare its timing with the earlier run.
 
 ## Agent runs
 
@@ -43,10 +44,12 @@ Cost: Eighteen role-agent runs across specification, implementation and review. 
 - The checkpoint presented the criteria, estimate, exclusions, operating burden and open debug choice. The user confirmed the eight criteria and the existing local-debug exception; `0c8b710` records that choice without adding a new protection system.
 - The user confirmed the larger total estimate before the tests were committed; application scope and dependency/service footprint remained unchanged.
 - Root preserved only its implementation draft in a named stash for the clean-tree test correction, restored it after the test commit, then dropped that exact stash after committing the implementation. Role scope checks passed and HEAD remained unchanged during each role run.
-- The user replaced repeated full local verification with focused validation. Root stopped only the verified verification process tree during migration checks after the printed 85% marker; no failures or errors had appeared. Remaining migration/platform checks were not completed locally, and no full local pass is claimed.
+- The user initially replaced repeated full local verification with focused validation. Root stopped only the verified verification process tree during migration checks after the printed 85% marker; no failures or errors had appeared. Remaining migration/platform checks were not completed at that stage; the later requested full rerun is recorded below.
 - After the user's separate publication instruction, root pushed the branch and opened [draft PR #51](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/51). CI was running at creation; a later timing check confirmed that [the published `92e14f2` run](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39109810499) succeeded with a 146-second verification step and 186-second job.
 - At the user's request, combined the former logs 013 and 014 here, retaining their requests, agent runs, decisions and failures and removing superseded pending-checkpoint wording.
-- Changed only the shared test database's host to explicit IPv4 loopback; application and `.env` settings and explicit hostname/IPv6 test cases were retained. Validation stayed focused, with the full suite left to CI.
+- Changed only the shared test database's host to explicit IPv4 loopback; application and `.env` settings and explicit hostname/IPv6 test cases were retained. That correction used focused validation; the user subsequently requested a full timed local run.
+- Root ran `ruff check . && ruff format --check . && pytest --durations=10` outside the Windows sandbox on `a70ce66`. Ruff and formatting passed; all 1,536 tests passed in 303.06 seconds (5 minutes 3 seconds), with 305.37 seconds for the complete verify command. The slowest test call was 5.55 seconds; the ten slowest were database-failure or lock-timeout checks. No further test rerun was needed for this log-only update.
+- The earlier restricted run took 2,104.99 seconds (35 minutes 5 seconds) and failed; the successful rerun used about 86% less time. This is an end-to-end comparison, not an isolated IPv4 benchmark: permissions and fixture corrections also differed.
 
 ## Problems
 
