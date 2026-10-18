@@ -26,6 +26,8 @@ Pressing **Create demo workspace** again, or reloading the page and resending th
 
 On `/sign-in/`, enter your **Username** and **Password**, and press **Sign in**.
 
+Usernames use only ASCII letters, digits and `@`, `.`, `+`, `-`, `_`; surrounding whitespace is ignored and letter case must match (see [ACC-1.7](../workflow/specs/product/accounts.md#acc-1-sign-in-and-out-by-role)). Passwords must match exactly, including letter case and spaces.
+
 If the username or password is wrong or empty, the page shows:
 
 > Incorrect username or password.
