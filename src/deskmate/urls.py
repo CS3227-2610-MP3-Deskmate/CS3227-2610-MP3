@@ -21,6 +21,18 @@ urlpatterns = [
         knowledge.article_form,
         name="article-edit",
     ),
+    path(
+        "support/tickets/",
+        tickets.ticket_list,
+        {"role": Role.SUPPORT_OFFICER},
+        name="support-ticket-list",
+    ),
+    re_path(
+        r"^support/tickets/(?P<ticket_id>[0-9]+)/$",
+        tickets.ticket_detail,
+        {"role": Role.SUPPORT_OFFICER},
+        name="support-ticket-detail",
+    ),
     path("requester/tickets/", tickets.ticket_list, name="ticket-list"),
     path("requester/tickets/new/", tickets.ticket_create, name="ticket-new"),
     re_path(

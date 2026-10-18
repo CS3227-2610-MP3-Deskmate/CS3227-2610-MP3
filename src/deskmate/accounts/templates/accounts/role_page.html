@@ -2,6 +2,7 @@
 {% block content %}
   <p>Signed in as {{ username }}.</p>
   {% if title == "Support Officer" %}
+    <p><a href="{% url 'support-ticket-list' %}">Tickets</a></p>
     <p><a href="{% url 'article-list' %}">Knowledge base</a></p>
     <p><a href="{% url 'reset-requester-password' %}">Reset Requester password</a></p>
   {% elif title == "Requester" %}
