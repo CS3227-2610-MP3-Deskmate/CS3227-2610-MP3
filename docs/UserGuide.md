@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate is still being built. So far you can only create a demo workspace, then sign in and out with its accounts.
+Deskmate lets you create a demo workspace and sign in and out. Support Officers can also write and edit their workspace's knowledge-base articles.
 
 Its home page shows only the heading **Deskmate** and this line:
 
@@ -50,6 +50,22 @@ Press **Sign out** to sign out and go back to the sign-in page.
 While signed in, `/sign-in/` takes you to your role's page. While signed out, a role's page takes you to the sign-in page.
 
 You are signed out 8 hours after signing in, however active you are. Closing your browser may also sign you out, but not if it reopens your previous tabs, so press **Sign out** on a shared computer.
+
+## Knowledge base
+
+As a Support Officer, choose **Knowledge base** on your role's page. The list shows your workspace's article titles, or **No articles yet.**
+
+Choose **New article**, enter **Title** and **Body**, then press **Save article**. The saved article opens under **Edit article**. Select an article title from **Knowledge base** to reopen and edit it.
+
+Articles use plain text. Titles must be unique within your workspace, ignoring case and surrounding whitespace. Any Support Officer in that workspace can edit its articles. A successful later save replaces both fields, including changes submitted from an older open form.
+
+Validation errors keep you on the form with your input and show the relevant message:
+
+> Enter a valid title (1 to 200 characters).
+>
+> Enter a valid body (1 to 10000 characters).
+>
+> An article with this title already exists.
 
 ## Forbidden pages
 
