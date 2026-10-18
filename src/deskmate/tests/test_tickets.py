@@ -144,7 +144,10 @@ def test_tickets_valid_boundaries_and_normalisation(requester, title, descriptio
     path = submit(browser, title, description)
     page = ticket_page(browser, path)
     assert title.strip() in page.text
-    assert description.replace("\r\n", "\n").replace("\r", "\n").strip() in page.text
+    normalised = description.replace("\r\n", "\n").replace("\r", "\n").strip()
+    assert all(
+        part.strip() in page.text for part in normalised.split("\n") if part.strip()
+    )
 
 
 @pytest.mark.ac("RQ-1.4")

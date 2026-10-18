@@ -1,0 +1,9 @@
+{% extends "deskmate/base.html" %}
+{% block content %}
+  <form method="post">
+    {% csrf_token %}
+    {{ form.as_p }}
+    <button type="submit">Submit ticket</button>
+  </form>
+  <p><a href="{% url 'ticket-list' %}">Tickets</a></p>
+{% endblock %}

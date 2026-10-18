@@ -90,6 +90,7 @@ INSTALLED_APPS = [
     "deskmate",
     "deskmate.accounts",
     "deskmate.knowledge",
+    "deskmate.tickets",
     "django.contrib.auth",
     "django.contrib.contenttypes",
     "django.contrib.sessions",
