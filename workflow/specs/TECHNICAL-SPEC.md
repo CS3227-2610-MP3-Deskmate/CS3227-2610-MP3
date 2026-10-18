@@ -39,6 +39,9 @@ On every route below, whether or not the visitor is signed in, these rules apply
 | `/support/articles/` | GET | Support Officer | Lists the current workspace's articles for editing | KB-1.1, KB-1.6–KB-1.8 |
 | `/support/articles/new/` | GET, POST | Support Officer | Shows the creation form and saves a new article in the current workspace | KB-1.2, KB-1.4–KB-1.8 |
 | `/support/articles/<id>/edit/` | GET, POST | Support Officer | Shows and saves the edit form for an article in the current workspace; `<id>` is a sequence of ASCII digits interpreted as a non-negative decimal integer | KB-1.3–KB-1.8 |
+| `/requester/tickets/` | GET | Requester | Lists the current workspace's tickets | RQ-1.1, RQ-1.6–RQ-1.8 |
+| `/requester/tickets/new/` | GET, POST | Requester | Shows the creation form and saves a new ticket in the current workspace | RQ-1.2, RQ-1.4–RQ-1.8 |
+| `/requester/tickets/<id>/` | GET | Requester | Shows a ticket in the current workspace; `<id>` is a sequence of ASCII digits interpreted as a non-negative decimal integer | RQ-1.3, RQ-1.6–RQ-1.8 |
 
 ## Configuration
 
