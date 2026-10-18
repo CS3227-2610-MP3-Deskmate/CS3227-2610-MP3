@@ -1111,28 +1111,10 @@ def test_migration_drift_check_passes_when_migrations_match_models(database):
     assert process.returncode == 0, process.stdout + process.stderr
 
 
-# Prints, as JSON, the label of each installed app that has a model but no
-# migrations, which `makemigrations --check` passes over.
-_UNMIGRATED_APPS_WITH_MODELS = """
-import json
-import django
-from django.apps import apps
-from django.db.migrations.loader import MigrationLoader
-
-django.setup()
-unmigrated = MigrationLoader(None).unmigrated_apps
-print(json.dumps(sorted(
-    config.label
-    for config in apps.get_app_configs()
-    if config.label in unmigrated and any(config.get_models())
-)))
-"""
-
-
 def unmigrated_apps_with_models(settings):
     """Return the installed apps of `settings` with models but no migrations."""
     process = run_python(
-        ["-c", _UNMIGRATED_APPS_WITH_MODELS],
+        ["-m", "deskmate.tests.migration_probe"],
         valid_environment({"DJANGO_SETTINGS_MODULE": settings}),
     )
     assert process.returncode == 0, process.stderr
