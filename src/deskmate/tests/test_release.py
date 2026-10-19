@@ -96,6 +96,50 @@ UNREADABLE_HOMES = [
         id="object",
     ),
     pytest.param(b"</body>", b'<embed src="https://evil.example/"></body>', id="embed"),
+    # A browser ends each of these comments at the first ">", so it shows the
+    # link that a parser reading on to "]]>" or "-->" hides.
+    pytest.param(
+        b"</body>",
+        b"<![CDATA[x>" + OTHER_LINK + b"]]></body>",
+        id="cdata-declaration-hides-link",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<!-->" + OTHER_LINK + b"--></body>",
+        id="abrupt-empty-comment-hides-link",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<!--->" + OTHER_LINK + b"--></body>",
+        id="abrupt-dash-comment-hides-link",
+    ),
+    # The check fails any comment, even a harmless one.
+    pytest.param(b"</body>", b"<!-- note --></body>", id="comment"),
+    pytest.param(
+        # After a frameset, a browser drops the body and shows only the frames.
+        b"</head>",
+        b'</head><frameset><frame src="https://evil.example/"></frameset>',
+        id="frameset",
+    ),
+    pytest.param(
+        # Even with no frame, a browser drops the body and shows a blank page.
+        b"</head>",
+        b"</head><frameset></frameset>",
+        id="empty-frameset",
+    ),
+    pytest.param(
+        # No inner text, so only the script flag fails this page.
+        b"</body>",
+        b'<script src="https://evil.example/x.js"></script></body>',
+        id="empty-script",
+    ),
+    pytest.param(
+        # With scripting on, a browser shows no link, but read as markup the
+        # page has exactly one valid link, so only the noscript flag fails it.
+        SIGN_IN_LINK,
+        b"<noscript>" + SIGN_IN_LINK + b"</noscript>",
+        id="noscript-wraps-link",
+    ),
 ]
 
 
