@@ -56,6 +56,7 @@ Deskmate is a Django web app. What it does is in [`workflow/specs/`](workflow/sp
 
 - Humans approve on GitHub, through pull request reviews and deployment approvals. Never write that a human approved, verified or tested something.
 - Report what you actually ran and saw, separately from what you assume.
+- Call a change security-reviewed only within the range of a security-reviewer report.
 
 ## Safety
 

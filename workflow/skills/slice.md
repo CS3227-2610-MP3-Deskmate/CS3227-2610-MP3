@@ -4,13 +4,13 @@ Runs one slice, a small vertical change with its own issue and pull request, thr
 
 **Input:** The slice's GitHub issue number and the human's request.
 
-Agree the tier with the human before starting:
+Agree the tier with the human before starting, and record it in the log. The issue's tier is only a proposal: a slice that touches anything in the High row is High. Check the tier again whenever the scope changes.
 
 | Tier | Use for | Steps |
 | --- | --- | --- |
-| High | AI features and LLM calls, login and passwords, access control, deployment | 1–8 |
-| Standard | Other behaviour changes, including bug fixes | 1–8, without spec-critic, and without security-reviewer unless devops changed files |
-| Fast lane | Changes that leave every acceptance criterion as it is | 1; one implementer or devops run without a plan, or `maintain-docs` for documents other than the User Guide; the verify command; one commit; the size check from step 6; 7 with the reviewer, plus security-reviewer if devops changed files; 8 |
+| High | AI features and LLM calls; login, passwords and sessions; a new kind of access rule, such as a new role or access across workspaces; deployment, meaning the workflows, the build configuration and the entry points the build and release run | 1–8 |
+| Standard | Other behaviour changes, including bug fixes | 1–8, without spec-critic, and with security-reviewer only where step 7 requires it |
+| Fast lane | Changes that leave every acceptance criterion as it is | 1; one implementer or devops run without a plan, or `maintain-docs` for documents other than the User Guide; the verify command; one commit; the size check from step 6; 7 with the reviewer, plus security-reviewer where step 7 requires it; 8 |
 
 **Size budget:** A slice adds or changes criteria in at most one requirement, at most 8 of them, and changes at most 400 lines under `src/` outside tests and migrations, counting insertions plus deletions from `git diff --shortstat <default-branch>...HEAD -- src ':(exclude)*/tests/*' ':(exclude)*/migrations/*' ':(exclude)src/e2e/*' ':(exclude)*/conftest.py'`. The human may raise it for one slice at the checkpoint.
 
@@ -22,7 +22,7 @@ Apply [scope confirmation](../../AGENTS.md#scope-confirmation) throughout every 
 4. **Tests.** Run test-writer for the new, changed or removed criteria, or for the bug, and check that new tests fail for the reason it gives. Commit as `test:`.
 5. **Plan.** Run implementer to write the plan. Commit as `plan:`.
 6. **Build.** For each plan task, run the role it names, implementer or devops, for that task only, run the verify command, then commit as `feat:`, as `docs:` for the User Guide task, or as `ci:` for a devops task. If implementer stops because it needs a dependency, ask the human, then run devops to add it. Before each role run, compare the remaining estimate with the confirmed scope and size budget; after each commit, run the size command. If the total will exceed the confirmed budget, stop before further work and follow [scope confirmation](../../AGENTS.md#scope-confirmation); propose a split or an explicit budget increase. Preserve the existing branch if the human chooses to restart with a narrower slice.
-7. **Review.** Run the verify command, then run reviewer and, for High or whenever devops changed files, security-reviewer in parallel, giving them the slice's diff from where the branch left the default branch, and the results. Send code findings to the role that owns the file, implementer or devops (commit as `fix:`), and missing or wrong tests to test-writer (commit as `test:`), then review again. After two rounds, or for a finding that needs a spec change, stop and ask the human.
+7. **Review.** Run the verify command, then run reviewer and, for High or whenever the slice adds or changes a route, a role or workspace check, a query scoped to a workspace or user, or a file in devops's `writes` list other than its plan, security-reviewer in parallel. Give them the tier, the slice's diff from where the branch left the default branch with its range `<base>..<head>`, and the results. Send code findings to the role that owns the file, implementer or devops (commit as `fix:`), and missing or wrong tests to test-writer (commit as `test:`), then review again, giving the reviewers the commits since their last range. Every commit after a round that changes more than logs or the plan needs another round, including fixes for Low findings. After two rounds, or for a finding that needs a spec change, stop and ask the human before changing anything else; if they choose to leave a change or finding unreviewed, the pull request lists it as an open finding.
 8. **Deliver.** Follow `workflow/skills/log.md`, then `workflow/skills/create-pull-request.md`.
 
 For every role agent run:
