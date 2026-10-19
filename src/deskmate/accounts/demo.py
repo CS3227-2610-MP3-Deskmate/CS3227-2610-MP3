@@ -24,6 +24,8 @@ ACCOUNTS = (
 
 # A demo account, with the password its workspace's page shows once.
 Account = namedtuple("Account", ["username", "role", "password"])
+# A created workspace's code, which its usernames share, and its accounts.
+Created = namedtuple("Created", ["code", "accounts"])
 
 
 def _random_string(length):
@@ -61,7 +63,8 @@ def _draw_passwords():
 
 
 def create_workspace():
-    """Create a demo workspace, and return its accounts in the page's order.
+    """Create a demo workspace, and return it as a Created: the code its
+    usernames share and its accounts in the page's order (ACC-2.1).
 
     Each password is hashed once, as the configured hasher's salted hash,
     before anything is saved (ACC-2.6). Any Django database `Error`, such as
@@ -81,7 +84,8 @@ def create_workspace():
 
 def _save_under_free_code(passwords, hashes):
     """Save the accounts, with `passwords` stored as `hashes`, under the first
-    code that does not clash, and return them (ACC-2.3).
+    code that does not clash, and return that code and them as a Created
+    (ACC-2.3).
 
     Each of at most MAX_CODES codes is drawn by calling `random_code`. A
     code clashes if saving fails because one of its usernames is taken,
@@ -89,13 +93,15 @@ def _save_under_free_code(passwords, hashes):
     clash on the last code, is raised.
     """
     for _ in range(MAX_CODES - 1):
-        accounts = _accounts(random_code(), passwords)
+        code = random_code()
+        accounts = _accounts(code, passwords)
         try:
-            return _save(accounts, hashes)
+            return Created(code, _save(accounts, hashes))
         except IntegrityError:
             if not _any_taken(accounts):
                 raise
-    return _save(_accounts(random_code(), passwords), hashes)
+    code = random_code()
+    return Created(code, _save(_accounts(code, passwords), hashes))
 
 
 def _accounts(code, passwords):
