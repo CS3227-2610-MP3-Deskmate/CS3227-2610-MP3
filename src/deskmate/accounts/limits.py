@@ -1,4 +1,4 @@
-"""Rate limits on sign-ins, demo creations and Requester resets (ACC-3, ACC-4.8).
+"""Account rate limits and shared admission counting (ACC-3, ACC-4.8, PLT-5).
 
 Each attempt is checked against its kind's limits, and counted if they allow
 it, in one transaction that every other attempt of its kind waits its turn
@@ -77,6 +77,17 @@ def check_and_count(request, kind):
     `MAX_WAIT` for it, or a database failure, raises (ACC-3.7).
     """
     group = _stored_group(address_group(client_address(request.META)))
+    return check_group_and_count(group, kind, LIMITS[kind])
+
+
+def check_group_and_count(group, kind, limits):
+    """Check and count `kind` for an already-keyed identity hash `group`.
+
+    `limits` holds the allowances for this group and for everyone of this kind.
+    The caller supplies the correct identity and calls outside another database
+    transaction. Returns None only after counting commits, or the whole seconds
+    until both allowances permit it, rounded up. Database failures propagate.
+    """
     wait = f"{MAX_WAIT // timedelta(milliseconds=1)}ms"
     with transaction.atomic(durable=True):
         with connection.cursor() as cursor:
@@ -107,7 +118,7 @@ def check_and_count(request, kind):
         counted = of_kind.filter(counted_at__gt=start)
         refused_until = []
         for records, limit in zip(
-            [counted.filter(group=group), counted], LIMITS[kind], strict=True
+            [counted.filter(group=group), counted], limits, strict=True
         ):
             # The limit refuses until its oldest counted attempt leaves the window.
             times = records.order_by("-counted_at").values_list("counted_at", flat=True)
