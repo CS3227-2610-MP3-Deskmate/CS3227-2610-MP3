@@ -20,6 +20,34 @@ from urllib.request import HTTPRedirectHandler, HTTPSHandler, Request, build_ope
 
 _HOST = r"[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.vercel\.app"
 _ID = r"[A-Za-z0-9_-]{1,128}"
+# HTML void elements: the only tags a browser closes at "/>".
+_VOID = (
+    "area",
+    "base",
+    "br",
+    "col",
+    "embed",
+    "hr",
+    "img",
+    "input",
+    "link",
+    "meta",
+    "source",
+    "track",
+    "wbr",
+)
+# Elements whose content or effect a browser renders unlike this parser reads it.
+_UNREADABLE = (
+    "template",
+    "noscript",
+    "script",
+    "svg",
+    "math",
+    "iframe",
+    "object",
+    "embed",
+    "base",
+)
 
 
 class ReleaseError(Exception):
@@ -122,6 +150,11 @@ def _identity(document, deployment_id, owner_id, project_id):
 
 
 class _HomePage(HTMLParser):
+    """Collect the rendered title, headings, text and links of a page.
+
+    Flags markup that a browser would render differently from how this reads it.
+    """
+
     def __init__(self):
         super().__init__()
         self.parts = {"title": [], "heading": [], "other": []}
@@ -133,16 +166,13 @@ class _HomePage(HTMLParser):
         self.ignored = 0
 
     def handle_starttag(self, tag, attrs):
-        """Collect the title, headings, links and other rendered text."""
-        if self.ignored:
-            if tag in ("template", "noscript", "script", "style"):
-                self.ignored += 1
-            return
-        if tag in ("template", "noscript", "script", "style"):
-            self.ignored = 1
-            return
-        if tag == "base":
+        """Start a link, title or heading, skip style and flag unreadable tags."""
+        if tag in _UNREADABLE:
             self.invalid = True
+            return
+        if tag == "style":
+            self.ignored += 1
+        if self.ignored:
             return
         if tag == "a":
             hrefs = [value for name, value in attrs if name == "href"]
@@ -163,10 +193,16 @@ class _HomePage(HTMLParser):
             self.section = section
             self.counts[section] += 1
 
+    def handle_startendtag(self, tag, attrs):
+        """Flag a non-void "<x/>", which a browser leaves open, then close it."""
+        if tag not in _VOID:
+            self.invalid = True
+        super().handle_startendtag(tag, attrs)
+
     def handle_endtag(self, tag):
-        """Return to ordinary text after closing a link, title or heading."""
+        """Return to ordinary text after closing a style, link, title or heading."""
         if self.ignored:
-            if tag in ("template", "noscript", "script", "style"):
+            if tag == "style":
                 self.ignored -= 1
             return
         if tag == "a":
@@ -175,7 +211,7 @@ class _HomePage(HTMLParser):
             self.section = "other"
 
     def handle_data(self, data):
-        """Collect text, including any unexpected content."""
+        """Collect text outside style, including any unexpected content."""
         if self.ignored:
             return
         self.parts[self.section].append(data)
