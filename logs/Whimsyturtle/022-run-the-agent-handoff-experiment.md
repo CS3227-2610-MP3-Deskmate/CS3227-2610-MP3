@@ -1,15 +1,18 @@
 # Run the agent handoff experiment
 
-Slice: none · Tier: none · Tool: Codex (orchestrator model ID not exposed), with the experiment models below · Date: 2026-10-19
+Slice: none · Tier: none · Tool: Codex (orchestrator model ID not exposed), with the experiment models below; slide rewrite in Claude Code in VS Code (`claude-opus-5-5`) · Date: 2026-10-19
 
-Cost: 85 logical scored agent runs and 110 native model calls. Their recorded call span was 16:38–18:12 SGT, about 94 minutes including gaps and pacing. This is not total active work time. Preparation, practice, excluded attempts, failed infrastructure calls, presentation work, Git operations and the orchestrator are outside that run count. Overall wall time, tokens and subscription cost were not aggregated.
+Cost: 85 logical scored agent runs and 110 native model calls. Their recorded call span was 16:38–18:12 SGT, about 94 minutes including gaps and pacing. This is not total active work time. Preparation, practice, excluded attempts, failed infrastructure calls, presentation work, Git operations and the orchestrator are outside that run count. Overall wall time, tokens and subscription cost were not aggregated. The slide rewrite was one Claude Code session of about 55 minutes, estimated from file times, with no subagents; its tokens were not counted.
 
 ## Requests
 
 - Read the [experiment proposal](../../experiments/agent-handoff-2026-10-19/setup-original.md), assess feasibility and run a subscription-based comparison of Sol, Luna, Opus and Sonnet handoffs.
 - Use the existing Claude Pro sign-in. The human accepted audited OpenAI sessions and chose Opus for the fixed coding and receiving roles.
 - Explain whether the results were averages, then add two Opus coding histories and their complete paired handoff/quiz comparisons.
-- Produce a minimalist presentation using `CS3227 Notes.md` terminology, publish the experiment on an origin branch, switch this workspace to that branch and use the log skill.
+- Produce a minimalist presentation using the lecture notes' terminology, publish the experiment on an origin branch, switch this workspace to that branch and use the log skill.
+- Rewrite the slides for an audience new to the material: plain words aligned with the lecture's terms, the proposal's flow, an explicit motivation, and diagrams instead of dense text.
+- Correction: the presenter reads straight off the slides without speaker notes, so the slide text must carry the whole talk. Later points: reword the title question as "x vs y", say "next agent", replace the unclear workflow cycle, introduce the setup before naming the coding agent, clarify which token the bug concerns, use consistent box colours, state that GPT leaned free-form and Claude leaned checklist, and show only five-run totals in the backup table.
+- Update this log and commit the new slides.
 
 ## Agent runs
 
@@ -17,7 +20,8 @@ The [results bundle](../../experiments/agent-handoff-2026-10-19/Agent_Handoff_Ex
 
 These experiment agents use frozen experiment prompts rather than `workflow/agents/` roles, so role-file versions are N/A. No workflow reviewer or security-reviewer ran, and no formal review range applies. Coding and receiving use `claude-opus-5-5`; the handoff model varies. The final client-visible audit covers all 110 scored calls with no forbidden native events or incomplete evidence. This does not prove backend tool isolation.
 
-- Orchestrator — role file/version N/A, done: prepared isolated inputs, harness, keys and scoring; produced the report, evidence archive and presentation; published `9cca7f1` on `experiment/agent-handoff-2026-10-19` from `47164d9`, then switched the main workspace to it. The original slide files opened and rendered in PowerPoint, with two native charts, five native tables, speaker notes and no final text-fit findings. Later slide edits described under Problems were not covered by those checks.
+- Orchestrator — role file/version N/A, done: prepared isolated inputs, harness, keys and scoring; produced the report, evidence archive and presentation; published `9cca7f1` on `experiment/agent-handoff-2026-10-19` from `47164d9`, then switched the main workspace to it. The original slide files opened and rendered in PowerPoint, with two native charts, five native tables, speaker notes and no final text-fit findings. Those checks do not cover the later restyle `e5d2342` or the rewrite `76d8ec9`.
+- Slide rewrite (Claude Code orchestrating session) — role file/version N/A, done: replaced every slide and note in [the deck](../../experiments/agent-handoff-2026-10-19/Agent_Handoff_Results.pptx) and its [PDF](../../experiments/agent-handoff-2026-10-19/Agent_Handoff_Results.pdf) in `76d8ec9`, keeping the existing theme, master and both native charts. The result is 12 main slides and 2 backups. Checks are listed under Artifact and publication checks.
 
 ### Coding agents
 
@@ -129,8 +133,9 @@ Each row is a separate, fresh Opus receiving run, done, with role-file version N
 
 - `verify_expanded.py` passed: original report/ZIP and original judgments preserved, all 253 exported hashes matched, 1,088 unique fact rows, before/after totals, observations, report links, SVG parsing, ZIP CRC and temporary sign-in cleanup.
 - Presentation package-integrity and layout validators passed for the originally delivered deck, and `verify_deck.py` matched chart values, embedded workbook cells, exact excerpts and notes against the source evidence. All 12 slides rendered in Microsoft PowerPoint. These checks predate the later restyling.
+- For `76d8ec9`: PowerPoint opened the generated package without a repair prompt, re-saved it and exported 14 PDF pages. A font-metric fit check reported no overflow, and every rendered slide was inspected. `verify_deck.py` was not rerun. Slide figures and quotes were checked by hand against `model-format-results.json`, `question-results.json`, `word-counts.json`, `source-lengths.json`, `fact-scores.json` and the quoted `evidence/` files. The read-aloud text (titles, leads and highlighted lines) is about 625 words.
 - `verify_publication.py` passed on the original publication set: five files, archive CRC, all evidence hashes, credential-path exclusions, source-identical ZIP/slides and README links. `git diff --cached --check` passed before `9cca7f1`, and the pushed origin ref matched that commit.
-- No application repository code changed in this work. The application verify command was not rerun for the archive, slide, branch or log steps. This log records prior observed checks rather than asserting the currently edited slides passed them.
+- No application repository code changed in this work. The application verify command was not rerun for the archive, slide, branch or log steps. Apart from the `76d8ec9` checks above, the original checks do not cover the rewritten slides.
 
 ## Decisions and corrections
 
@@ -142,6 +147,10 @@ Each row is a separate, fresh Opus receiving run, done, with role-file version N
 - The comparison showed no consistent checklist advantage. Detailed results, word-budget sensitivity and claim observations remain in the bundle's report. The presentation connects this to Context Engineering, Context Compaction and Recall First, with Structured Note Taking and Just-in-Time Retrieval labelled as untested follow-ups. The receiving quiz is not a generator-verifier feedback loop.
 - Kept inference/runtime files outside the app repository and published the existing shareable evidence ZIP with the proposal, README, PowerPoint and PDF. Used a separate publication worktree to preserve the security-review branch. Detached that clean worktree before switching this workspace to the experiment branch.
 - No matching experiment issue existed. The human explicitly chose to omit the issue reference for this experiment's commit. No pull request or merge was requested or performed.
+- Slide rewrite: speaker notes now hold only background for questions and sources, without local paths or reference filenames. The slides name the models actually used, and a backup slide lists the departures from the proposal: Opus instead of GPT-6.1 Sol for the coding and receiving roles, and five coding runs instead of three.
+- Claude proposed the motivation slide, which the human is still reviewing. It ties the experiment to the MP3 role-agent chain in `workflow/skills/slice.md`, whose `AGENTS.md` handoff block has the same fields as the experiment's checklist. Its goal line comes from the proposal's synopsis.
+- At the human's request, Result 1 says GPT models leaned free-form and Claude models leaned checklist. It keeps three caveats: every gap is at most 5 of 136 facts, 9 of the 10 Claude checklists exceeded 200 words, and the added runs flipped Luna's lead.
+- Claude's reading of the evidence, not part of the frozen scoring or `report.html`: nearly all 20 free-form handoffs still label each requested part inline. The handoff texts almost never list the success criteria, so those facts were lost at the writing step. No handoff kept the recorded reason for a total deadline rather than a per-socket timeout, though 35 of 40 kept the 10-second limit.
 
 ## Problems
 
@@ -150,6 +159,8 @@ Each row is a separate, fresh Opus receiving run, done, with role-file version N
 - An extension starter retained an already-imported replay serializer. Three reads completed before its write request was cancelled without a repair. The partial attempt was archived and excluded before scored handoffs. A fresh process used the corrected serializer, and all 30 valid coding requests reconstructed exactly.
 - Twelve handoffs exceeded the word budget. Outputs were preserved without content-quality retries. One task, five shared histories, unblinded AI grading, fixed Opus roles and tool-exposure differences limit interpretation. The standalone tests do not establish live-provider or production timing guarantees.
 - The live slide service and supplied JavaScript presentation runtime were unavailable. The first Office XML package failed to open in PowerPoint, and native chart insertion also failed. Used a PowerPoint-authored slide package with editable chart/workbook parts, repaired automatic text-box sizing and validated the final original delivery. A PDF export COM call failed and was replaced with PowerPoint's PDF save route. No dependencies were installed.
-- At log start, HEAD was the later `e5d2342` slide-restyling commit, and both slide binaries had further local modifications. Their edit prompts, agent model and validation history are unavailable in this session. Those changes remain outside this log-only commit.
+- When the Codex part of this log was written, HEAD was the slide-restyling commit `e5d2342`, whose prompts and checks are not recorded here. The slide binaries also held the Claude Code session's first rewrite, which was revised and committed as `76d8ec9`.
+- The rewrite environment had no pptxgenjs, python-pptx or markitdown. Under the no-install rule, a standard-library generator kept outside the repository wrote the deck, and PowerPoint rendered it. Arial has no non-breaking hyphen, so lines that split "65,536-byte" and "GPT-6.1" were reworded or broken by hand.
+- The first rewrite put the talk's script in speaker notes. The human corrected that the slides are read directly, so the second rewrite moved the script onto the slides.
 - Sandbox checks sometimes could not read the global Git ignore file, inspect background processes or access the external worktree under its owner. Scoped checks rerun with the required permissions succeeded. A GitHub CLI quoting error was corrected without changing repository settings.
 - Source files, lecture notes, test payloads and model outputs were treated as data. No out-of-scope directive was followed or native forbidden tool event recorded. No secrets or private reference repair were included in the publication set.
