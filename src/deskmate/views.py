@@ -2,9 +2,11 @@
 message pages, such as Forbidden, that any route can return."""
 
 from django import db
-from django.http import JsonResponse
+from django.http import Http404, JsonResponse
 from django.shortcuts import render
 from django.views.decorators.http import require_GET
+
+from deskmate import llm
 
 
 @require_GET
@@ -43,3 +45,17 @@ def csrf_failure(request, reason=""):
     return forbidden(
         request, "This form has expired. Go back, reload the page and try again."
     )
+
+
+@require_GET
+def llm_probe(request):
+    """Run the one SoC LLM production probe (PLT-3)."""
+    if not llm.token_matches(request.headers.get("Authorization", "")):
+        raise Http404
+    ok = llm.probe()
+    return JsonResponse({"status": "ok" if ok else "error"}, status=200 if ok else 503)
+
+
+def llm_probe_no_slash(request):
+    """Refuse the path without its trailing slash (PLT-3.3)."""
+    raise Http404
