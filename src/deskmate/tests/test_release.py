@@ -29,12 +29,130 @@ HOME = (
     b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p>\n"
     b'<p><a href="/sign-in/">Sign in</a></p></body></html>'
 )
+SIGN_IN_LINK = b'<a href="/sign-in/">Sign in</a>'
+OTHER_LINK = b'<a href="/other/">Other</a>'
+# Home pages that a browser renders unlike PLT-1.1's page but a checker reading
+# only the visible markup could pass. Each changes HOME at one place, keeping
+# its title, heading, text and Sign in link, so it is invalid in one way only.
+UNREADABLE_HOMES = [
+    pytest.param(
+        SIGN_IN_LINK,
+        b'<span><template shadowrootmode="open">'
+        b'<a href="https://evil.example/">Sign in</a></template>'
+        + SIGN_IN_LINK
+        + b"</span>",
+        # The shadow root's link is shown in place of the unslotted Sign in link.
+        id="declarative-shadow-root-replaces-link",
+    ),
+    pytest.param(
+        b"<head>",
+        b'<head><noscript><base href="https://evil.example/"></noscript>',
+        id="base-inside-noscript",
+    ),
+    pytest.param(
+        # Inside SVG or MathML, <style> holds markup, and <p> leaves the foreign
+        # element, so the browser shows the extra link as an ordinary one.
+        b"</body>",
+        b"<svg><style><p>" + OTHER_LINK + b"</p></style></svg></body>",
+        id="style-inside-svg-hides-link",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<math><style><p>" + OTHER_LINK + b"</p></style></math></body>",
+        id="style-inside-math-hides-link",
+    ),
+    # A browser ignores the slash on a non-void element, so each element stays
+    # open and hides, or turns into text, the markup after it.
+    pytest.param(
+        SIGN_IN_LINK, b"<template/>" + SIGN_IN_LINK, id="self-closing-template"
+    ),
+    pytest.param(
+        SIGN_IN_LINK, b"<noscript/>" + SIGN_IN_LINK, id="self-closing-noscript"
+    ),
+    pytest.param(b"<head>", b"<head><style/>", id="self-closing-style-in-head"),
+    pytest.param(
+        SIGN_IN_LINK, b"<textarea/>" + SIGN_IN_LINK, id="self-closing-textarea"
+    ),
+    pytest.param(
+        # With scripting on, <noscript> holds "<template>" as text, so the
+        # browser shows the link that follows it.
+        b"</body>",
+        b"<noscript><template></noscript>" + OTHER_LINK + b"</template></body>",
+        id="crossed-noscript-and-template",
+    ),
+    pytest.param(
+        b"</body>",
+        b'<script>document.write("Other")</script></body>',
+        id="script",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<iframe srcdoc=\"<a href='/other/'>Other</a>\"></iframe></body>",
+        id="iframe",
+    ),
+    pytest.param(
+        b"</body>",
+        b'<object data="https://evil.example/"></object></body>',
+        id="object",
+    ),
+    pytest.param(b"</body>", b'<embed src="https://evil.example/"></body>', id="embed"),
+    # A browser ends each of these comments at the first ">", so it shows the
+    # link that a parser reading on to "]]>" or "-->" hides.
+    pytest.param(
+        b"</body>",
+        b"<![CDATA[x>" + OTHER_LINK + b"]]></body>",
+        id="cdata-declaration-hides-link",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<!-->" + OTHER_LINK + b"--></body>",
+        id="abrupt-empty-comment-hides-link",
+    ),
+    pytest.param(
+        b"</body>",
+        b"<!--->" + OTHER_LINK + b"--></body>",
+        id="abrupt-dash-comment-hides-link",
+    ),
+    # The check fails any comment, even a harmless one.
+    pytest.param(b"</body>", b"<!-- note --></body>", id="comment"),
+    pytest.param(
+        # After a frameset, a browser drops the body and shows only the frames.
+        b"</head>",
+        b'</head><frameset><frame src="https://evil.example/"></frameset>',
+        id="frameset",
+    ),
+    pytest.param(
+        # Even with no frame, a browser drops the body and shows a blank page.
+        b"</head>",
+        b"</head><frameset></frameset>",
+        id="empty-frameset",
+    ),
+    pytest.param(
+        # No inner text, so only the script flag fails this page.
+        b"</body>",
+        b'<script src="https://evil.example/x.js"></script></body>',
+        id="empty-script",
+    ),
+    pytest.param(
+        # With scripting on, a browser shows no link, but read as markup the
+        # page has exactly one valid link, so only the noscript flag fails it.
+        SIGN_IN_LINK,
+        b"<noscript>" + SIGN_IN_LINK + b"</noscript>",
+        id="noscript-wraps-link",
+    ),
+]
 
 
 def response(body, status=200, content_type="application/json", **headers):
     if not isinstance(body, bytes):
         body = json.dumps(body).encode()
     return status, {"Content-Type": content_type, **headers}, body
+
+
+def home_with(old, new):
+    """Return a text/html response holding HOME with `old` replaced by `new`."""
+    assert HOME.count(old) == 1
+    return response(HOME.replace(old, new), content_type="text/html")
 
 
 @pytest.fixture
@@ -124,23 +242,46 @@ def test_release_valid_identity_mapping_and_public_pages_succeed(release, scenar
     assert set(stages[2:]) == {"home", "health", "http_home", "http_health"}
 
 
-@pytest.mark.ac("PLT-2.3")
+@pytest.mark.ac("PLT-1.1", "PLT-2.3")
 @pytest.mark.parametrize("wrapper", ["template", "noscript"])
-def test_release_home_ignores_inert_link_markup(release, scenario, wrapper):
+def test_release_home_wrapper_hiding_extra_link_fails(release, scenario, wrapper):
+    hidden = f"<{wrapper}>".encode() + OTHER_LINK + f"</{wrapper}>".encode()
+    # The Sign in link after the wrapper keeps the rest of the page valid.
+    scenario.replies["home"] = [home_with(SIGN_IN_LINK, hidden + SIGN_IN_LINK)]
+    with pytest.raises(release.ReleaseError, match="home"):
+        verify(release, scenario)
+    assert [call[0] for call in scenario.calls].count("home") == 1
+
+
+@pytest.mark.ac("PLT-1.1", "PLT-2.3")
+@pytest.mark.parametrize(("old", "new"), UNREADABLE_HOMES)
+def test_release_home_markup_unread_as_browser_reads_it_fails(
+    release, scenario, old, new
+):
+    scenario.replies["home"] = [home_with(old, new)]
+    with pytest.raises(release.ReleaseError, match="home"):
+        verify(release, scenario)
+    assert [call[0] for call in scenario.calls].count("home") == 1
+
+
+@pytest.mark.ac("PLT-1.1", "PLT-2.3")
+def test_release_home_style_in_head_passes(release, scenario):
     scenario.replies["home"] = [
-        response(
-            HOME.replace(
-                b'<a href="/sign-in/">Sign in</a>',
-                b"<"
-                + wrapper.encode()
-                + b'><a href="/other/">Other</a></'
-                + wrapper.encode()
-                + b'><a href="/sign-in/">Sign in</a>',
-            ),
-            content_type="text/html",
-        )
+        home_with(b"</title>", b"</title><style>p > a { color: #1f5f8b; }</style>")
     ]
     verify(release, scenario)
+    assert [call[0] for call in scenario.calls].count("home") == 1
+
+
+@pytest.mark.ac("PLT-1.1", "PLT-2.3")
+def test_release_home_real_page_passes(release, scenario, client):
+    page = client.get("/")
+    assert page.status_code == 200
+    scenario.replies["home"] = [
+        response(page.content, content_type=page["Content-Type"])
+    ]
+    verify(release, scenario)
+    assert [call[0] for call in scenario.calls].count("home") == 1
 
 
 @pytest.mark.ac("PLT-2.3", "PLT-2.5")

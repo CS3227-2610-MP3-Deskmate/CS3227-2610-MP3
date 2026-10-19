@@ -1,6 +1,7 @@
 """RQ-1: Requesters submit tickets and read them in their workspace."""
 
 import re
+from datetime import timedelta
 from urllib.parse import unquote, urlsplit
 
 import pytest
@@ -8,8 +9,9 @@ from django.apps import apps
 from django.contrib.auth import get_user_model
 
 from deskmate.accounts.models import Workspace
-from deskmate.tests.pages import ORIGIN, Page
+from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
 from deskmate.tests.signing_in import (
+    EVIL_ORIGIN,
     FORM_EXPIRED,
     NOT_FOR_YOUR_ROLE,
     REQUESTER,
@@ -22,6 +24,7 @@ from deskmate.tests.signing_in import (
     browser_as,
     csrf_token,
     methods_not_listed,
+    new_browser,
     send,
     sign_in_as,
 )
@@ -35,6 +38,28 @@ ROUTES = (LIST, NEW, MISSING)
 TICKET = re.compile(r"/requester/tickets/[0-9]+/")
 TITLE_ERROR = "Enter a valid title (1 to 200 characters)."
 DESCRIPTION_ERROR = "Enter a valid description (1 to 10000 characters)."
+VALID = {"Title": "Printer", "Description": "It jams"}
+# An identifier no ticket in the tests has, for a forged `pk` to choose.
+UNUSED_ID = 1999999999
+# Ticket fields and identifiers a forged creation request may name, sent in the
+# form or the query string. `id` names an existing ticket in another workspace.
+FORGED_CREATION = [
+    *[("form", name) for name in ("open", "reply", "id", "pk")],
+    *[
+        ("query", name)
+        for name in ("open", "reply", "id", "pk", "workspace", "workspace_id", "role")
+    ],
+]
+# Reasons RQ-1.6 rejects a creation request that carries valid ticket fields.
+REJECTED_CREATIONS = [
+    "signed-out",
+    "support-officer",
+    "role-changed",
+    "deleted",
+    "expired",
+    "missing-csrf",
+    "other-origin",
+]
 
 
 @pytest.fixture
@@ -260,6 +285,44 @@ def test_tickets_csrf_and_origin_rejection_creates_nothing(requester, tickets, f
 
 
 @pytest.mark.ac("RQ-1.6")
+@pytest.mark.parametrize("reason", REJECTED_CREATIONS)
+def test_tickets_rejected_valid_creation_creates_nothing(
+    clock, requester, make_account, tickets, settings, reason
+):
+    browser, account = requester
+    # A Requester's form, filled in with valid values before the rejection.
+    form = form_at(browser)
+    changes, headers = {}, None
+    if reason == "signed-out":
+        browser = new_browser()
+        changes[CSRF_FIELD] = csrf_token(browser)
+    elif reason == "support-officer":
+        browser, _ = sign_in_as(make_account, SUPPORT_OFFICER)
+        changes[CSRF_FIELD] = csrf_token(browser, SUPPORT_OFFICER)
+    elif reason == "role-changed":
+        get_user_model().objects.filter(pk=account.pk).update(role=SUPPORT_OFFICER)
+    elif reason == "deleted":
+        account.delete()
+    elif reason == "expired":
+        clock.set_elapsed(timedelta(hours=8))
+    elif reason == "missing-csrf":
+        changes[CSRF_FIELD] = None
+    else:
+        settings.DEBUG = False
+        headers = {"Origin": EVIL_ORIGIN}
+    response = form.submit(
+        browser, VALID, button="Submit ticket", changes=changes, headers=headers
+    )
+    if reason in ("missing-csrf", "other-origin"):
+        assert_forbidden(response, FORM_EXPIRED)
+    elif reason in ("support-officer", "role-changed"):
+        assert_forbidden(response, NOT_FOR_YOUR_ROLE)
+    else:
+        assert_redirects(response, "/sign-in/")
+    assert tickets.count() == 0
+
+
+@pytest.mark.ac("RQ-1.6")
 @pytest.mark.parametrize("state", ["expired", "deleted", "role-changed"])
 def test_tickets_current_session_and_stored_role_control_access(
     clock, requester, state
@@ -326,6 +389,56 @@ def test_tickets_forged_fields_cannot_change_workspace(requester, tickets):
     ticket = tickets.get(pk=int(path.strip("/").split("/")[-1]))
     assert ticket.workspace_id == account.workspace_id
     assert tickets.count() == 1
+
+
+@pytest.mark.ac("RQ-1.2", "RQ-1.7")
+@pytest.mark.parametrize(("place", "name"), FORGED_CREATION)
+def test_tickets_forged_creation_fields_create_one_open_ticket_and_change_none(
+    requester, tickets, place, name
+):
+    browser, account = requester
+    own = tickets.create(workspace=account.workspace, title="Own", description="Body")
+    foreign = tickets.create(
+        workspace=Workspace.objects.create(),
+        title="Foreign",
+        description="Foreign body",
+        open=False,
+        reply="Foreign answer",
+    )
+    existing = list(tickets.values())
+    forged = {
+        name: {
+            "open": "false",
+            "reply": "Forged reply",
+            "id": str(foreign.pk),
+            "pk": str(UNUSED_ID),
+            "workspace": str(foreign.workspace_id),
+            "workspace_id": str(foreign.workspace_id),
+            "role": SUPPORT_OFFICER,
+        }[name]
+    }
+    response = form_at(browser).submit(
+        browser,
+        VALID,
+        button="Submit ticket",
+        changes=forged if place == "form" else None,
+        query=forged if place == "query" else None,
+    )
+    assert response.status_code == 302
+    created = list(tickets.exclude(pk__in=[own.pk, foreign.pk]).values())
+    assert len(created) == 1, created
+    ticket = created[0]
+    assert ticket["id"] != UNUSED_ID
+    assert urlsplit(response.url).path == f"{LIST}{ticket['id']}/"
+    assert ticket == {
+        "id": ticket["id"],
+        "workspace_id": account.workspace_id,
+        "title": "Printer",
+        "description": "It jams",
+        "open": True,
+        "reply": "",
+    }
+    assert list(tickets.filter(pk__in=[own.pk, foreign.pk]).values()) == existing
 
 
 @pytest.mark.ac("RQ-1.7")
