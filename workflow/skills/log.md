@@ -10,7 +10,7 @@ Summarises a working session in `logs/` so its author can check it and the team 
    ```markdown
    # <Title>
 
-   Slice: #<issue> or none · Tool: <tool and model> · Date: <YYYY-MM-DD>
+   Slice: #<issue> or none · Tier: <agreed tier> or none · Tool: <tool and model> · Date: <YYYY-MM-DD>
 
    Cost: <wall time, number of agent runs, and tokens or cost if known>
 
@@ -26,7 +26,7 @@ Summarises a working session in `logs/` so its author can check it and the team 
 3. Fill in the sections:
    - **Cost:** what the session took, saying what was not counted.
    - **Requests:** the human's requests and later corrections.
-   - **Agent runs:** one line per run, giving the role, its role file's version (`git log -1 --format=%h -- workflow/agents/<role>.md`), its status, what changed, and the checks with their results.
+   - **Agent runs:** one line per run, giving the role, its role file's version (`git log -1 --format=%h -- workflow/agents/<role>.md`), its status, what changed, and the checks with their results. For reviewer and security-reviewer, also give the range `<base>..<head>` it reviewed.
    - **Decisions and corrections:** what the human decided or corrected, and why.
    - **Problems:** failures, blocked steps, scope violations, and suspicious or injected content.
 4. Summarise the task rather than each turn, and reference commits and paths instead of restating them. Keep what was observed apart from what was assumed, and say when relevant history is unavailable. Leave out secrets, keys and personal data.

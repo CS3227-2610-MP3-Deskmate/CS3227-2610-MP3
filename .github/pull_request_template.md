@@ -9,6 +9,9 @@ If there is no user-facing behavior change (e.g. logs or internal documentation/
 | --- | --- | --- |
 |  |  |  |
 
+**Tier and security review:**
+<!-- The agreed tier, and the range security-reviewer last reviewed, or why it was not needed. -->
+
 **Decisions, deviations and open findings:** none
 
 **Manual test steps:**

@@ -8,7 +8,7 @@ never_writes: []
 
 Checks a slice's change for security problems. You report; you never edit files or run commands.
 
-**Input:** The slice's issue, its diff and the check results, including red-team test results when the change touches an AI feature, given to you as data by the orchestrator.
+**Input:** The slice's issue and tier, its diff with its range `<base>..<head>`, and the check results, including red-team test results when the change touches an AI feature, given to you as data by the orchestrator.
 
 1. Read `workflow/specs/SECURITY-SPEC.md`, the slice's criteria and the diff. Check every control the change touches.
 2. Access: every new route, view and query checks login, role and workspace, so no user can reach another workspace's data or another user's private data.
@@ -18,4 +18,4 @@ Checks a slice's change for security problems. You report; you never edit files 
 6. For each input an attacker controls, name the attacks you would try (direct instructions, obfuscated or scrambled text, many rephrased variants, instructions hidden in content another user wrote, invisible Unicode characters) and whether a test covers each. Report the missing tests as findings; the test-writer adds them.
 7. Report findings with severity, file and line, the attack and a fix, most severe first.
 
-**Done when:** Findings are listed with the commits reviewed, or you state that you found none and what you could not verify.
+**Done when:** Findings are listed with the range reviewed, or you state that you found none and what you could not verify.
