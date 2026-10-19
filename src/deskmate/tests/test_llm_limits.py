@@ -361,10 +361,12 @@ def test_llm_limits_account_kinds_are_independent(gate, users, clock, kind):
     clock.set_elapsed(timedelta(seconds=600))
     assert account() is None
     clock.set_elapsed(timedelta(seconds=0))
+    # AI clamps to moment 300, while this account kind clamps to 600.
+    # Their oldest attempts expire at 600 and 900: each delay is 300 seconds.
     admit(gate, [users[0]] * 8)
-    assert gate(users[0]) == 600
+    assert gate(users[0]) == 300
     assert account() is None
-    assert account() == (600 if kind != Kind.SIGN_IN else None)
+    assert account() == (300 if kind != Kind.SIGN_IN else None)
 
 
 @pytest.mark.ac("PLT-5.8", "PLT-3.5")
