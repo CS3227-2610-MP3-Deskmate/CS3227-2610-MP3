@@ -47,6 +47,8 @@ _UNREADABLE = (
     "object",
     "embed",
     "base",
+    "frameset",
+    "frame",
 )
 
 
@@ -152,7 +154,9 @@ def _identity(document, deployment_id, owner_id, project_id):
 class _HomePage(HTMLParser):
     """Collect the rendered title, headings, text and links of a page.
 
-    Flags markup that a browser would render differently from how this reads it.
+    Flags any comment, CDATA-style declaration or _UNREADABLE tag, a non-void
+    "<x/>", and an <a> inside a link or with more than one href. It does not
+    check other tags, other attributes or CSS.
     """
 
     def __init__(self):
@@ -217,6 +221,14 @@ class _HomePage(HTMLParser):
         self.parts[self.section].append(data)
         if self.link is not None:
             self.link["text"].append(data)
+
+    def handle_comment(self, data):
+        """Flag any comment, which a browser may end sooner than this does."""
+        self.invalid = True
+
+    def unknown_decl(self, data):
+        """Flag a "<![...]>" declaration, which a browser may end at the first ">"."""
+        self.invalid = True
 
 
 def verify_release(deployment_id, owner_id, project_id, hostname, token, job_deadline):
