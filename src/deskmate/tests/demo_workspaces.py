@@ -47,6 +47,9 @@ INVITATION = (
     "No account? Create a demo workspace with 2 Requesters and 1 Support Officer."
 )
 CREATED = "Demo workspace created"
+# The created page's first text after its heading, for the code its usernames
+# share.
+WORKSPACE_CODE = "Workspace: {code}"
 COPY_NOW = "Copy these passwords now. They will not be shown again."
 COLUMNS = ["Username", "Role", "Password"]
 SIGN_IN_LINK = "Sign in"
@@ -167,7 +170,8 @@ def assert_nothing_created(before, elsewhere=()):
 
 def read_created_page(response):
     """Assert `response` is the page of ACC-2.1, showing accounts generated as
-    ACC-2.3 says, and return its accounts in order."""
+    ACC-2.3 says and, first after its heading, the code their usernames share,
+    and return its accounts in order."""
     assert response.status_code == 200, (
         f"Expected the {CREATED} page, got {response.status_code}."
     )
@@ -180,8 +184,15 @@ def read_created_page(response):
     cells = [[text for _, text in row] for row in rows]
     assert len(cells) == len(ACCOUNTS), f"Expected 3 accounts' rows, got {cells}."
     assert all(len(row) == len(COLUMNS) for row in cells), cells
+    titles = [row[1] for row in cells]
+    assert titles == [ROLE_TITLES[role] for _, role in ACCOUNTS], titles
+    accounts = [
+        Account(username, role, password)
+        for (username, _, password), (_, role) in zip(cells, ACCOUNTS, strict=True)
+    ]
+    workspace = WORKSPACE_CODE.format(code=assert_generated(accounts))
     shown = " ".join(" ".join(row) for row in cells)
-    expected = f"{CREATED} {CREATED} {COPY_NOW} {' '.join(COLUMNS)} {shown}"
+    expected = f"{CREATED} {CREATED} {workspace} {COPY_NOW} {' '.join(COLUMNS)} {shown}"
     assert page.text == f"{expected} {SIGN_IN_LINK}"
     assert len(page.links) == 1, page.links
     text, url = page.links[0]
@@ -193,19 +204,12 @@ def read_created_page(response):
         "",
         "",
     ), page.links
-    titles = [row[1] for row in cells]
-    assert titles == [ROLE_TITLES[role] for _, role in ACCOUNTS], titles
-    accounts = [
-        Account(username, role, password)
-        for (username, _, password), (_, role) in zip(cells, ACCOUNTS, strict=True)
-    ]
-    assert_generated(accounts)
     return accounts
 
 
 def assert_generated(accounts):
     """Assert `accounts`, in the page's order, are named and given passwords as
-    ACC-2.3 says."""
+    ACC-2.3 says, and return the code their usernames share."""
     codes = set()
     pattern = f"([{ALPHABET}]{{{CODE_LENGTH}}})"
     for account, (prefix, _) in zip(accounts, ACCOUNTS, strict=True):
@@ -221,6 +225,7 @@ def assert_generated(accounts):
     assert len(codes) == 1, f"The usernames do not share one code: {codes}"
     passwords = {account.password for account in accounts}
     assert len(passwords) == len(accounts), "Two accounts have the same password."
+    return codes.pop()
 
 
 def assert_created(response, before, elsewhere=()):

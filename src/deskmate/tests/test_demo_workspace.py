@@ -145,7 +145,7 @@ def test_demo_no_clash_draws_one_code_and_uses_it(db, browser, codes):
     assert [account.username for account in accounts] == usernames_for(FIRST)
 
 
-@pytest.mark.ac("ACC-2.3")
+@pytest.mark.ac("ACC-2.3", "ACC-2.1")
 @pytest.mark.parametrize("when", CLASH_TIMES)
 @pytest.mark.parametrize("taken", TAKEN)
 def test_demo_first_code_clashes_creates_with_second_code(
@@ -156,12 +156,13 @@ def test_demo_first_code_clashes_creates_with_second_code(
     before, response = press_with_taken(make_account, browser, [username], when)
     assert draws.count == 2
     # Nothing the clashing attempt wrote remains: one new workspace, holding
-    # only the second code's accounts.
+    # only the second code's accounts. assert_created also checks the page
+    # shows `Workspace: <code>` with the code its usernames share.
     accounts = assert_created(response, before, elsewhere=[username])
     assert [account.username for account in accounts] == usernames_for(SECOND)
 
 
-@pytest.mark.ac("ACC-2.3")
+@pytest.mark.ac("ACC-2.3", "ACC-2.1")
 @pytest.mark.parametrize("when", CLASH_TIMES)
 def test_demo_first_2_codes_clash_creates_with_third_code(
     transactional_db, make_account, browser, codes, when
@@ -170,6 +171,8 @@ def test_demo_first_2_codes_clash_creates_with_third_code(
     taken = [usernames_for(FIRST)[1], usernames_for(SECOND)[2]]
     before, response = press_with_taken(make_account, browser, taken, when)
     assert draws.count == 3
+    # assert_created also checks the page shows `Workspace: <code>` with the
+    # code its usernames share.
     accounts = assert_created(response, before, elsewhere=taken)
     assert [account.username for account in accounts] == usernames_for(THIRD)
 

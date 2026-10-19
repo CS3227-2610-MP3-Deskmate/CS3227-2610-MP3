@@ -1,6 +1,6 @@
 # Platform
 
-What every feature relies on: the app runs, reports its health, fails without exposing its internals, and starts only when it is safely configured.
+What every feature relies on: the app runs, reports its health, presents its pages consistently, fails without exposing its internals, and starts only when it is safely configured.
 
 ### PLT-1 Run a safe placeholder site
 Why: Developers and hosts need a running app whose health they can check, and no visitor may see its internals.
@@ -11,7 +11,7 @@ Why: Developers and hosts need a running app whose health they can check, and no
 - PLT-1.6 (ambiguous) Given `DJANGO_DEBUG` is unset or is anything other than exactly `true`, including `True`, `1`, `yes`, `true` with spaces around it and the empty string, when the app starts, then debug is off, so errors get the responses in PLT-1.4. Only `DJANGO_DEBUG=true` turns debug on.
 - PLT-1.7 (failure) Given a variable that [Configuration](../TECHNICAL-SPEC.md#configuration) requires in the current debug mode is unset or has a value that table does not allow, when the web server or any management command starts, then it exits with a non-zero status without serving a request or running the command, and standard error contains `Deskmate cannot start: <NAME> is not set or is invalid.` for each such variable, but never any variable's value.
 
-Out of scope: The Django admin site and any page other than `/` and `/health/`; a sign-in form on `/`; custom error pages; styling; HTTPS settings and security headers; the image's production web server, publishing the image and deploying it.
+Out of scope: The Django admin site and any page other than `/` and `/health/`; a sign-in form on `/`; custom error pages; styling, which [PLT-4](#plt-4-present-every-page-consistently) covers; HTTPS settings and security headers; the image's production web server, publishing the image and deploying it.
 
 ### PLT-2 Release the placeholder site to production
 Why: The team needs automatic deployment after a reviewed merge, with a production schema that matches the released code and checks that show whether the public site works.
@@ -45,5 +45,17 @@ Why: The team needs to know that the deployed app, not only a developer's machin
 - PLT-3.7 (happy) Given both `SOC_LLM_API_KEY` and `SOC_LLM_PROBE_TOKEN` are set only in Vercel production, no `SOC_LLM_*` variable targets Preview or Development, and the app is deployed, when the operator requests `GET https://<hostname>/health/llm/` with `Authorization: Bearer <SOC_LLM_PROBE_TOKEN>`, then the real provider call is made and the response is `200` with a body that is exactly the JSON object `{"status": "ok"}`. The operator records only the result, never the token or key. [manual]
 
 Out of scope: AI features on a role's pages, any LLM input written by a user, ticket, article or workspace, output shown to a user, per-user or global LLM quotas, an audit log of LLM calls, red-team evaluation, automatic probing or monitoring, retries or fallback models, streaming, a new dependency, and any route other than `/health/llm/`.
+
+### PLT-4 Present every page consistently
+Why: Pages built feature by feature look inconsistent and are harder to read, and the team needs one presentation that needs no new assets or services.
+
+- PLT-4.1 (happy) Given any HTML page the app serves with its common page layout, including `/`, `/sign-in/`, `/demo-workspace/`, `/requester/`, `/support/`, both roles' ticket and article lists, creation and edit forms, ticket and article detail and reading pages, the resolution form, the Requester password-reset form and every message page such as `Forbidden` or `Too many attempts`, when it is served, then the response itself contains the presentation rules that style it, those rules are the same for every such page, and the response refers to no separate stylesheet, script, font, image or other resource that the browser must fetch. The `/health/` response and the `404` and `500` responses of PLT-1.4 are not affected.
+- PLT-4.2 (happy) Given any such page, when it is displayed in a wide browser window, then its content is arranged in one column that leaves space on both sides instead of stretching across the window, so lines of text keep a readable length, and headings, paragraphs, lists, links, form labels, fields, buttons, tables and message pages use consistent type sizes, weights and spacing from page to page. [manual]
+- PLT-4.3 (boundary) Given a narrow browser window, when any such page is displayed, then ordinary headings, text, lists, forms and tables stay within the window and can be read without scrolling sideways; only a single unbroken string too long for the window may extend beyond it. [manual]
+- PLT-4.4 (failure) Given any such page, when its response and the repository's declared dependencies are checked, then the response itself carries the rules that style it and refers to no stylesheet, script, font, image or other address the browser must fetch, and no new dependency, static-file service or asset pipeline is added, so making static files unavailable or blocking every request but the page's own leaves its presentation unchanged.
+- PLT-4.5 (adversarial) Given any such page, when the styling is applied, then it adds no user-visible text, link, form control, image or other element, and changes none of the existing user-visible text, headings, links, form labels, field names, button captions, routes or status codes specified elsewhere.
+- PLT-4.6 (adversarial) Given a page that shows saved or resubmitted ticket or article text, or a message page, when it is displayed, then no styling rule hides, reorders or replaces the page's text, and every line break that RQ-1.3, RQ-3.7, KB-1.2 or KB-2.2 shows as a line break still appears as one.
+
+Out of scope: Exact colours, typefaces, type sizes, spacing values or layout measurements; class names, selectors, stylesheet files or a CSS framework or design system; separate static files, a build step or an asset pipeline; JavaScript, images, icons, external fonts or other network requests; custom `404` and `500` pages; dark mode, print styles, animation or other themes; changing page content, structure, routes, status codes or any other behaviour; accessibility conformance or a redesign of the page layout.
 
 Retired: PLT-1.5, PLT-1.8, PLT-2.11
