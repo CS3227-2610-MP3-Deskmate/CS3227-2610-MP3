@@ -7,7 +7,7 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 - One Django project on Python 3.14 that renders HTML on the server, with no separate front end. Application code and its tests live under `src/`: Django's commands run through `src/manage.py`, and the project package is `deskmate`, with its settings in `deskmate.settings`.
 - PostgreSQL 18 is the database in every environment, including tests. Every attempt to connect to it gives up after 5 seconds.
 - The app reads its configuration only from environment variables.
-- Repository dependencies, CI tooling and PostgreSQL container images have exact version pins; container images also have digest pins.
+- Repository dependencies, CI tooling and PostgreSQL container images have exact version pins, except the Vercel CLI's own dependencies ([gap](SECURITY-SPEC.md#ci-and-dependencies)); container images also have digest pins.
 
 Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL only; there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
 
