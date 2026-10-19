@@ -40,7 +40,7 @@ def make_secret_key(length=64, distinct=None):
 def is_configuration_variable(name):
     """Return whether `name` configures Deskmate, Django, libpq or Vercel.
 
-    Deskmate's own variables all start with `DJANGO_` or `POSTGRES_`
+    Deskmate's own variables start with `DJANGO_`, `POSTGRES_` or `SOC_LLM_`
     (TECHNICAL-SPEC "Configuration"). libpq, which connects to the database,
     also reads `PG` variables such as `PGSSLMODE` for every setting Django
     leaves unset, and their names have no underscore after `PG`. Provider
@@ -50,7 +50,7 @@ def is_configuration_variable(name):
     """
     upper = name.upper()
     return upper == "VERCEL" or upper.startswith(
-        ("POSTGRES_", "DJANGO_", "PG", "VERCEL_")
+        ("POSTGRES_", "DJANGO_", "PG", "VERCEL_", "SOC_LLM_")
     )
 
 

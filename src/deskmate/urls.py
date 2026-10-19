@@ -58,6 +58,8 @@ urlpatterns = [
     ),
     path("", views.home, name="home"),
     path("health/", views.health, name="health"),
+    path("health/llm", views.llm_probe_no_slash, name="health-llm-no-slash"),
+    path("health/llm/", views.llm_probe, name="health-llm"),
     path("sign-in/", accounts.sign_in, name="sign-in"),
     path("sign-out/", accounts.sign_out, name="sign-out"),
     path("demo-workspace/", accounts.demo_workspace, name="demo-workspace"),
