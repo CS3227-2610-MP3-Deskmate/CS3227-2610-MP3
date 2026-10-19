@@ -55,7 +55,7 @@ def path_of(response):
     return urlsplit(response.url).path
 
 
-@pytest.mark.ac("ACC-2.2", "ACC-1.1", "ACC-1.2", "RQ-1.1", "RQ-1.2", "RQ-1.3")
+@pytest.mark.ac("ACC-2.2", "ACC-1.1", "ACC-1.2", "RQ-1.1", "RQ-1.2", "RQ-1.3", "KB-2.1")
 def test_requester_journey_from_demo_workspace_to_sign_out():
     creator = new_browser()
     accounts = demo_accounts(creator)
@@ -97,6 +97,9 @@ def test_requester_journey_from_demo_workspace_to_sign_out():
     assert ticket.title == "Ticket" and ticket.h1s == ["Ticket"]
     assert "Printer on fire" in ticket.text
     assert "Line one Line two https://evil.example" in ticket.text
+    html = requester.get(ticket_path, secure=True).content.decode()
+    assert "Line one<br>" in html and "Line two<br>" in html
+    assert "https://evil.example</p>" in html
     assert "Open" in ticket.text.split()
     assert ("Tickets", f"{ORIGIN}{TICKETS}") in ticket.links
     assert not any(control.is_field() for control in ticket.controls)
@@ -144,6 +147,8 @@ def test_requester_journey_from_demo_workspace_to_sign_out():
     assert article_page.title == "Article" and article_page.h1s == ["Article"]
     assert "Printer guide" in article_page.text
     assert "First check the cable. Then restart." in article_page.text
+    article_html = requester.get(article_path, secure=True).content.decode()
+    assert "First check the cable.<br>" in article_html
     assert ("Knowledge base", f"{ORIGIN}{ARTICLES}") in article_page.links
 
     page = Page(requester.get(REQUESTER_PAGE, secure=True))
