@@ -92,6 +92,15 @@ Threat: anyone scripts sign-in attempts, workspace creations or, after obtaining
 - Gap: if an attempt stalls while it is being checked, such as on a server instance that is frozen or torn down without closing its database connection, every later attempt of its kind gets `500` after waiting 5 seconds (ACC-3.7), until PostgreSQL notices that the client is gone. Revisit once production has been measured.
 - Gap: a password that ACC-2 did not generate, such as one an operator sets, is protected from guessing only by the limits' rate.
 
+## User AI admission
+
+Threat: a user exhausts the shared provider allowance through repeated or parallel calls, resets a personal allowance by changing request values or features, or obtains provider work when counting fails; retained attempt state exposes user or prompt data.
+
+- The [internal gate](TECHNICAL-SPEC.md#user-ai-admission) applies PLT-5 using the trusted caller's authenticated stored user identity and shared database counts; it adds no route or authentication capability.
+- Admission state holds only the record identifier, AI-attempt kind, a user-identity hash keyed with the secret key and its counted time. It retains no raw user identifier, username, client address, session identifier, prompt, ticket, article, provider input or output, or credentials, and emits no such data to application logs, standard output or standard error. Changing the secret key changes the stored identity hash; cleanup follows PLT-5.6.
+- PLT-5's counts remain consumed after downstream failure, checks fail without granting admission, and the independent account limits and operator probe retain their existing controls.
+- Gap: accounts are available through demo workspace creation, so the user allowance does not prevent someone from obtaining more accounts; the app allowance still bounds admissions, but anyone who exhausts it can deny admission to other users until capacity returns.
+
 ## Knowledge-base authoring
 
 Threat: a Requester or signed-out visitor reaches an authoring page; a Support Officer guesses another workspace's article identifier or submits a different workspace; another site submits an unwanted save; or stored or reflected article text executes markup in an author's browser.
@@ -175,4 +184,4 @@ Threat: a stranger spends the team's SoC LLM allowance, learns whether a key is 
 - The provider's response is untrusted data. It is read only for the fixed shape check of the [AI contract](../ai/llm-health.md#output), and never used as an instruction or passed to a template, shell, database or log.
 - The provider call has a 10-second total limit, no retry and no redirect, so it cannot hold a request to the platform's 60-second limit or be sent to another host (PLT-3.6).
 - `SOC_LLM_API_KEY` and `SOC_LLM_PROBE_TOKEN` are optional app settings. They stay in provider production settings only: no real value appears in CI, source, fixtures, `.env.example` or logs. `.env.example` may list them only as empty placeholders, and tests use a fixed non-secret placeholder with a fake provider. No `SOC_LLM_*` variable targets Preview or Development, and where Vercel Hobby allows it both are marked Sensitive. A missing value disables only the probe, not the app (PLT-3.5).
-- Gap: nothing limits how often the probe is called, so anyone who learns its token can spend the allowance; quotas and an audit log are out of scope for this slice (#21, #22).
+- Gap: nothing limits how often the probe is called, so anyone who learns its token can spend the allowance; the [user AI admission foundation](product/platform.md#plt-5-limit-admission-of-user-ai-calls) does not apply to this operator route, and the probe has no audit log.
