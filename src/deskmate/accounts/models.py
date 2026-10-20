@@ -57,18 +57,19 @@ class User(AbstractUser):
 
 
 class Kind(models.TextChoices):
-    """What a counted attempt was (ACC-3.1, ACC-4.8)."""
+    """What a counted attempt was (ACC-3.1, ACC-4.8, PLT-5)."""
 
     SIGN_IN = "sign_in", "Sign-in attempt"
     CREATION = "creation", "Creation"
     RESET = "reset", "Reset attempt"
+    LLM_CALL = "llm_call", "User AI attempt"
 
 
 class CountedAttempt(models.Model):
     """One attempt counted toward the rate limits, the limits' only state.
 
-    `group` is the client's address group as a hash keyed with the secret key,
-    never the address or group itself (ACC-3.6).
+    `group` is the client's address group or stored user identity as a hash keyed
+    with the secret key, never the address or identity itself (ACC-3.6, PLT-5.6).
     """
 
     kind = models.CharField(max_length=16, choices=Kind)
