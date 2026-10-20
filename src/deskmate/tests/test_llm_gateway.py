@@ -180,7 +180,10 @@ REJECTED = {
     "repeated-nested-field": '{"summary": "a", "steps": [{"n": 1, "n": 2}]}',
     "escaped-lone-surrogate": '{"summary": "\\ud800", "steps": []}',
     "raw-lone-surrogate": '{"summary": "' + chr(0xD800) + '", "steps": []}',
-    "nesting-2000-deep": '{"summary": "x", "steps": ' + "[" * 2000 + "]" * 2000 + "}",
+    "array-2000-deep-for-objects": '{"summary": "x", "steps": '
+    + "[" * 2000
+    + "]" * 2000
+    + "}",
     "missing-field": '{"summary": "x"}',
     "extra-field": '{"summary": "x", "steps": [], "note": "y"}',
     "wrong-type": '{"summary": 1, "steps": []}',
@@ -193,6 +196,15 @@ REJECTED = {
     "string-over-bound": '{"summary": "' + "a" * 21 + '", "steps": []}',
     "array-over-bound": '{"summary": "x", "steps": [{"n": 1}, {"n": 1}, {"n": 1}]}',
 }
+# Unpaired surrogates in a string nested in an array of objects, which NOTES
+# would otherwise accept.
+NOTES = obj(notes=array(obj(text=string(5)), 2))
+NESTED = {
+    "nested-escaped-lone-surrogate": '{"notes": [{"text": "a\\udc00"}]}',
+    "nested-raw-lone-surrogate": '{"notes": [{"text": "a' + chr(0xDC00) + '"}]}',
+}
+REJECTED_CASES = [pytest.param(c, SCHEMA, id=k) for k, c in REJECTED.items()]
+REJECTED_CASES += [pytest.param(c, NOTES, id=k) for k, c in NESTED.items()]
 
 
 def http_error(code):
@@ -506,8 +518,8 @@ def test_gateway_admission_database_error_returns_error_without_retry(
     [
         pytest.param("a\r\nb", "a\nb", id="crlf"),
         pytest.param(None, KEPT, id="every-removed-kind-between-kept"),
-        pytest.param("a" * 12000, "a" * 12000, id="at-cap"),
-        pytest.param("\U0001f600" * 12000, "\U0001f600" * 12000, id="at-cap-astral"),
+        pytest.param("a" * 4000, "a" * 4000, id="at-cap"),
+        pytest.param("\U0001f600" * 4000, "\U0001f600" * 4000, id="at-cap-astral"),
         pytest.param(" \t\n", " \t\n", id="only-kept-whitespace"),
     ],
 )
@@ -523,8 +535,8 @@ def test_gateway_input_guard_sends_only_kept_code_points_in_order(
 @pytest.mark.parametrize(
     "supplied",
     [
-        pytest.param("a" * 12001, id="over-cap"),
-        pytest.param("a" * 11999 + chr(0x200B) * 2, id="over-cap-before-removal"),
+        pytest.param("a" * 4001, id="over-cap"),
+        pytest.param("a" * 3999 + chr(0x200B) * 2, id="over-cap-before-removal"),
         pytest.param("", id="empty"),
         pytest.param(chr(0x200B) * 2, id="only-zero-width-spaces"),
     ],
@@ -592,13 +604,38 @@ def test_gateway_trickling_response_fails_at_total_deadline(
 
 
 @pytest.mark.ac("PLT-8.6")
-@pytest.mark.parametrize("content", list(REJECTED.values()), ids=list(REJECTED))
+@pytest.mark.parametrize("content,schema", REJECTED_CASES)
 def test_gateway_reply_outside_guard_returns_error_without_reply(
-    call, provider, actor, content
+    call, provider, actor, content, schema
 ):
     provider.body = probe.provider_body(content)
-    assert call() == ERROR
+    assert call(schema=schema) == ERROR
     only(provider)
+    assert events() == recorded(actor, "failure")
+
+
+@pytest.mark.ac("PLT-8.6", "PLT-8.7")
+@pytest.mark.parametrize(
+    "level", [pytest.param("provider-body", marks=pytest.mark.ac("PLT-8.5")), "reply"]
+)
+def test_gateway_json_too_deep_to_parse_returns_error_and_records_failure(
+    call, provider, actor, monkeypatch, level
+):
+    # Every stdlib JSON parse runs `raw_decode`; it raises as the C scanner does
+    # on deep nesting, but only for the one document this case targets, so the
+    # case does not depend on the stack size.
+    target = REPLY_BODY.decode() if level == "provider-body" else REPLY_TEXT
+    parse, hits = json.JSONDecoder.raw_decode, []
+
+    def too_deep(decoder, document, *args, **kwargs):
+        if document == target:
+            hits.append(document)
+            raise RecursionError("synthetic: nested too deeply to parse")
+        return parse(decoder, document, *args, **kwargs)
+
+    monkeypatch.setattr(json.JSONDecoder, "raw_decode", too_deep)
+    assert call() == ERROR
+    assert len(hits) == 1 and len(provider.requests) == 1
     assert events() == recorded(actor, "failure")
 
 
