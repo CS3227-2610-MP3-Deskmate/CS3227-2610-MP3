@@ -9,7 +9,7 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 - The app reads its configuration only from environment variables.
 - Repository dependencies, CI tooling and PostgreSQL container images have exact version pins, except the Vercel CLI's own dependencies ([gap](SECURITY-SPEC.md#ci-and-dependencies)); container images also have digest pins.
 
-Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL only; there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
+Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL and the separate [product website build](#product-website); there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
 
 ## Data model
 
@@ -117,12 +117,12 @@ CI validation runs in GitHub Actions on every pull request and push to `main`, u
 | --- | --- |
 | Public URL | `https://cs3227-2610-mp3-deskmate.github.io/CS3227-2610-MP3/` |
 | Source | `docs/index.md` with `docs/_config.yml` |
-| Build | GitHub-provided Jekyll Pages build, `jekyll-theme-cayman`, kramdown Markdown and the theme's default layout; no app dependency or custom renderer |
+| Build | GitHub's official Jekyll Pages builder image, pinned by exact version and immutable digest, with `jekyll-theme-cayman`, kramdown Markdown and the theme's default layout; no app dependency or custom renderer |
 | Site URL / base path | `https://cs3227-2610-mp3-deskmate.github.io` / `/CS3227-2610-MP3` |
 | Guide destinations | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/UserGuide.md` and the corresponding `DeveloperGuide.md` source URL |
 | Source destination | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3` |
 
-GitHub Actions builds pull requests and `main`; only successful same-repository `main`-push CI can publish its exact checked commit, after building that commit's site and rechecking current `main`. The existing verify command stays unchanged. Build and deployment have separate jobs, with access under [Product website publication](SECURITY-SPEC.md#product-website-publication).
+GitHub Actions builds pull requests and `main`; only successful same-repository `main`-push CI can publish its exact checked commit, after building that commit's site. One Pages concurrency group, separate from Vercel's, allows only one active publication job without cancelling it for a newer run; immediately before submitting deployment, that job rechecks current `main` and skips an outdated commit. The existing verify command stays unchanged. Build and deployment have separate jobs, with access under [Product website publication](SECURITY-SPEC.md#product-website-publication).
 
 Pages setup remains manual and unverified: operators select GitHub Actions as the repository's Pages source and confirm that the protected `production` environment admits only `main`, excluding tags and pull-request refs. Hosted checks must establish the public project URL, theme asset paths and guide links, successful main publication after CI, and refusal of PR publication. Local checks do not establish these settings or hosted behaviour.
 
