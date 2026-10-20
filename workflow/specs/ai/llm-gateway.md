@@ -74,11 +74,14 @@ Separation marks the text as data; it cannot make the model ignore instructions 
 
 ## Output
 
-The provider's response must pass the status and shape check of the [probe's output](llm-health.md#output), which is its one home. The reply is the `content` string that check reads, and it passes only if all of these hold:
+The provider's response must pass the status and shape check of the [probe's output](llm-health.md#output), which is its one home. The reply is the `content` string that check reads, and it passes only if all of these hold, checked in this order:
 
-1. It has at most 4,096 Unicode code points.
-2. It is strict JSON: exactly one JSON text as RFC 8259 defines it, with optional space, TAB, LF or CR around one value and nothing else, so no code fence, prose, comment, byte-order mark or second value. `NaN`, `Infinity` and `-Infinity` fail, as do, at any depth, an object with a repeated field name and a string or field name whose parsed value holds a surrogate code point (U+D800–U+DFFF), whether written raw or as an unpaired `\u` escape; an escaped surrogate pair that forms one character is allowed.
-3. It matches `schema`.
+1. It has at most 4,096 Unicode code points as received, counting any fence and surrounding whitespace.
+2. If, once leading and trailing space, TAB, LF and CR are removed, it begins with a backtick (U+0060), it is a fenced reply, and it must then be exactly the line `` ```json `` (three backticks and lowercase `json`, with nothing else on the line), one line break, the inner text, one line break and the line `` ``` `` (exactly three backticks, with nothing else on the line). Each of the two line breaks is LF or CR followed by LF, and the inner text holds no three consecutive backticks. The surrounding whitespace, both fence lines and those two line breaks are removed, and only the inner text goes on to item 3. Any other reply that begins with a backtick fails, including a bare `` ``` `` fence, another tag such as `` ```JSON `` or `` ```js ``, a space after the opening backticks, an unterminated fence, text after the closing fence, two fences and a second fence inside the first. A reply that does not begin with a backtick goes on to item 3 unchanged, so text before a fence fails there.
+3. What item 2 passes on is strict JSON: exactly one JSON text as RFC 8259 defines it, with optional space, TAB, LF or CR around one value and nothing else, so no prose, comment, byte-order mark or second value. `NaN`, `Infinity` and `-Infinity` fail, as do, at any depth, an object with a repeated field name and a string or field name whose parsed value holds a surrogate code point (U+D800–U+DFFF), whether written raw or as an unpaired `\u` escape; an escaped surrogate pair that forms one character is allowed.
+4. It matches `schema`.
+
+The fixed rules still ask the model for no code fence; the gateway accepts exactly one `` ```json `` fence so that a model that adds one anyway does not fail the call.
 
 Invalid UTF-8 or JSON at either level, including nesting too deep to parse, is a failure, never an error raised to the caller.
 
@@ -115,7 +118,7 @@ The gateway returns exactly one of these dictionaries:
 | Text over 12,000 code points, or none left after removal | None | `failure` | `error` |
 | `SOC_LLM_API_KEY` unset or empty | None | `failure` | `error` |
 | Network or TLS failure, redirect, timeout, non-`200` status, body over the probe's limit, invalid UTF-8 or JSON, or a response that fails the probe's shape check | One | `failure` | `error` |
-| Reply over 4,096 code points, not strict JSON, or not matching `schema` | One | `failure` | `error` |
+| Reply over 4,096 code points as received, a fence other than exactly one `` ```json `` fence, not strict JSON once any permitted fence is removed, or not matching `schema` | One | `failure` | `error` |
 | Reply passes | One | `success` | `ok`, with the checked output |
 | Recording the event raises PLT-6's database failure, on any path above that records one | As on that path | Not confirmed | `error`, never the output |
 
