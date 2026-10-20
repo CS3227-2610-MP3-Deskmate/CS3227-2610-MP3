@@ -5,7 +5,7 @@ Deskmate is a service desk web app: Requesters raise tickets, Support Officers r
 ## Roles
 
 - **Requester:** raises tickets and reads their workspace's [saved resolution replies](product/tickets.md#rq-1-submit-a-ticket).
-- **Support Officer:** [reads their workspace's tickets](product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [resolves tickets with a reply](product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) and [writes and edits knowledge-base articles](product/knowledge-base.md#kb-1-write-and-edit-knowledge-base-articles).
+- **Support Officer:** [reads their workspace's tickets](product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [highlights their key sentences](product/tickets.md#rq-4-highlight-a-tickets-key-sentences), [resolves tickets with a reply](product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) and [writes and edits knowledge-base articles](product/knowledge-base.md#kb-1-write-and-edit-knowledge-base-articles).
 
 Every user has exactly one of these roles and belongs to exactly one **workspace**, a group of users who see only their own workspace's records.
 
@@ -18,7 +18,7 @@ Every user has exactly one of these roles and belongs to exactly one **workspace
 | `KB` | Knowledge base: Support Officers writing and editing articles in their workspace | [`product/knowledge-base.md`](product/knowledge-base.md) |
 | `RQ` | Tickets: Requesters submitting tickets, Support Officers reading and resolving them with a reply, and both roles reading saved resolutions in their workspace | [`product/tickets.md`](product/tickets.md) |
 
-AI feature contracts live under [`ai/`](ai/); the SoC LLM production probe is [`ai/llm-health.md`](ai/llm-health.md), and the internal gateway that every user AI call goes through is [`ai/llm-gateway.md`](ai/llm-gateway.md).
+AI feature contracts live under [`ai/`](ai/): [key sentences](ai/key-sentences.md), the [SoC LLM production probe](ai/llm-health.md), and the [internal gateway](ai/llm-gateway.md) that every user AI call goes through.
 
 ## Requirements
 
