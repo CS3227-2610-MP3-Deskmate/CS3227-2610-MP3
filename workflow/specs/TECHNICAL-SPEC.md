@@ -109,6 +109,23 @@ CI validation runs in GitHub Actions on every pull request and push to `main`, u
 
 `pytest` needs no variables set by the developer: the tests take all their configuration from what is committed with them, except a secret key they make on each run ([SECURITY-SPEC](SECURITY-SPEC.md#secrets-and-settings)), and never from the developer's shell. The tests discard every `SOC_LLM_*` variable from the developer's environment, as they discard `DJANGO_*` and `POSTGRES_*`; their committed configuration may hold only fixed, non-secret placeholders for the probe, and a test that makes the probe call uses a fake provider, so no real value is needed. Their database settings match the throwaway credentials in `.env.example` and the CI workflow. `.env.example` may list `SOC_LLM_API_KEY=` and `SOC_LLM_PROBE_TOKEN=` as empty placeholders.
 
+## Product website
+
+[PLT-7](product/platform.md#plt-7-publish-the-product-website) is a separate static GitHub Pages project site; the Django architecture, routes, environments and Vercel release remain unchanged.
+
+| Setting | Value |
+| --- | --- |
+| Public URL | `https://cs3227-2610-mp3-deskmate.github.io/CS3227-2610-MP3/` |
+| Source | `docs/index.md` with `docs/_config.yml` |
+| Build | GitHub-provided Jekyll Pages build, `jekyll-theme-cayman`, kramdown Markdown and the theme's default layout; no app dependency or custom renderer |
+| Site URL / base path | `https://cs3227-2610-mp3-deskmate.github.io` / `/CS3227-2610-MP3` |
+| Guide destinations | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/UserGuide.md` and the corresponding `DeveloperGuide.md` source URL |
+| Source destination | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3` |
+
+GitHub Actions builds pull requests and `main`; only successful same-repository `main`-push CI can publish its exact checked commit, after building that commit's site and rechecking current `main`. The existing verify command stays unchanged. Build and deployment have separate jobs, with access under [Product website publication](SECURITY-SPEC.md#product-website-publication).
+
+Pages setup remains manual and unverified: operators select GitHub Actions as the repository's Pages source and confirm that the protected `production` environment admits only `main`, excluding tags and pull-request refs. Hosted checks must establish the public project URL, theme asset paths and guide links, successful main publication after CI, and refusal of PR publication. Local checks do not establish these settings or hosted behaviour.
+
 ## Release verification
 
 PLT-2 uses **reviewed PR merge → CI → automatic production deployment, whose Vercel build migrates → public smoke test**, owned by GitHub Actions. The Vercel project's Git integration must be unlinked. There is no container-image publication. Deployment commands and pins are in the [workflow](../../.github/workflows/deploy.yml); provider verification is in [`release.py`](../../src/deskmate/release.py).
