@@ -8,7 +8,7 @@ Cost: Twelve role runs. Active wall time, tokens and monetary cost were not meas
 
 - Run `/slice 34` and prepare a site similar to [Arbiter](https://github.com/CS3227-2610-MP2-Arbiter/CS3227-2610-MP2/commits/main/), despite missing reflection files.
 - The human chose High, GitHub's Jekyll/Cayman build, a landing page, existing-guide links and main publication within 250–450 total changed lines, without Django changes or app dependencies.
-- At the checkpoint, the human chose to implement PLT-7.1–7.6 at `5bef4c4`. Pushing and hosting changes remain pending.
+- At the checkpoint, the human chose to implement PLT-7.1–7.6 at `5bef4c4`; the later reply authorized pushing the branch and opening a draft PR. Hosting changes remain operator work.
 
 ## Agent runs
 
@@ -32,13 +32,15 @@ Cost: Twelve role runs. Active wall time, tokens and monetary cost were not meas
 - The official builder wrapper references a container tag, so the workflow directly invokes the same official image with its public-registry digest and explicit inputs. Official action release SHAs were checked through GitHub APIs. No dependency was installed.
 - Pages builds PRs read-only and publishes only its own checked main artifact after successful app CI, with deployment-only grants, the protected production environment, separate concurrency and an immediate freshness check. Settings remain operator work under the [technical spec](../../workflow/specs/TECHNICAL-SPEC.md#product-website).
 - Final focused command at `96ad2ff`: Ruff check passed, format check passed for 111 files, and all 14 website tests passed in 1.21 seconds. These combine source contracts and synthetic Bash checks; rendering and hosted publication are unverified.
-- No application lines changed outside tests. The complete diff, including this log, remains within the confirmed 450-line limit. The PR body and exact push/create commands were prepared as local delivery files outside the slice worktree; neither action was run.
+- No application lines changed outside tests. The complete diff, including this log, remains within the confirmed 450-line limit. The authorized branch push opened [draft PR #73](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/73); the main-freshness check still found `abcdbc2`.
+- [CI at `62ab85f`](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39373897866) ran the unchanged verify command with temporary PostgreSQL: Ruff and formatting passed, then all 2,025 tests passed in 174.93 seconds. Root read job `118467599256` and confirmed the PR checks passed; this supplies verification that the local environment could not.
+- [Pages build](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39373897795) passed and its deploy job was skipped for the PR. Root inspected its artifact: generated Deskmate title/heading, guide/source links, project-prefixed stylesheet and nonempty CSS, with no reflection reference. Public hosting, browser appearance and main/fork publication controls remain unverified.
 
 ## Problems
 
 - The unchanged full verify command was first interrupted after repeated setup errors. A second run against `3ee84fe`, collected before the later test-only correction, completed: 1 failed, 307 passed, 1,708 errors and 3 warnings in 894.44 seconds. This is not a passing verify result.
 - PostgreSQL at `127.0.0.1:5432` returned `FATAL: password authentication failed for user "deskmate"`. The single failure was `test_llm_probe_does_not_write_database` on that connection error. A health-file diagnostic separately returned 1 passed and 5 setup errors. No credentials or database services were changed.
 - The full run also encountered `PermissionError: [WinError 5] Access is denied` for the existing pytest temp directory, including release-workflow/startup fixtures, despite the outside-sandbox invocation. Its transient log is `deskmate-34-final-verify.log` in the local temp directory; it is not committed. The later 14 website cases passed separately.
-- Docker reported its daemon pipe missing, so the pinned Jekyll image never rendered locally. The Pages GET API returned 404; hosted configuration, theme assets, public links and publication protections are not claimed verified.
+- Docker reported its daemon pipe missing, so the pinned Jekyll image never rendered locally; the later CI build supplied the generated artifact above. The Pages GET API returned 404; live hosting, public navigation and publication protections are not claimed verified.
 - GitHub reads and Git state needed sandbox escalation. A package-metadata request lacked `read:packages`; the public registry resolved the image digest without adding a credential. Windows jq quoting and Python launcher access required safe alternatives. A patch-context mismatch was corrected before committing, and edited document sections were reread.
 - Untrusted content seen: implementer reported an instruction inside a quoted handoff and treated it as data. No injected instruction was followed. The author still needs to check this log.

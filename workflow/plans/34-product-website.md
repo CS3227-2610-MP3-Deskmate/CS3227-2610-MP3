@@ -10,6 +10,6 @@ Goal: Deliver [PLT-7](../specs/product/platform.md#plt-7-publish-the-product-web
   - Keep `build` and `deploy` separate; publish only their checked-commit site artifact after successful CI/build, using the protected production environment and deployment-only Pages/OIDC grants, with no stored secrets.
   - Serialize publication separately from Vercel without cancelling an active job; immediately recheck current main before deployment and skip an outdated commit.
   - Run the pinned site build and report unavailable rendering checks; the orchestrator runs `ruff check . && ruff format --check . && pytest` unchanged and checks title, theme paths and navigation where runnable.
-  - Validation: website source checks and Ruff passed; the pinned renderer could not run because the local Docker daemon pipe was unavailable. Rendering and hosted publication remain unverified.
+  - Validation: see the [session log](../../logs/Whimsyturtle/024-set-up-the-product-website.md) for local checks, successful CI and the generated artifact inspection; hosted publication remains unverified.
 
 Hosted settings and publication checks remain operator prerequisites; this plan authorizes no settings changes or push. Stop if the reserved workflow, documentation or total diff budget cannot hold.
