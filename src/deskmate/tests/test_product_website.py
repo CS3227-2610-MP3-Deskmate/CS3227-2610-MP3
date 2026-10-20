@@ -116,6 +116,7 @@ def test_product_website_publication_requires_success_current_main_and_serial_jo
     workflow = source(".github/workflows/pages.yml")
     deploy = job(workflow, "deploy")
     assert_deployment_guard(deploy)
+    assert "github.event.workflow_run.head_sha" in deploy
     assert re.search(r"needs:\s*(?:\[\s*)?build\b", deploy)
     assert not re.search(r"continue-on-error:\s*true|always\(\)", workflow)
     assert re.search(r"environment:\s*(?:name:\s*)?production\b", deploy)
