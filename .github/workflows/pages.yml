@@ -1,0 +1,93 @@
+name: Product website
+
+on:
+  pull_request:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    if: >-
+      github.event_name == 'pull_request' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push' &&
+       github.event.workflow_run.head_branch == 'main' &&
+       github.event.workflow_run.head_repository.full_name == github.repository)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CHECKED_SHA: ${{ github.event_name == 'workflow_run' && github.event.workflow_run.head_sha || github.sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CHECKED_SHA }}
+          clean: true
+          persist-credentials: false
+      - name: Confirm checked source
+        run: test "$(git rev-parse HEAD)" = "$CHECKED_SHA"
+      # Supply the wrapper's inputs explicitly when invoking its pinned image.
+      - name: Build with the official Jekyll Pages image
+        uses: docker://ghcr.io/actions/jekyll-build-pages:v1.0.13@sha256:6791ebfd912185ed59bfb5fb102664fa872496b79f87ff8b9cfba292a7345041
+        env:
+          INPUT_SOURCE: ./docs
+          INPUT_DESTINATION: ./_site
+          INPUT_BUILD_REVISION: ${{ env.CHECKED_SHA }}
+          INPUT_TOKEN: ${{ github.token }}
+          INPUT_FUTURE: 'false'
+          INPUT_VERBOSE: 'false'
+      - uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          name: github-pages
+          path: ./_site
+
+  deploy:
+    needs: build
+    if: >-
+      github.event_name == 'workflow_run' &&
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository
+    environment: production
+    permissions:
+      contents: read
+      pages: write
+      id-token: write
+    concurrency:
+      group: deskmate-pages-production
+      cancel-in-progress: false
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CHECKED_SHA: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CHECKED_SHA }}
+          clean: true
+          persist-credentials: false
+      - name: Check current main immediately before publication
+        id: current-main
+        run: |
+          test "$(git rev-parse HEAD)" = "$CHECKED_SHA"
+          current_main="$(git ls-remote --exit-code origin refs/heads/main)"
+          if [[ "${current_main%%$'\t'*}" == "$CHECKED_SHA" ]]; then
+            echo 'publish=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'publish=false' >> "$GITHUB_OUTPUT"
+            echo 'current-main: skipped outdated commit'
+          fi
+      # deploy-pages resolves this name only within the current workflow run.
+      - name: Publish this run's checked site artifact
+        if: steps.current-main.outputs.publish == 'true'
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: github-pages
