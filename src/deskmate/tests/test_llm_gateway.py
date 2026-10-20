@@ -199,12 +199,12 @@ REJECTED = {
 # Unpaired surrogates in a string nested in an array of objects, which NOTES
 # would otherwise accept.
 NOTES = obj(notes=array(obj(text=string(5)), 2))
-NESTED = {
+NESTED_SURROGATES = {
     "nested-escaped-lone-surrogate": '{"notes": [{"text": "a\\udc00"}]}',
     "nested-raw-lone-surrogate": '{"notes": [{"text": "a' + chr(0xDC00) + '"}]}',
 }
 REJECTED_CASES = [pytest.param(c, SCHEMA, id=k) for k, c in REJECTED.items()]
-REJECTED_CASES += [pytest.param(c, NOTES, id=k) for k, c in NESTED.items()]
+REJECTED_CASES += [pytest.param(c, NOTES, id=k) for k, c in NESTED_SURROGATES.items()]
 
 
 def http_error(code):
