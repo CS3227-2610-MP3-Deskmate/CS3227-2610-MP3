@@ -88,4 +88,16 @@ Why: Future user AI calls need a shared, privacy-limited record of the metadata 
 
 Out of scope: Building the reserved user AI features; observing or automatically recording provider calls; proving that a reported outcome matches a real call; integrating quotas or the operator probe; reporting, export or an admin viewer; a scheduler, background worker, retry, deduplication or crash-recovery system; new dependencies, services, credentials or settings.
 
+### PLT-7 Publish the product website
+Why: Visitors need a public introduction to Deskmate and working links to its existing guides and source, even before team reflections are supplied.
+
+- PLT-7.1 (happy) Given the published [product website](../TECHNICAL-SPEC.md#product-website), when anyone opens its landing page without signing in, then it identifies `Deskmate` in its page title and as its primary heading, introduces Requesters and Support Officers, and describes the built demo workspaces, tickets, saved resolution replies, knowledge-base articles and Requester password resets. It presents no planned AI feature as available.
+- PLT-7.2 (happy) Given the landing page, when a visitor follows `User Guide`, `Developer Guide` or `Source code`, then each link opens the corresponding existing guide or repository on GitHub. Theme assets and navigation resolve correctly at the project's configured path.
+- PLT-7.3 (boundary) Given reflection documents are absent, when the website builds or visitors open it, then the build succeeds without those documents and the landing page has no reflection link or placeholder; their absence does not prevent publication.
+- PLT-7.4 (happy) Given a pull request or a push to `main`, when website validation runs, then it builds the site without changing or replacing the existing app verification. Publication uses only the exact successful same-repository `main`-push CI commit from a clean checkout, after a successful site build. At most one site publication runs at a time; immediately before submitting deployment it rechecks current `main` and skips an outdated commit.
+- PLT-7.5 (failure) Given app CI or the site build fails, when publication is considered, then no site deployment occurs for that commit; a failed site build fails its job and does not replace the previously published site, if any.
+- PLT-7.6 (adversarial) Given a pull request, fork or source other than `main`, when its website workflow runs, then it cannot publish the site or receive app production credentials; publication follows the [Pages access controls](../SECURITY-SPEC.md#product-website-publication).
+
+Out of scope: Changing Django pages, routes, app deployment or dependencies; publishing planned features as built; writing reflections, discovering them automatically or linking absent files; custom domains, additional services or credentials; custom rendering, JavaScript features or a new recovery system. Reflection links are added through a later content update when the files exist.
+
 Retired: PLT-1.5, PLT-1.8, PLT-2.11
