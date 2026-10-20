@@ -16,7 +16,7 @@ from deskmate import llm
 from deskmate.llm_audit import record_call, valid_caller
 from deskmate.llm_limits import check_and_count
 
-MAX_TEXT = 12000
+MAX_TEXT = 4000
 MAX_REPLY = 4096
 _RULES = (
     "You are part of Deskmate, a service desk app. The user message is a JSON "
