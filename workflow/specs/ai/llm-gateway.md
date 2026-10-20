@@ -29,7 +29,7 @@ The gateway runs these steps in order. Step 1 raises or returns at once as it sa
 
 ## Input guard
 
-1. Text of more than 12,000 Unicode code points, counted as supplied, fails.
+1. Text of more than 4,000 Unicode code points, counted as supplied, fails.
 2. Every code point of these kinds is removed:
    - general category `Cc`, except TAB (U+0009) and LF (U+000A), so CR is removed and CRLF becomes LF;
    - general categories `Cf`, `Cs`, `Co` and `Cn`, as Python 3.14's `unicodedata.category` gives them. These include the soft hyphen U+00AD, the zero-width and directional marks U+200B–U+200F, the bidirectional controls U+202A–U+202E and U+2066–U+2069, U+2060–U+2064, the byte-order mark U+FEFF, the tag characters U+E0001 and U+E0020–U+E007F, and surrogate code points, which a Python string can hold unpaired;
@@ -115,7 +115,7 @@ The gateway returns exactly one of these dictionaries:
 | Invalid input, or a call inside an atomic block or with autocommit off | None | None | The matching fixed error is raised and nothing is counted |
 | Admission refused | None | None | `refused`, with PLT-5.2's delay |
 | The database cannot be reached during step 1's check, or admission raises a database error | None | None | `error` |
-| Text over 12,000 code points, or none left after removal | None | `failure` | `error` |
+| Text over 4,000 code points, or none left after removal | None | `failure` | `error` |
 | `SOC_LLM_API_KEY` unset or empty | None | `failure` | `error` |
 | Network or TLS failure, redirect, timeout, non-`200` status, body over the probe's limit, invalid UTF-8 or JSON, or a response that fails the probe's shape check | One | `failure` | `error` |
 | Reply over 4,096 code points as received, a fence other than exactly one `` ```json `` fence, not strict JSON once any permitted fence is removed, or not matching `schema` | One | `failure` | `error` |
