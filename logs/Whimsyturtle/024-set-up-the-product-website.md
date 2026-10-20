@@ -8,7 +8,7 @@ Cost: Twelve role runs. Active wall time, tokens and monetary cost were not meas
 
 - Run `/slice 34` and prepare a site similar to [Arbiter](https://github.com/CS3227-2610-MP2-Arbiter/CS3227-2610-MP2/commits/main/), despite missing reflection files.
 - The human chose High, GitHub's Jekyll/Cayman build, a landing page, existing-guide links and main publication within 250–450 total changed lines, without Django changes or app dependencies.
-- At the checkpoint, the human chose to implement PLT-7.1–7.6 at `5bef4c4`; the later reply authorized pushing the branch and opening a draft PR. Hosting changes remain operator work.
+- At the checkpoint, the human chose to implement PLT-7.1–7.6 at `5bef4c4`; later replies authorized pushing/opening the PR, then configuring Pages and completing the reviewed merge.
 
 ## Agent runs
 
@@ -35,12 +35,14 @@ Cost: Twelve role runs. Active wall time, tokens and monetary cost were not meas
 - No application lines changed outside tests. The complete diff, including this log, remains within the confirmed 450-line limit. The authorized branch push opened [draft PR #73](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/73); the main-freshness check still found `abcdbc2`.
 - [CI at `62ab85f`](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39373897866) ran the unchanged verify command with temporary PostgreSQL: Ruff and formatting passed, then all 2,025 tests passed in 174.93 seconds. Root read job `118467599256` and confirmed the PR checks passed; this supplies verification that the local environment could not.
 - [Pages build](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39373897795) passed and its deploy job was skipped for the PR. Root inspected its artifact: generated Deskmate title/heading, guide/source links, project-prefixed stylesheet and nonempty CSS, with no reflection reference. Public hosting, browser appearance and main/fork publication controls remain unverified.
+- On the hosting follow-up, root enabled Pages with `build_type=workflow`; readback confirmed the expected public URL, source branch `main` and enforced HTTPS. The existing `production` policy admits only branch `main`; no environment or review restriction was changed.
+- PR #73 is ready for review. GitHub requires one approving review, dismisses stale approvals and enforces protection for administrators; no review exists yet, so no merge or deployment occurred. Repository auto-merge is disabled and was left unchanged.
 
 ## Problems
 
 - The unchanged full verify command was first interrupted after repeated setup errors. A second run against `3ee84fe`, collected before the later test-only correction, completed: 1 failed, 307 passed, 1,708 errors and 3 warnings in 894.44 seconds. This is not a passing verify result.
 - PostgreSQL at `127.0.0.1:5432` returned `FATAL: password authentication failed for user "deskmate"`. The single failure was `test_llm_probe_does_not_write_database` on that connection error. A health-file diagnostic separately returned 1 passed and 5 setup errors. No credentials or database services were changed.
 - The full run also encountered `PermissionError: [WinError 5] Access is denied` for the existing pytest temp directory, including release-workflow/startup fixtures, despite the outside-sandbox invocation. Its transient log is `deskmate-34-final-verify.log` in the local temp directory; it is not committed. The later 14 website cases passed separately.
-- Docker reported its daemon pipe missing, so the pinned Jekyll image never rendered locally; the later CI build supplied the generated artifact above. The Pages GET API returned 404; live hosting, public navigation and publication protections are not claimed verified.
+- Docker reported its daemon pipe missing, so the pinned Jekyll image never rendered locally; the later CI build supplied the generated artifact above. The initial Pages GET returned 404; the later setup succeeded, but live hosting, public navigation and publication protections remain unverified pending the reviewed merge.
 - GitHub reads and Git state needed sandbox escalation. A package-metadata request lacked `read:packages`; the public registry resolved the image digest without adding a credential. Windows jq quoting and Python launcher access required safe alternatives. A patch-context mismatch was corrected before committing, and edited document sections were reread.
 - Untrusted content seen: implementer reported an instruction inside a quoted handoff and treated it as data. No injected instruction was followed. The author still needs to check this log.
