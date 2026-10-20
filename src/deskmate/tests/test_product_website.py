@@ -3,10 +3,13 @@ Content review must also reject planned-feature claims.
 """
 
 import re
+import subprocess
+import textwrap
 
 import pytest
 
 from deskmate.tests.helpers import REPO_ROOT
+from deskmate.tests.test_release_workflow import bash_executable
 
 REPOSITORY = "https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3"
 
@@ -95,17 +98,24 @@ def test_product_website_build_is_read_only_pinned_and_uses_checked_source():
     )
 
 
-@pytest.mark.ac("PLT-7.4", "PLT-7.5", "PLT-7.6")
-def test_product_website_publication_requires_success_current_main_and_serial_job():
-    workflow = source(".github/workflows/pages.yml")
-    deploy = job(workflow, "deploy")
-    for condition in (
+def assert_deployment_guard(deploy):
+    # Narrow source contract for this conjunction, not a GitHub expression runner.
+    condition = re.search(r"(?ms)^    if: >-\n(.*?)(?=^    \S)", deploy)
+    assert condition
+    assert set(" ".join(condition[1].split()).split(" && ")) == {
+        "github.event_name == 'workflow_run'",
         "github.event.workflow_run.conclusion == 'success'",
         "github.event.workflow_run.event == 'push'",
         "github.event.workflow_run.head_branch == 'main'",
         "github.event.workflow_run.head_repository.full_name == github.repository",
-    ):
-        assert condition in deploy
+    }
+
+
+@pytest.mark.ac("PLT-7.4", "PLT-7.5", "PLT-7.6")
+def test_product_website_publication_requires_success_current_main_and_serial_job():
+    workflow = source(".github/workflows/pages.yml")
+    deploy = job(workflow, "deploy")
+    assert_deployment_guard(deploy)
     assert re.search(r"needs:\s*(?:\[\s*)?build\b", deploy)
     assert not re.search(r"continue-on-error:\s*true|always\(\)", workflow)
     assert re.search(r"environment:\s*(?:name:\s*)?production\b", deploy)
@@ -113,8 +123,66 @@ def test_product_website_publication_requires_success_current_main_and_serial_jo
     assert "concurrency:" in deploy and "cancel-in-progress: false" in deploy
     group = re.search(r"group:\s*([^\n]+)", deploy)
     assert group and not re.search(r"\$\{\{|deskmate-production", group[1])
-    assert "git ls-remote" in deploy and "refs/heads/main" in deploy
-    assert "github.event.workflow_run.head_sha" in deploy
-    assert "GITHUB_OUTPUT" in deploy
     assert re.search(r"if:.*steps\.[\w-]+\.outputs\.[\w-]+\s*==\s*'true'", deploy)
     assert "actions/deploy-pages@" in deploy
+
+
+@pytest.mark.ac("PLT-7.5", "PLT-7.6")
+@pytest.mark.parametrize(
+    "disjunct",
+    [
+        "github.event_name == 'pull_request'",
+        "github.event.workflow_run.head_repository.full_name != github.repository",
+        "github.event.workflow_run.head_branch != 'main'",
+        "github.event.workflow_run.conclusion != 'success'",
+    ],
+    ids=["pr", "fork", "non-main", "failed-ci"],
+)
+def test_product_website_deployment_guard_rejects_or_broadened_source(disjunct):
+    deploy = job(source(".github/workflows/pages.yml"), "deploy")
+    mutant = deploy.replace("if: >-\n", f"if: >-\n      {disjunct} ||\n", 1)
+    with pytest.raises(AssertionError):
+        assert_deployment_guard(mutant)
+
+
+def assert_current_main_step(tmp_path, current, lookup, inverted=False):
+    deploy = job(source(".github/workflows/pages.yml"), "deploy")
+    run = re.search(r"(?m)^        run: \|\n((?:          .*\n)+)", deploy)
+    assert run
+    script = textwrap.dedent(run[1])
+    if inverted:
+        script = script.replace(' == "$CHECKED_SHA"', ' != "$CHECKED_SHA"')
+    output = tmp_path / "output"
+    fake_git = (
+        'git() { if [[ "$1" == rev-parse ]]; then echo "$CHECKED_SHA"; else '
+        f"printf '%s\\trefs/heads/main\\n' '{('a' if current else 'b') * 40}'; "
+        f"return {lookup}; fi; }}\n"
+    )
+    flags = ["--noprofile", "--norc", "-e", "-o", "pipefail", "-c"]
+    result = subprocess.run(
+        [str(bash_executable()), *flags, fake_git + script],
+        cwd=tmp_path,
+        env={"CHECKED_SHA": "a" * 40, "GITHUB_OUTPUT": output.as_posix()},
+        capture_output=True,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+    assert result.returncode == lookup, result.stdout + result.stderr
+    actual = output.read_text() if output.exists() else ""
+    assert actual == ("" if lookup else f"publish={str(current).lower()}\n")
+
+
+@pytest.mark.ac("PLT-7.4", "PLT-7.5")
+@pytest.mark.parametrize(("current", "lookup"), [(True, 0), (False, 0), (True, 2)])
+def test_product_website_current_main_executes_publish_skip_or_fail(
+    tmp_path, current, lookup
+):
+    assert_current_main_step(tmp_path, current, lookup)
+
+
+@pytest.mark.ac("PLT-7.4")
+@pytest.mark.parametrize("current", [True, False], ids=["matching", "stale"])
+def test_product_website_current_main_detects_inverted_comparator(tmp_path, current):
+    with pytest.raises(AssertionError):
+        assert_current_main_step(tmp_path, current, 0, inverted=True)
