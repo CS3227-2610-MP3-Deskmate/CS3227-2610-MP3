@@ -12,6 +12,5 @@ from deskmate.settings import *
 
 ROOT_URLCONF = "deskmate.tests.migration_fixtures"
 INSTALLED_APPS = [
-    "deskmate",
     "deskmate.tests.migration_fixtures.noisy",
 ]
