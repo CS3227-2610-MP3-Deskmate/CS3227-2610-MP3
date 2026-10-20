@@ -1,6 +1,6 @@
 Goal: Deliver [PLT-7](../specs/product/platform.md#plt-7-publish-the-product-website) within the confirmed 250–450-line total diff; follow the [site design](../specs/TECHNICAL-SPEC.md#product-website) and [publication controls](../specs/SECURITY-SPEC.md#product-website-publication).
 
-- [ ] **Orchestrator using [maintain-docs](../skills/maintain-docs.md)**: Add `docs/index.md` and `docs/_config.yml`; update `README.md` and `docs/DeveloperGuide.md` only where the site needs them.
+- [x] **Orchestrator using [maintain-docs](../skills/maintain-docs.md)**: Add `docs/index.md` and `docs/_config.yml`; update `README.md` and `docs/DeveloperGuide.md` only where the site needs them.
   - Use Cayman, kramdown and the default layout at the specified project path; introduce only built features and link the existing guides/source on GitHub, omitting absent reflections.
   - Credit the reused theme/build tools in Developer Guide acknowledgements and link technical setup prerequisites; leave User Guide text unchanged because app behaviour is unchanged.
   - Make the theme/content and guide-link tests in `src/deskmate/tests/test_product_website.py` pass (PLT-7.1–7.2); check changed links and content against built behaviour.

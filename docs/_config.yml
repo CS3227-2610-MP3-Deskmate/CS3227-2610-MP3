@@ -1,0 +1,10 @@
+title: Deskmate
+description: A service desk for Requesters and Support Officers.
+url: https://cs3227-2610-mp3-deskmate.github.io
+baseurl: /CS3227-2610-MP3
+markdown: kramdown
+theme: jekyll-theme-cayman
+show_downloads: false
+exclude:
+  - UserGuide.md
+  - DeveloperGuide.md
