@@ -23,7 +23,7 @@ from deskmate.tests import signing_in as auth
 from deskmate.tests import test_llm_gateway as gateway
 from deskmate.tests import test_llm_probe as probe
 from deskmate.tests.demo_workspaces import stored_rows
-from deskmate.tests.pages import ORIGIN, Page
+from deskmate.tests.pages import ORIGIN, Page, normalise
 from deskmate.tests.test_llm_gateway import KEYS, RULES, attempts, events, recorded
 from deskmate.tests.test_support_tickets import checked_send, security, snapshot
 from deskmate.tickets.models import Ticket
@@ -51,8 +51,8 @@ def plain(fragment):
 
 
 @pytest.fixture
-def c(transactional_db, make_account, provider):
-    """An actual session, own/foreign tickets and an unrelated article."""
+def c(transactional_db, make_account, provider, clock):
+    """A frozen sign-in time, real session, own/foreign tickets and article."""
     b, u = auth.sign_in_as(make_account, auth.SUPPORT_OFFICER)
     t = Ticket.objects.create(workspace=u.workspace, title="Own", description="Body")
     f = Ticket.objects.create(
@@ -261,9 +261,10 @@ def test_key_sentences_source_rejection_keeps_gateway_success_without_partial_ou
     c, provider, written_output, text, quotes
 ):
     source(c, text)
+    baseline = Page(c.b.get(c.detail, secure=True)).text
     reply(provider, quotes)
     page = result(send(c), text, message=ERROR)
-    assert not any(q and q not in text and q in page.text for q in quotes)
+    assert normalise(page.text.replace(ERROR, "", 1)) == baseline
     assert events() == recorded(c.u, "success", "key_sentences")
     assert attempts() == len(provider.requests) == 1 and written_output.text() == ""
 
