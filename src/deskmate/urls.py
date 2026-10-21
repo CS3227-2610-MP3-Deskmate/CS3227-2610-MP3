@@ -10,6 +10,11 @@ from deskmate.tickets import views as tickets
 
 urlpatterns = [
     path(
+        "support/create-requester/",
+        accounts.create_requester,
+        name="create-requester",
+    ),
+    path(
         "support/reset-requester-password/",
         accounts.reset_requester_password,
         name="reset-requester-password",
