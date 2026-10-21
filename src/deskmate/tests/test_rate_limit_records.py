@@ -4,10 +4,12 @@ shares, and what the limits store.
 Attempts that arrive together come from threads, each with its own database
 connection, as from separate server instances; another instance is also
 started as a new process. The limits' records are found without naming them:
-they are the rows that counting an attempt adds to tables other than those of
-accounts and workspaces. The clock is stopped unless a test moves it, so
-attempts released together are all counted at one moment; a test that moves it
-backwards checks the moment of ACC-3.8 at which an attempt is counted.
+they are the rows that counting an attempt adds to tables other than those that
+hold what a creation stores in its new workspace: accounts, workspaces, and the
+sample articles and tickets of ACC-2.9. The clock is stopped unless a test
+moves it, so attempts released together are all counted at one moment; a test
+that moves it backwards checks the moment of ACC-3.8 at which an attempt is
+counted.
 """
 
 import base64
@@ -123,7 +125,8 @@ def found(rows, values):
 
 def limit_tables(kind):
     """Count one allowed attempt of `kind` from a new address group, and return
-    the tables it added rows to, apart from accounts and workspaces."""
+    the tables it added rows to, apart from those that hold what a creation
+    stores in its new workspace (`workspace_tables`)."""
     before = stored_rows()
     assert_allowed(Visitor(numbered_source(254)).attempt(kind), kind)
     tables = {table for table, _ in added_rows(before)}

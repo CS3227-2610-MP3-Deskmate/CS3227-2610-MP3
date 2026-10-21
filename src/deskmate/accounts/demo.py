@@ -1,4 +1,6 @@
-"""Generating and saving demo workspaces (ACC-2.3, ACC-2.4, ACC-2.6, ACC-2.8)."""
+"""Generating and saving demo workspaces and their sample articles and tickets
+(ACC-2.3, ACC-2.4, ACC-2.6, ACC-2.8, ACC-2.9).
+"""
 
 import secrets
 from collections import namedtuple
@@ -7,6 +9,8 @@ from django.contrib.auth.hashers import make_password
 from django.db import Error, IntegrityError, transaction
 
 from deskmate.accounts.models import Role, User, Workspace
+from deskmate.knowledge.models import Article
+from deskmate.tickets.models import Ticket
 
 # The characters of codes and passwords: the digits and lowercase letters
 # without 0, 1, i, l and o (ACC-2.3).
@@ -20,6 +24,61 @@ ACCOUNTS = (
     ("requester1", Role.REQUESTER),
     ("requester2", Role.REQUESTER),
     ("support1", Role.SUPPORT_OFFICER),
+)
+# Each sample article's title and body, in ACC-2.9's order.
+SAMPLE_ARTICLES = (
+    (
+        "Fix a printer that will not print",
+        (
+            "Check that the printer is switched on and has paper. Turn it off, wait 30 "
+            "seconds and turn it on again. If it still will not print, raise a ticket."
+        ),
+    ),
+    (
+        "Connect to the office Wi-Fi",
+        (
+            "Open the Wi-Fi settings on your device and choose the office network. "
+            "Enter the network password from the notice board in your office. If the "
+            "connection keeps dropping, forget the network and connect again."
+        ),
+    ),
+)
+# Each sample ticket's title, description, whether it is open, and reply, in
+# ACC-2.9's order.
+SAMPLE_TICKETS = (
+    (
+        "Printer will not print",
+        (
+            "The printer by the meeting room shows a ready light, but nothing comes "
+            "out. I have sent my document twice from my laptop."
+        ),
+        False,
+        (
+            "I restarted the printer and cleared a stuck job from its queue. Your "
+            "document should print now. Raise a new ticket if it happens again."
+        ),
+    ),
+    (
+        "Wi-Fi keeps disconnecting",
+        (
+            "Since Monday, my laptop drops off the office Wi-Fi several times an hour. "
+            "Each time, it reconnects after about a minute. It happens in every room "
+            "on my floor. I have already restarted my laptop. I need a stable "
+            "connection for video calls every afternoon."
+        ),
+        True,
+        "",
+    ),
+    (
+        "Need a spreadsheet app",
+        (
+            "I am joining the budget team next week. I need a spreadsheet app on my "
+            "laptop before then. My manager has already approved the request. I can "
+            "bring my laptop to the help desk on any morning."
+        ),
+        True,
+        "",
+    ),
 )
 
 # A demo account, with the password its workspace's page shows once.
@@ -63,8 +122,9 @@ def _draw_passwords():
 
 
 def create_workspace():
-    """Create a demo workspace, and return it as a Created: the code its
-    usernames share and its accounts in the page's order (ACC-2.1).
+    """Create a demo workspace with its sample articles and tickets, and return
+    it as a Created: the code its usernames share and its accounts in the
+    page's order (ACC-2.1, ACC-2.9).
 
     Each password is hashed once, as the configured hasher's salted hash,
     before anything is saved (ACC-2.6). Any Django database `Error`, such as
@@ -115,7 +175,8 @@ def _accounts(code, passwords):
 @transaction.atomic
 def _save(accounts, hashes):
     """Save one new workspace holding `accounts`, each with its password's hash
-    from `hashes`, and return them; if saving any fails, nothing is saved.
+    from `hashes`, and then its sample articles and tickets, and return the
+    accounts; if saving any fails, nothing is saved (ACC-2.4, ACC-2.9).
 
     Nothing is locked, so another creation can save its accounts meanwhile.
     """
@@ -127,7 +188,27 @@ def _save(accounts, hashes):
             role=account.role,
             workspace=workspace,
         )
+    _save_samples(workspace)
     return accounts
+
+
+def _save_samples(workspace):
+    """Save the sample articles and then tickets in `workspace`, one at a time
+    in ACC-2.9's order, which is the order the lists show them in.
+
+    Each article is saved by its own `create`, as `Article.save` derives the
+    key that KB-1.5's duplicate-title check compares.
+    """
+    for title, body in SAMPLE_ARTICLES:
+        Article.objects.create(workspace=workspace, title=title, body=body)
+    for title, description, is_open, reply in SAMPLE_TICKETS:
+        Ticket.objects.create(
+            workspace=workspace,
+            title=title,
+            description=description,
+            open=is_open,
+            reply=reply,
+        )
 
 
 def _any_taken(accounts):

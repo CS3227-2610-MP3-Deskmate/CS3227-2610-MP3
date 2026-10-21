@@ -1,6 +1,6 @@
 """ACC-2.4, and the part of ACC-2.6 about standard output, standard error and
-logs: creations that fail, what they leave behind, and what Deskmate writes
-about them.
+logs: creations that fail, what they leave behind, including the sample
+articles and tickets of ACC-2.9, and what Deskmate writes about them.
 
 `written_output` captures what Deskmate writes to standard output, standard
 error and its logs.
@@ -17,11 +17,14 @@ import re
 import pytest
 from django.db import DatabaseError, InterfaceError
 
+from deskmate.knowledge.models import Article
 from deskmate.tests.demo_workspaces import (
     ACCOUNTS,
     CLASH_TIMES,
     DEBUG_MODES,
     MAX_CODES,
+    SAMPLE_ARTICLES,
+    SAMPLE_TICKETS,
     assert_created,
     assert_nothing_created,
     found_in,
@@ -35,9 +38,11 @@ from deskmate.tests.demo_workspaces import (
 from deskmate.tests.signing_in import (
     PASSWORD,
     REQUESTER,
+    SUPPORT_OFFICER,
     assert_server_error,
     get_sign_in_page,
 )
+from deskmate.tickets.models import Ticket
 
 pytestmark = pytest.mark.usefixtures("fast_hashing")
 
@@ -45,6 +50,19 @@ pytestmark = pytest.mark.usefixtures("fast_hashing")
 # fourth is never taken, so drawing it would let a creation succeed.
 CODES = ("aaaaaa", "bbbbbb", "cccccc", "dddddd")
 TRACEBACK = "Traceback (most recent call last)"
+# The database fails after some but not all of a creation is written (ACC-2.4):
+# while it writes its last sample ticket or its last sample article of
+# ACC-2.9, so every 3rd ticket row or every 2nd article row fails. The cases
+# pair each table, error kind of PartwayFailure and debug mode with each value
+# of the other two.
+LAST_TICKET = (Ticket, len(SAMPLE_TICKETS))
+LAST_ARTICLE = (Article, len(SAMPLE_ARTICLES))
+LAST_SAMPLE_FAILURES = [
+    pytest.param(*LAST_TICKET, "not-null", False, id="ticket-debug-off"),
+    pytest.param(*LAST_TICKET, "disk-full", True, id="ticket-debug-on"),
+    pytest.param(*LAST_ARTICLE, "disk-full", False, id="article-debug-off"),
+    pytest.param(*LAST_ARTICLE, "not-null", True, id="article-debug-on"),
+]
 
 
 def not_shown(watch, error_type="IntegrityError"):
@@ -98,6 +116,33 @@ def test_demo_database_fails_partway_returns_500_creates_nothing(
     if not debug:
         hidden = not_shown(watch, database_fails_partway.error_type)
         assert_server_error(response, hidden)
+    assert_nothing_created(before)
+
+
+@pytest.mark.ac("ACC-2.4", "ACC-2.9")
+@pytest.mark.parametrize(("model", "every", "kind", "debug"), LAST_SAMPLE_FAILURES)
+def test_demo_database_fails_on_last_sample_returns_500_creates_nothing(
+    make_account, browser, settings, failing_rows, model, every, kind, debug
+):
+    settings.DEBUG = debug
+    alice = make_account("alice", PASSWORD, SUPPORT_OFFICER)
+    # An existing workspace's article and ticket, which must not change.
+    workspace = alice.workspace
+    Article.objects.create(workspace=workspace, title="Guide", body="Steps")
+    Ticket.objects.create(workspace=workspace, title="Printer", description="Jams")
+    before = stored_state()
+    page = get_sign_in_page(browser)
+    browser.raise_request_exception = False
+    with failing_rows(kind, model, every) as failure, watching() as watch:
+        response = press_create(browser, page)
+    assert watch.errors, (
+        f"The database reported no error, so sample {model._meta.model_name} "
+        f"number {every} was never written."
+    )
+    if not debug:
+        assert_server_error(response, not_shown(watch, failure.error_type))
+    # Nothing from the attempt remains: no workspace, account, article or
+    # ticket, and the existing ones are as they were.
     assert_nothing_created(before)
 
 

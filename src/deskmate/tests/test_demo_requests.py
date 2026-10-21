@@ -1,6 +1,6 @@
 """ACC-2.5: requests to /demo-workspace/ that must create nothing, and fields,
 query parameters and request bodies that must not change what a creation
-makes.
+makes, its sample articles and tickets included.
 
 Every client enforces Django's CSRF checks, as a browser gets them, and debug
 is off. Each request that is meant to pass the checks carries
@@ -59,15 +59,27 @@ OTHER_SITE_CASES = [
     pytest.param("PUT", None, None, id="put-signed-out"),
     pytest.param("PATCH", REQUESTER, None, id="patch-requester"),
 ]
-# Fields a request might use to choose what is created (ACC-2.5), each sent
-# alone, alternately in the form and in the query, then all in each place.
-EXTRA_FIELDS = ["username", "password", "role", "workspace", "count"]
+# Fields a request might use to choose what is created (ACC-2.5), including
+# the sample articles and tickets of ACC-2.9, each sent alone, alternately in
+# the form and in the query, then all in each place.
+EXTRA_FIELDS = [
+    "username",
+    "password",
+    "role",
+    "workspace",
+    "count",
+    "title",
+    "body",
+    "description",
+    "reply",
+    "open",
+    "sample",
+]
+PLACES = ["form", "query"]
 EXTRA_CASES = [
     *(
-        pytest.param((name,), place, id=f"{name}-in-{place}")
-        for name, place in zip(
-            EXTRA_FIELDS, ["form", "query", "form", "query", "form"], strict=True
-        )
+        pytest.param((name,), PLACES[number % 2], id=f"{name}-in-{PLACES[number % 2]}")
+        for number, name in enumerate(EXTRA_FIELDS)
     ),
     pytest.param(tuple(EXTRA_FIELDS), "form", id="all-in-form"),
     pytest.param(tuple(EXTRA_FIELDS), "query", id="all-in-query"),
@@ -174,6 +186,12 @@ def test_demo_extra_fields_or_query_parameters_create_the_same(
         "role": SUPPORT_OFFICER,
         "workspace": str(alice.workspace_id),
         "count": "1000",
+        "title": "Forged title",
+        "body": "Forged body",
+        "description": "Forged description",
+        "reply": "Forged reply",
+        "open": "false",
+        "sample": "0",
     }
     extra = {name: values[name] for name in names}
     page = get_sign_in_page(browser)
@@ -183,8 +201,9 @@ def test_demo_extra_fields_or_query_parameters_create_the_same(
     else:
         response = press_create(browser, page, query=extra)
     # assert_created checks the new workspace holds only the three accounts
-    # of ACC-2.1, with their roles, and that Alice and her workspace are as
-    # they were.
+    # of ACC-2.1, with their roles, and exactly the sample articles and
+    # tickets of ACC-2.9, and that Alice and her workspace are as they were,
+    # with no article or ticket added.
     accounts = assert_created(response, before)
     assert alice.username not in [account.username for account in accounts]
     assert PASSWORD not in [account.password for account in accounts]
@@ -200,6 +219,8 @@ def test_demo_json_or_multipart_body_with_token_header_creates_the_same(
         "username": alice.username,
         "role": SUPPORT_OFFICER,
         "workspace": str(alice.workspace_id),
+        "title": "Forged title",
+        "sample": "0",
     }
     headers = {"Origin": ORIGIN, "X-CSRFToken": csrf_token(browser)}
     before = stored_state()
@@ -214,7 +235,8 @@ def test_demo_json_or_multipart_body_with_token_header_creates_the_same(
         # The test client sends a mapping as multipart/form-data by default.
         response = browser.post(DEMO_WORKSPACE, fields, headers=headers)
     # assert_created checks the new workspace holds only the three accounts
-    # of ACC-2.1, with their roles, and that Alice and her workspace are as
-    # they were.
+    # of ACC-2.1, with their roles, and exactly the sample articles and
+    # tickets of ACC-2.9, and that Alice and her workspace are as they were,
+    # with no article or ticket added.
     accounts = assert_created(response, before)
     assert alice.username not in [account.username for account in accounts]

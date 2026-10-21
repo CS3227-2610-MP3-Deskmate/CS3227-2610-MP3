@@ -106,6 +106,29 @@ def database_fails_partway(request, transactional_db):
 
 
 @pytest.fixture
+def failing_rows(transactional_db):
+    """Return a function that returns a PartwayFailure for any table's rows.
+
+    `failing_rows(kind, model, every)` returns a PartwayFailure inside which
+    every `every`th row of `model` that the database is asked to insert fails
+    with the error `kind` names. Each is removed after the test. The database
+    is not wrapped in a transaction, so what a request writes before the
+    failure is really stored unless the request undoes it.
+    """
+    failures = []
+
+    def make(kind, model, every):
+        failures.append(PartwayFailure(kind, model, every))
+        return failures[-1]
+
+    try:
+        yield make
+    finally:
+        for failure in failures:
+            failure.remove()
+
+
+@pytest.fixture
 def fast_hashing(settings):
     """Hash passwords with the tests' fast salted hasher, RecordingPasswordHasher
     in deskmate.tests.hashing."""
