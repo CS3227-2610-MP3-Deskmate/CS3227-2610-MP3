@@ -11,6 +11,22 @@ from deskmate.accounts.models import User
 from deskmate.models import FEATURES, OUTCOMES, AICallAuditEvent
 
 
+def valid_caller(user, feature):
+    """Return whether `user` is a stored, authenticated User and `feature` a label.
+
+    The label must be exactly one of the built-in `str` values in FEATURES. The
+    check reads no database, so callers can run it before any database access.
+    """
+    return (
+        isinstance(user, User)
+        and not user._state.adding
+        and user.pk is not None
+        and user.is_authenticated
+        and type(feature) is str
+        and feature in FEATURES
+    )
+
+
 def record_call(user, *, feature, outcome):
     """Commit one reported event and prune expired events for a trusted caller.
 
@@ -22,12 +38,7 @@ def record_call(user, *, feature, outcome):
     never retries, calls a provider or emits metadata.
     """
     if (
-        not isinstance(user, User)
-        or user._state.adding
-        or user.pk is None
-        or not user.is_authenticated
-        or type(feature) is not str
-        or feature not in FEATURES
+        not valid_caller(user, feature)
         or type(outcome) is not str
         or outcome not in OUTCOMES
     ):
