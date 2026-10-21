@@ -67,6 +67,47 @@ The app has one operator-only probe, `GET /health/llm/` (PLT-3). It makes one fi
 
 The probe writes no database record, never retries and gives up after 10 seconds. A missing key makes it return `503`; a missing or wrong token makes it return `404`.
 
+## AI features and the internal gateway
+
+Every user AI call goes through one entry point, `deskmate.llm_gateway.call`, which
+is specified in [`llm-gateway.md`](../workflow/specs/ai/llm-gateway.md) and implemented
+in `src/deskmate/llm_gateway.py`. A feature never calls SoC LLM itself and never reads
+`SOC_LLM_API_KEY`. One call does all of this in order:
+
+1. checks its inputs and that no database transaction is open, then
+2. admits the call through `deskmate.llm_limits.check_and_count`, which counts one
+   attempt against the user's 10 and the app's 30 per rolling 10 minutes (PLT-5),
+3. removes control, format, surrogate, private-use, unassigned and default-ignorable
+   characters from the untrusted text, and rejects text over 4,000 code points,
+4. sends one request with the fixed rules and the caller's fixed instructions, with the
+   untrusted text as JSON in the user message,
+5. checks the reply's size, strict JSON and the caller's schema, then
+6. records one audit event (`success` or `failure`) and returns `ok`, `refused` or
+   `error`.
+
+The gateway is the only place that reads the key or talks to the provider. It writes
+nothing to logs. Refusals and failures are returned as fixed values, so a caller keeps
+its page usable; only invalid trusted input or a call inside a transaction raises.
+
+Each feature's own contract lives in `workflow/specs/ai/` and fixes its `feature`
+identifier, its exact instructions, its schema and which text it sends. That file is the
+first place to read before changing a prompt, a schema or what a feature displays.
+
+To add an AI feature:
+
+1. Write or amend its contract in `workflow/specs/ai/`, and its acceptance criteria in
+   the owning product spec.
+2. Run its tests against the real gateway with the provider faked, as
+   `src/deskmate/tests/test_key_sentences.py` does. No test contacts SoC LLM.
+3. Keep the instructions and schema as developer-written constants. Put every user,
+   ticket, article or workspace value in the untrusted text.
+4. Treat checked output as untrusted: escape it, never render it as markup, and check any
+   record it names against the user's own workspace.
+
+The audit helper (`src/deskmate/llm_audit.py`) stores only a keyed user hash, a feature
+label, an outcome and a timestamp, keeps 30 days, and has no readable user, prompt or
+reply. The gateway is its only caller.
+
 ## Product website
 
 See the [website design and operator prerequisites](../workflow/specs/TECHNICAL-SPEC.md#product-website) for publishing and manual Pages setup.
