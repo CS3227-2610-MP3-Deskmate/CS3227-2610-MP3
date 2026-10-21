@@ -1,12 +1,20 @@
 """The Requester's journey through the merged product, from demo workspace to
-sign-out, plus the workspace boundary around tickets and articles."""
+sign-out, including suggesting articles while writing a ticket, plus the
+workspace boundary around tickets and articles."""
 
+import json
 from urllib.parse import urlsplit
 
 import pytest
 
 from deskmate.accounts.models import Workspace
-from deskmate.tests.demo_workspaces import press_create
+from deskmate.knowledge.models import Article
+from deskmate.tests.demo_workspaces import (
+    SAMPLE_ARTICLES,
+    SAMPLE_TICKETS,
+    listed_items,
+    press_create,
+)
 from deskmate.tests.pages import ORIGIN, Page
 from deskmate.tests.signing_in import (
     PASSWORD,
@@ -20,12 +28,27 @@ from deskmate.tests.signing_in import (
     sign_in,
     sign_in_as,
 )
+from deskmate.tests.test_llm_gateway import attempts
+from deskmate.tests.test_llm_probe import provider_body, request_body
+from deskmate.tickets.models import Ticket
 
 pytestmark = pytest.mark.django_db
 SIGN_IN = "/sign-in/"
 REQUESTER_PAGE = "/requester/"
 TICKETS = "/requester/tickets/"
 ARTICLES = "/requester/articles/"
+# The paths the Requester's ticket and article lists link their items to.
+TICKET_ITEM = rf"{TICKETS}([0-9]+)/"
+ARTICLE_ITEM = rf"{ARTICLES}([0-9]+)/"
+# The titles of the demo workspace's samples, in the order its lists show them
+# (ACC-2.9).
+SAMPLE_TICKET_TITLES = [sample.title for sample in SAMPLE_TICKETS]
+SAMPLE_ARTICLE_TITLES = [sample.title for sample in SAMPLE_ARTICLES]
+# The phrases the fake provider suggests for the draft, which match both
+# sample articles.
+PHRASES = ["printer", "office wi-fi"]
+TICKET_TITLE = "Printer on fire"
+TICKET_DESCRIPTION = "Line one\nLine two\nhttps://evil.example"
 
 
 def demo_accounts(browser):
@@ -55,8 +78,29 @@ def path_of(response):
     return urlsplit(response.url).path
 
 
-@pytest.mark.ac("ACC-2.2", "ACC-1.1", "ACC-1.2", "RQ-1.1", "RQ-1.2", "RQ-1.3", "KB-2.1")
-def test_requester_journey_from_demo_workspace_to_sign_out():
+def titles(page, pattern):
+    """Return the text of each item link on the list `page`, in order."""
+    return [text for text, _ in listed_items(page, pattern)]
+
+
+@pytest.mark.ac(
+    "ACC-2.2",
+    "ACC-2.9",
+    "ACC-1.1",
+    "ACC-1.2",
+    "RQ-1.1",
+    "RQ-1.2",
+    "RQ-1.3",
+    "RQ-5.1",
+    "RQ-5.2",
+    "RQ-5.3",
+    "RQ-5.4",
+    "KB-2.1",
+)
+def test_requester_journey_from_demo_workspace_to_sign_out(
+    transactional_db,
+    provider,
+):
     creator = new_browser()
     accounts = demo_accounts(creator)
     requester_name, _, requester_password = next(
@@ -71,27 +115,60 @@ def test_requester_journey_from_demo_workspace_to_sign_out():
     assert ("Tickets", f"{ORIGIN}{TICKETS}") in role_page.links
     assert ("Knowledge base", f"{ORIGIN}{ARTICLES}") in role_page.links
 
-    empty = Page(requester.get(TICKETS, secure=True))
-    assert empty.title == "Tickets" and empty.h1s == ["Tickets"]
-    assert "No tickets yet." in empty.text
-    assert ("New ticket", f"{ORIGIN}{TICKETS}new/") in empty.links
-    assert ("Requester", f"{ORIGIN}{REQUESTER_PAGE}") in empty.links
+    # The new workspace already holds the sample tickets of ACC-2.9.
+    listed = Page(requester.get(TICKETS, secure=True))
+    assert listed.title == "Tickets" and listed.h1s == ["Tickets"]
+    assert titles(listed, TICKET_ITEM) == SAMPLE_TICKET_TITLES
+    assert "No tickets yet." not in listed.text
+    assert ("New ticket", f"{ORIGIN}{TICKETS}new/") in listed.links
+    assert ("Requester", f"{ORIGIN}{REQUESTER_PAGE}") in listed.links
 
     form_page = Page(requester.get(f"{TICKETS}new/", secure=True))
     assert form_page.title == "New ticket" and form_page.h1s == ["New ticket"]
     form = form_page.form_with_button("Submit ticket")
     assert form.field("Title").tag == "input"
     assert form.field("Description").tag == "textarea"
-    response = form.submit(
+    assert form.button("Suggest articles").tag == "button"
+
+    # Suggesting articles sends the draft to the gateway and lists the sample
+    # articles it matches, without creating a ticket (RQ-5.1, RQ-5.3).
+    saved = (Ticket.objects.count(), Article.objects.count())
+    calls = attempts()
+    provider.body = provider_body(json.dumps({"phrases": PHRASES}))
+    draft = {"Title": TICKET_TITLE, "Description": TICKET_DESCRIPTION}
+    suggested = Page(
+        form.submit(requester, draft, button="Suggest articles", secure=True)
+    )
+    assert suggested.title == "New ticket"
+    assert suggested.heading_texts == ["New ticket", "Suggested articles"]
+    articles = [Article.objects.get(title=sample.title) for sample in SAMPLE_ARTICLES]
+    assert [
+        (text, url)
+        for text, url in suggested.links
+        if url.startswith(f"{ORIGIN}{ARTICLES}")
+    ] == [(article.title, f"{ORIGIN}{ARTICLES}{article.pk}/") for article in articles]
+    for sample in SAMPLE_ARTICLES:
+        assert sample.body not in suggested.text
+    assert titles(suggested, ARTICLE_ITEM) == SAMPLE_ARTICLE_TITLES
+    returned = suggested.form_with_button("Submit ticket")
+    assert returned.field("Title").value == TICKET_TITLE
+    assert returned.field("Description").value == TICKET_DESCRIPTION
+    assert attempts() == calls + 1
+    assert len(provider.requests) == calls + 1
+    request, _ = provider.requests[-1]
+    assert json.loads(request_body(request)["messages"][1]["content"]) == {
+        "untrusted_text": f"{TICKET_TITLE}\n\n{TICKET_DESCRIPTION}"
+    }
+    assert (Ticket.objects.count(), Article.objects.count()) == saved
+
+    response = suggested.form_with_button("Submit ticket").submit(
         requester,
-        {
-            "Title": "Printer on fire",
-            "Description": "Line one\nLine two\nhttps://evil.example",
-        },
+        draft,
         secure=True,
     )
     ticket_path = path_of(response)
     assert ticket_path.startswith(TICKETS)
+    assert attempts() == calls + 1
 
     ticket = Page(requester.get(ticket_path, secure=True))
     assert ticket.title == "Ticket" and ticket.h1s == ["Ticket"]
@@ -108,6 +185,8 @@ def test_requester_journey_from_demo_workspace_to_sign_out():
 
     listed = Page(requester.get(TICKETS, secure=True))
     assert ("Printer on fire", f"{ORIGIN}{ticket_path}") in listed.links
+    assert titles(listed, TICKET_ITEM) == [*SAMPLE_TICKET_TITLES, TICKET_TITLE]
+    assert attempts() == calls + 1
 
     officer = role_page_for(officer_name, officer_password, SUPPORT_OFFICER)
     ticket_id = ticket_path.rstrip("/").rsplit("/", 1)[1]
@@ -140,6 +219,10 @@ def test_requester_journey_from_demo_workspace_to_sign_out():
     assert reading_list.title == "Knowledge base"
     assert reading_list.h1s == ["Knowledge base"]
     assert ("Printer guide", f"{ORIGIN}{article_path}") in reading_list.links
+    assert titles(reading_list, ARTICLE_ITEM) == [
+        *SAMPLE_ARTICLE_TITLES,
+        "Printer guide",
+    ]
     assert ("Requester", f"{ORIGIN}{REQUESTER_PAGE}") in reading_list.links
     assert not any(text == "New article" for text, _ in reading_list.links)
 
