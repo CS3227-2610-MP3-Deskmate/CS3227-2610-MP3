@@ -138,12 +138,13 @@ def _new_ticket_page(request, form, suggestions=None, message=None):
     )
 
 
-def _matching_articles(articles, phrases):
-    """Return the earliest three of `articles` matching a phrase (RQ-5.3)."""
+def _matching_articles(workspace_id, phrases):
+    """Return the earliest three workspace articles matching a phrase (RQ-5.3)."""
     folded = [phrase.casefold() for phrase in phrases]
     folded = [phrase for phrase in folded if phrase]
     matches = []
-    for article in articles:
+    articles = Article.objects.filter(workspace_id=workspace_id).order_by("pk")
+    for article in articles.only("pk", "title", "body"):
         title, body = article.title.casefold(), article.body.casefold()
         if any(phrase in title or phrase in body for phrase in folded):
             matches.append(article)
@@ -159,9 +160,6 @@ def ticket_suggest_articles(request):
     form = TicketForm(data=request.POST)
     if not form.is_valid():
         return _new_ticket_page(request, form)
-    articles = list(
-        Article.objects.filter(workspace_id=request.user.workspace_id).order_by("pk")
-    )
     text = f"{form.cleaned_data['title']}\n\n{form.cleaned_data['description']}"
     result = llm_gateway.call(
         request.user,
@@ -177,7 +175,7 @@ def ticket_suggest_articles(request):
     elif result["status"] == "ok":
         phrases = result["output"]["phrases"]
         if all(phrases):
-            suggestions = _matching_articles(articles, phrases)
+            suggestions = _matching_articles(request.user.workspace_id, phrases)
             message = None if suggestions else _NO_MATCHING_ARTICLES
     return _new_ticket_page(request, form, suggestions, message)
 
