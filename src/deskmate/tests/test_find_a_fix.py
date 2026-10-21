@@ -799,7 +799,7 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
         return execute(sql, params, many, context)
 
     if outcome == "refused":
-        for _ in range(10):
+        for _ in range(9):
             assert check_and_count(requester.u) is None
     elif outcome == "error":
         provider.error = TimeoutError("synthetic")
@@ -810,7 +810,8 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
         response = send(requester, token, data=data)
     assert response.status_code == 200
     assert article_reads == []
-    assert attempts() == 1 and provider.requests == []
+    assert attempts() == (10 if outcome == "refused" else 1)
+    assert provider.requests == []
 
 
 @pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.6")
@@ -845,10 +846,7 @@ def test_find_a_fix_article_failure_after_ok_is_generic_500(requester, provider)
         for value in (TITLE, DESCRIPTION, BUTTON, SUBMIT, HEADING, requester.own.title)
     )
     assert len(reads) == 1 and "Location" not in response
-    ignorable = (ATTEMPTS, AICallAuditEvent._meta.db_table)
-    assert {k: v for k, v in snapshot().items() if k not in ignorable} == {
-        k: v for k, v in before.items() if k not in ignorable
-    }
+    assert snapshot() == before
     assert provider.requests != [] and attempts() == 1
     assert events() == recorded(requester.u, "success", FEATURE)
 
