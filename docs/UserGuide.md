@@ -43,7 +43,11 @@ After signing in, you land on your role's page:
 - a Requester on `/requester/`, headed **Requester**;
 - a Support Officer on `/support/`, headed **Support Officer**.
 
-The page shows this line and a **Sign out** button:
+Both role pages show the same line directly below the heading, as do their ticket, knowledge-base and Requester-password-reset pages, including validation errors and results:
+
+> Workspace: *code*
+
+**Workspace: unavailable** means the stored accounts do not identify one canonical demo workspace code (see [ACC-1.2](../workflow/specs/product/accounts.md#acc-1-sign-in-and-out-by-role)). On your role's page, this comes before the following line and the **Sign out** button:
 
 > Signed in as *your username*.
 
