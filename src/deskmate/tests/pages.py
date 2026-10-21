@@ -74,6 +74,7 @@ class Control:
         self.type = (attributes.get("type") or default_type).lower()
         self.name = attributes.get("name")
         self.value = attributes.get("value", "")
+        self.formaction = attributes.get("formaction")
         self.id = attributes.get("id")
         # Whether the browser refuses to send the form while the control is
         # empty, and the most characters it lets a user type, or None.
@@ -212,8 +213,14 @@ class Form:
         """
         assert self.method == "post", f"The form's method is {self.method!r}."
         data = self.data(typed, button=button, changes=changes)
-        url = urlsplit(self.url)
-        assert url.netloc == SITE, f"The form is sent to another site: {self.url}"
+        pressed = self.button(button) if button is not None else None
+        action = (
+            urljoin(self.page_url, pressed.formaction)
+            if pressed is not None and pressed.formaction
+            else self.url
+        )
+        url = urlsplit(action)
+        assert url.netloc == SITE, f"The form is sent to another site: {action}"
         query_string = "&".join(
             part for part in (url.query, urlencode(query or {})) if part
         )
