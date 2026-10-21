@@ -26,7 +26,9 @@ Cost: About 2 hours 45 minutes of wall time, including two container restarts; 1
 - test-writer (`3d65dbb`): done; `d000137` adds the L2 attack test (83 insertions). Root scope check passed; [CI 39584541345](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39584541345) passed: Ruff, 122 files formatted, 2,336 passed.
 - reviewer (`8d74e8e`): done; `baa1ccb..d000137`; no defects; two optional Lows (hand-typed attack routes; "since launch" in the gap overstates it).
 - security-reviewer (`8d74e8e`): done; `baa1ccb..d000137`; no findings.
-- reviewer and security-reviewer (`8d74e8e`) on the merge of `main` into the branch, `d000137..a616293`: see Decisions.
+- reviewer (`8d74e8e`): done; `d000137..a616293`, the merge of `main`; both conflict resolutions keep each side's change, and #84's code and tests fit #83's. Two Lows already on `main` from #84 (`random_password` docstring omits ACC-5.2; SECURITY-SPEC's guessing gap omits ACC-4 passwords), suggested as follow-ups.
+- security-reviewer (`8d74e8e`): done; `d000137..a616293`; no findings; optional Info: "each creation" in SECURITY-SPEC "Demo workspaces" could read as covering ACC-5 creations.
+- Final CI: [run 39586054452](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39586054452) at `a616293` succeeded, and [run 39586206981](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39586206981) at `16d47fb` passed Ruff, 129 files formatted and 2,467 tests.
 
 ## Decisions and corrections
 
