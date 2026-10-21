@@ -803,10 +803,8 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
             assert check_and_count(requester.u) is None
     elif outcome == "error":
         provider.error = TimeoutError("synthetic")
-    elif outcome == "rejected":
-        reply(provider, ["printer", ""])
     data = {"Title": "T", "Description": "x" * 4001} if outcome == "over-cap" else VALID
-    reply(provider, ["printer"])
+    reply(provider, ["printer", ""] if outcome == "rejected" else ["printer"])
     token = auth.csrf_token(requester.b, auth.REQUESTER)
     with connection.execute_wrapper(record):
         response = send(requester, token, data=data)
