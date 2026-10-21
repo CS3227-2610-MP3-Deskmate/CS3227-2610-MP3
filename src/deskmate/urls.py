@@ -57,6 +57,11 @@ urlpatterns = [
     ),
     path("requester/tickets/", tickets.ticket_list, name="ticket-list"),
     path("requester/tickets/new/", tickets.ticket_create, name="ticket-new"),
+    path(
+        "requester/tickets/new/suggest-articles/",
+        tickets.ticket_suggest_articles,
+        name="ticket-suggest-articles",
+    ),
     re_path(
         r"^requester/tickets/(?P<ticket_id>[0-9]+)/$",
         tickets.ticket_detail,
