@@ -30,6 +30,8 @@ from deskmate.tickets.models import Ticket
 SIGN_IN = "/sign-in/"
 ROLE_PAGES = {REQUESTER: "/requester/", SUPPORT_OFFICER: "/support/"}
 KEY_SENTENCES = "/support/tickets/<id>/key-sentences/"
+SUGGEST_ARTICLES = "/requester/tickets/new/suggest-articles/"
+GATEWAY_ROUTES = {KEY_SENTENCES, SUGGEST_ARTICLES}
 # The deliberate alias that gives PLT-3.3's 404 (PLT-1.9).
 NO_SLASH = "/health/llm"
 
@@ -41,6 +43,7 @@ ACCESS = {
     "/requester/articles/<id>/": REQUESTER,
     "/requester/tickets/": REQUESTER,
     "/requester/tickets/new/": REQUESTER,
+    SUGGEST_ARTICLES: REQUESTER,
     "/requester/tickets/<id>/": REQUESTER,
     "/support/": SUPPORT_OFFICER,
     "/support/create-requester/": SUPPORT_OFFICER,
@@ -80,7 +83,12 @@ NAMED_GROUP = re.compile(r"\(\?P<[^>]+>.+?\)")
 @pytest.fixture
 def gateway_call(monkeypatch):
     """Replace the gateway so authorization tests never contact a provider."""
-    call = Mock(return_value={"status": "ok", "output": {"sentences": []}})
+    call = Mock(
+        return_value={
+            "status": "ok",
+            "output": {"sentences": [], "phrases": []},
+        }
+    )
     monkeypatch.setattr(llm_gateway, "call", call)
     return call
 
@@ -126,8 +134,20 @@ def concrete(path, ticket, article):
 def request_route(browser, route, ticket, article, visitor):
     """Use a route's allowed method, with valid CSRF and Origin for POST."""
     path = concrete(route, ticket, article)
-    if route == KEY_SENTENCES:
-        return send(browser, "POST", path, csrf_token(browser, visitor), secure=True)
+    if route in GATEWAY_ROUTES:
+        data = (
+            {"title": "Printer", "description": "It jams"}
+            if route == SUGGEST_ARTICLES
+            else None
+        )
+        return send(
+            browser,
+            "POST",
+            path,
+            csrf_token(browser, visitor),
+            data=data,
+            secure=True,
+        )
     return browser.get(path, secure=True)
 
 
@@ -178,7 +198,7 @@ def test_a_visitor_without_the_routes_role_is_redirected_or_refused(
                     assert response.content == b""
                     gateway_call.assert_not_called()
             response = request_route(browser, route, ticket, article, visitor)
-            if route == KEY_SENTENCES and visitor == SUPPORT_OFFICER:
+            if route in GATEWAY_ROUTES and visitor == allowed_role:
                 gateway_call.assert_called_once()
             else:
                 gateway_call.assert_not_called()
