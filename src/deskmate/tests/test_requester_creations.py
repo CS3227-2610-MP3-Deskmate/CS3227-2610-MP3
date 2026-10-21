@@ -117,7 +117,8 @@ def test_create_requester_membership_and_quota_boundaries(creator, monkeypatch, 
 
     with monkeypatch.context() as patch, recording_hashes() as hashed:
         if count not in (2, 19):
-            patch.setattr("secrets.choice", forbidden_draw)
+            # Django also draws CSRF masks; guard only password generation.
+            patch.setattr("deskmate.accounts.demo.random_password", forbidden_draw)
         response = sender.post()
     if count in (2, 19):
         read_success(response, f"requester{count + 1}-{CODE}")
@@ -216,7 +217,7 @@ def test_create_requester_each_noncanonical_partition_rejected_without_draw_or_w
         draws.append(True)
         raise AssertionError("Noncanonical creation must generate no password.")
 
-    monkeypatch.setattr("secrets.choice", forbidden_draw)
+    monkeypatch.setattr("deskmate.accounts.demo.random_password", forbidden_draw)
     with recording_hashes() as hashed:
         response = sender.post()
     read_form(response, error=NONCANONICAL, code="unavailable")

@@ -162,7 +162,7 @@ def test_create_requester_failures_roll_back_accounts_and_sanitize_generated_val
 
     with monkeypatch.context() as patch:
         if failure == "random":
-            patch.setattr("secrets.choice", broken_random)
+            patch.setattr("deskmate.accounts.demo.random_password", broken_random)
         with reporting_hashes_to(hashed), connection.execute_wrapper(broken_save):
             response = sender.post()
     assert failed, "The requested failure was not reached."

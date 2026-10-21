@@ -137,7 +137,7 @@ def test_create_requester_counter_database_failure_fails_closed_before_generatio
         draws.append(True)
         raise AssertionError("Failed admission must generate no password.")
 
-    monkeypatch.setattr("secrets.choice", forbidden_draw)
+    monkeypatch.setattr("deskmate.accounts.demo.random_password", forbidden_draw)
     before = accounts()
     with recording_hashes() as hashed, connection.execute_wrapper(fail_count):
         response = sender.post()
