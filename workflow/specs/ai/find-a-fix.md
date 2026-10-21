@@ -4,7 +4,7 @@ The AI contract for [RQ-5](../product/tickets.md#rq-5-suggest-articles-while-wri
 
 ## Inputs and authorship
 
-After the New ticket form is submitted to the suggestion route and the current stored Requester/workspace authorization succeeds, the action validates both fields by RQ-1.4. When they pass, it performs a fixed preflight scoped to the current stored workspace that reads no article text, then makes exactly one [gateway call](llm-gateway.md) outside a database transaction. No article title or body is read before the gateway call:
+After the New ticket form is submitted to the suggestion route and the current stored Requester/workspace authorization succeeds, the action validates both fields by RQ-1.4. When they pass, it makes no article read at all, then makes exactly one [gateway call](llm-gateway.md) outside a database transaction:
 
 | Input | Written by | Value |
 | --- | --- | --- |
