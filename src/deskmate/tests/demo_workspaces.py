@@ -2,9 +2,10 @@
 
 The tests create a workspace as a visitor does: they load the sign-in page and
 press Create demo workspace, with Django's CSRF checks enforced. Everything
-they expect comes from ACC-2. The one thing they need from Deskmate's code is
-a way to choose the codes it draws, so that codes can clash (ACC-2.3): each
-time Deskmate draws a code it calls `deskmate.accounts.demo.random_code()`,
+they expect comes from ACC-2, including the sample articles and tickets of
+ACC-2.9 that each new workspace holds. The one thing they need from Deskmate's
+code is a way to choose the codes it draws, so that codes can clash (ACC-2.3):
+each time Deskmate draws a code it calls `deskmate.accounts.demo.random_code()`,
 which the `codes` fixture replaces with a `Draws`.
 
 A `Watch` records what a creation generates and what the database reports, so
@@ -30,6 +31,7 @@ from django.core import signing
 from django.db import DatabaseError, connection, connections, transaction
 
 from deskmate.accounts.models import Workspace
+from deskmate.knowledge.models import Article
 from deskmate.tests.hashing import reporting_hashes_to
 from deskmate.tests.pages import CSRF_FIELD, SITE, Page
 from deskmate.tests.signing_in import (
@@ -39,6 +41,7 @@ from deskmate.tests.signing_in import (
     SUPPORT_OFFICER,
     get_sign_in_page,
 )
+from deskmate.tickets.models import Ticket
 
 DEMO_WORKSPACE = "/demo-workspace/"
 # The fixed texts of ACC-2.1.
@@ -76,6 +79,57 @@ DEBUG_MODES = [pytest.param(False, id="debug-off"), pytest.param(True, id="debug
 
 # An account the created page shows, with its stored role.
 Account = namedtuple("Account", ["username", "role", "password"])
+
+# The sample articles and tickets of ACC-2.9 that each creation adds to its new
+# workspace, in the order ACC-2.9 numbers them, which is the order they are
+# created in and the order the lists show them in. Each text is exactly as
+# ACC-2.9 writes it, on one line.
+SampleArticle = namedtuple("SampleArticle", ["title", "body"])
+SampleTicket = namedtuple("SampleTicket", ["title", "description", "open", "reply"])
+SAMPLE_ARTICLES = (
+    SampleArticle(
+        "Fix a printer that will not print",
+        "Check that the printer is switched on and has paper. Turn it off, wait "
+        "30 seconds and turn it on again. If it still will not print, raise a "
+        "ticket.",
+    ),
+    SampleArticle(
+        "Connect to the office Wi-Fi",
+        "Open the Wi-Fi settings on your device and choose the office network. "
+        "Enter the network password from the notice board in your office. If "
+        "the connection keeps dropping, forget the network and connect again.",
+    ),
+)
+SAMPLE_TICKETS = (
+    SampleTicket(
+        "Printer will not print",
+        "The printer by the meeting room shows a ready light, but nothing comes "
+        "out. I have sent my document twice from my laptop.",
+        False,
+        "I restarted the printer and cleared a stuck job from its queue. Your "
+        "document should print now. Raise a new ticket if it happens again.",
+    ),
+    SampleTicket(
+        "Wi-Fi keeps disconnecting",
+        "Since Monday, my laptop drops off the office Wi-Fi several times an "
+        "hour. Each time, it reconnects after about a minute. It happens in "
+        "every room on my floor. I have already restarted my laptop. I need a "
+        "stable connection for video calls every afternoon.",
+        True,
+        "",
+    ),
+    SampleTicket(
+        "Need a spreadsheet app",
+        "I am joining the budget team next week. I need a spreadsheet app on my "
+        "laptop before then. My manager has already approved the request. I can "
+        "bring my laptop to the help desk on any morning.",
+        True,
+        "",
+    ),
+)
+# What a stored_state holds, and what was saved since one: the workspaces'
+# ids, and the accounts, articles and tickets, each as its stored fields.
+State = namedtuple("State", ["workspaces", "accounts", "articles", "tickets"])
 
 # A generated username, wherever it appears in a statement or its parameters.
 _GENERATED_USERNAME = re.compile(r"(?:requester1|requester2|support1)-[0-9a-z]+")
@@ -124,47 +178,75 @@ def assert_demo_form(page):
     return form
 
 
+def _by_id(rows):
+    """Return `rows`, each a record's stored fields, by the record's id."""
+    return {row["id"]: row for row in rows}
+
+
 def stored_state():
-    """Return every workspace's id, and every account's stored fields by its id."""
-    workspaces = frozenset(Workspace.objects.values_list("pk", flat=True))
-    accounts = {row["id"]: row for row in get_user_model().objects.values()}
-    return workspaces, accounts
+    """Return a State: every workspace's id, and every account's, article's and
+    ticket's stored fields by its id."""
+    return State(
+        frozenset(Workspace.objects.values_list("pk", flat=True)),
+        _by_id(get_user_model().objects.values()),
+        _by_id(Article.objects.values()),
+        _by_id(Ticket.objects.values()),
+    )
 
 
 def _saved_since(before, elsewhere=()):
-    """Return the workspaces and accounts saved since `before`, a stored_state.
+    """Return a State of what was saved since `before`, a stored_state.
 
-    Leaves out the accounts whose usernames are in `elsewhere`, which another
-    creation saved meanwhile, and their workspaces. Checks that every
-    workspace and account in `before` is still there, unchanged.
+    It holds the new workspaces' ids and lists of the new accounts', articles'
+    and tickets' stored fields, each in the order of their ids. Leaves out the
+    accounts whose usernames are in `elsewhere`, which another creation saved
+    meanwhile, and their workspaces. Checks that every workspace, account,
+    article and ticket in `before` is still there, unchanged.
     """
-    workspaces, accounts = stored_state()
-    old_workspaces, old_accounts = before
-    unchanged = {pk: accounts.get(pk) for pk in old_accounts}
-    assert unchanged == old_accounts, "An account that existed before changed."
-    assert old_workspaces <= workspaces, "A workspace that existed before is gone."
+    now = stored_state()
+    for name, record in (
+        ("accounts", "An account"),
+        ("articles", "An article"),
+        ("tickets", "A ticket"),
+    ):
+        old, current = getattr(before, name), getattr(now, name)
+        unchanged = {pk: current.get(pk) for pk in old}
+        assert unchanged == old, f"{record} that existed before changed."
+    assert before.workspaces <= now.workspaces, (
+        "A workspace that existed before is gone."
+    )
     others = {
         pk
-        for pk, account in accounts.items()
-        if pk not in old_accounts and account["username"] in elsewhere
+        for pk, account in now.accounts.items()
+        if pk not in before.accounts and account["username"] in elsewhere
     }
-    other_workspaces = {accounts[pk]["workspace_id"] for pk in others}
-    new_accounts = [
-        account
-        for pk, account in accounts.items()
-        if pk not in old_accounts and pk not in others
-    ]
-    return workspaces - old_workspaces - other_workspaces, new_accounts
+    other_workspaces = {now.accounts[pk]["workspace_id"] for pk in others}
+
+    def added(name, leave_out=()):
+        old = getattr(before, name)
+        rows = getattr(now, name)
+        return [
+            rows[pk] for pk in sorted(rows) if pk not in old and pk not in leave_out
+        ]
+
+    return State(
+        now.workspaces - before.workspaces - other_workspaces,
+        added("accounts", others),
+        added("articles"),
+        added("tickets"),
+    )
 
 
 def assert_nothing_created(before, elsewhere=()):
-    """Assert no workspace or account was saved since `before`, a stored_state,
-    and none that existed then changed, apart from the accounts in `elsewhere`
-    that another creation saved meanwhile."""
-    workspaces, accounts = _saved_since(before, elsewhere)
-    usernames = sorted(account["username"] for account in accounts)
-    assert not workspaces and not accounts, (
-        f"{len(workspaces)} workspaces and these accounts remain: {usernames}"
+    """Assert no workspace, account, article or ticket was saved since `before`,
+    a stored_state, and none that existed then changed, apart from the
+    accounts in `elsewhere` that another creation saved meanwhile."""
+    saved = _saved_since(before, elsewhere)
+    usernames = [account["username"] for account in saved.accounts]
+    titles = [row["title"] for row in (*saved.articles, *saved.tickets)]
+    assert not any(saved), (
+        f"{len(saved.workspaces)} workspaces, these accounts: {usernames}, and "
+        f"these articles and tickets remain: {titles}"
     )
 
 
@@ -233,14 +315,16 @@ def assert_created(response, before, elsewhere=()):
     `before`, a stored_state, and return the accounts it shows.
 
     The new workspace must hold exactly those accounts, with their roles and
-    passwords, and nothing that existed before may change (ACC-2.2). Accounts
-    whose usernames are in `elsewhere`, which another creation saved
-    meanwhile, and their workspaces are left out.
+    passwords, and exactly the sample articles and tickets of ACC-2.9, and no
+    other article or ticket may be added and nothing that existed before may
+    change (ACC-2.2). Accounts whose usernames are in `elsewhere`, which
+    another creation saved meanwhile, and their workspaces are left out.
     """
     accounts = read_created_page(response)
-    workspaces, saved = _saved_since(before, elsewhere)
+    saved = _saved_since(before, elsewhere)
+    workspaces = saved.workspaces
     assert len(workspaces) == 1, f"Expected 1 new workspace, got {len(workspaces)}."
-    by_username = {account["username"]: account for account in saved}
+    by_username = {account["username"]: account for account in saved.accounts}
     shown = sorted(account.username for account in accounts)
     assert sorted(by_username) == shown, "The new accounts are not those shown."
     for account in accounts:
@@ -250,7 +334,51 @@ def assert_created(response, before, elsewhere=()):
         assert check_password(account.password, stored["password"]), (
             f"The password shown for {account.username} is not its password."
         )
+    _assert_samples(saved, next(iter(workspaces)))
     return accounts
+
+
+def _assert_samples(saved, workspace):
+    """Assert the articles and tickets in `saved`, a State of what was saved,
+    are exactly the samples of ACC-2.9, all in `workspace`, created in the
+    order ACC-2.9 numbers them."""
+    articles = [
+        (row["workspace_id"], SampleArticle(row["title"], row["body"]))
+        for row in saved.articles
+    ]
+    assert articles == [(workspace, sample) for sample in SAMPLE_ARTICLES], (
+        f"{len(articles)} articles were added; expected the "
+        f"{len(SAMPLE_ARTICLES)} sample articles of ACC-2.9, in order, all in "
+        "the new workspace."
+    )
+    tickets = [
+        (
+            row["workspace_id"],
+            SampleTicket(row["title"], row["description"], row["open"], row["reply"]),
+        )
+        for row in saved.tickets
+    ]
+    assert tickets == [(workspace, sample) for sample in SAMPLE_TICKETS], (
+        f"{len(tickets)} tickets were added; expected the {len(SAMPLE_TICKETS)} "
+        "sample tickets of ACC-2.9, in order, all in the new workspace."
+    )
+
+
+def workspace_of(account):
+    """Return the id of the stored workspace of `account`, an Account shown on
+    the created page."""
+    return get_user_model().objects.get(username=account.username).workspace_id
+
+
+def listed_items(page, pattern):
+    """Return the text and id of each link on `page`, in order, whose path is
+    all matched by `pattern`, a regular expression whose one group is the id."""
+    items = []
+    for text, url in page.links:
+        match = re.fullmatch(pattern, urlsplit(url).path)
+        if match:
+            items.append((text, int(match[1])))
+    return items
 
 
 def _session_store():
@@ -498,11 +626,15 @@ def _saves_account(sql):
 
 
 class PartwayFailure:
-    """Inside it, every third account row the database is asked to insert fails
-    with an error whose detail holds that row, password hash included.
+    """Inside it, every `every`th row the database is asked to insert into
+    `model`'s table, the accounts' unless another is given, fails with an
+    error whose detail holds that row, an account's password hash included.
 
-    So a creation fails after its workspace and two of its accounts are
-    written, and so does every attempt it makes again. `kind` chooses the
+    With the defaults, every third account row fails, so a creation fails
+    after its workspace and two of its accounts are written, and so does every
+    attempt it makes again. With `model` Ticket and `every` 3, or Article and
+    2, a creation fails while it writes its last sample ticket or article of
+    ACC-2.9, and so does every attempt it makes again. `kind` chooses the
     error: "not-null" is PostgreSQL's own not-null violation, which Django
     raises as IntegrityError, and "disk-full" is raised as a full disk is,
     which Django raises as OperationalError. `error_type` is that name.
@@ -517,20 +649,22 @@ class PartwayFailure:
             "DETAIL = format('Failing row contains %s.', NEW);"
         ),
     }
-    _NAME = "deskmate_test_fail_third_account"
-    _COUNTER = "deskmate_test_account_inserts"
 
-    def __init__(self, kind):
+    def __init__(self, kind, model=None, every=3):
         self.kind = kind
         self.error_type = self._ERROR_TYPES[kind]
+        self.every = every
+        table = (model or get_user_model())._meta.db_table
+        self._table = connection.ops.quote_name(table)
+        self._name = f"deskmate_test_fail_{table}"
+        self._counter = f"deskmate_test_{table}_inserts"
 
     def __enter__(self):
-        """Make the database fail every third account row from now on."""
-        table = connection.ops.quote_name(get_user_model()._meta.db_table)
+        """Make the database fail every `every`th row of the table from now on."""
         function = f"""
-            CREATE FUNCTION {self._NAME}() RETURNS trigger LANGUAGE plpgsql AS $$
+            CREATE FUNCTION {self._name}() RETURNS trigger LANGUAGE plpgsql AS $$
             BEGIN
-                IF nextval('{self._COUNTER}') % 3 = 0 THEN
+                IF nextval('{self._counter}') % {self.every} = 0 THEN
                     {self._FAILURES[self.kind]}
                 END IF;
                 RETURN NEW;
@@ -538,25 +672,24 @@ class PartwayFailure:
             $$
         """
         with connection.cursor() as cursor:
-            cursor.execute(f"CREATE SEQUENCE {self._COUNTER}")
+            cursor.execute(f"CREATE SEQUENCE {self._counter}")
             cursor.execute(function)
             cursor.execute(
-                f"CREATE TRIGGER {self._NAME} BEFORE INSERT ON {table} "
-                f"FOR EACH ROW EXECUTE FUNCTION {self._NAME}()"
+                f"CREATE TRIGGER {self._name} BEFORE INSERT ON {self._table} "
+                f"FOR EACH ROW EXECUTE FUNCTION {self._name}()"
             )
         return self
 
     def __exit__(self, *exc_info):
-        """Let the database insert accounts again."""
+        """Let the database insert the table's rows again."""
         self.remove()
 
     def remove(self):
         """Remove the failure, if it is there."""
-        table = connection.ops.quote_name(get_user_model()._meta.db_table)
         with connection.cursor() as cursor:
-            cursor.execute(f"DROP TRIGGER IF EXISTS {self._NAME} ON {table}")
-            cursor.execute(f"DROP FUNCTION IF EXISTS {self._NAME}()")
-            cursor.execute(f"DROP SEQUENCE IF EXISTS {self._COUNTER}")
+            cursor.execute(f"DROP TRIGGER IF EXISTS {self._name} ON {self._table}")
+            cursor.execute(f"DROP FUNCTION IF EXISTS {self._name}()")
+            cursor.execute(f"DROP SEQUENCE IF EXISTS {self._counter}")
 
 
 class _InterfaceErrorOnThirdRow:
