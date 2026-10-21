@@ -2,7 +2,7 @@
 
 Slice: #84 · Tier: High · Tool: Codex (GPT-6) · Date: 2026-10-21
 
-Cost: Ten role-agent runs across specification, build and review. Wall time, token use and monetary cost were not measured.
+Cost: Thirteen role-agent runs across specification, build and review. Wall time, token use and monetary cost were not measured.
 
 ## Requests
 
@@ -10,6 +10,7 @@ Cost: Ten role-agent runs across specification, build and review. Wall time, tok
 - Use 20 total Requesters per workspace, including the initial two, without an aggregate lifetime account cap across workspaces.
 - Continue after agreement with the criteria checkpoint. Run tests only through GitHub CI/CD on a draft pull request; do not run local tests. This authorized publishing the branch and opening draft [PR #87](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/pull/87).
 - Combine the specification and build logs, originally numbered 030 and 031, into one session log.
+- Add the proposed end-to-end journey covering demo creation, officer sign-in, new Requester creation and sign-in, ticket submission, and officer visibility of that ticket.
 
 ## Agent runs
 
@@ -23,6 +24,9 @@ Cost: Ten role-agent runs across specification, build and review. Wall time, tok
 - implementer (`3d65dbb`), User Guide: done; `docs/UserGuide.md` and task checkbox committed in `165eab2`. Parent scope and diff checks against `8a8c9f6` passed; HEAD unchanged. Changed sections were read back against the built templates with no duplicate headings, orphaned fragments or lost rules reported. No source lines added.
 - reviewer (`8d74e8e`): done, no actionable findings for `5248aafe9b1e3ce40fc89e97ce77020116b1846d..165eab292c8b85a76d612f267e580897385c8bf9`. Independently inspected final-head CI logs, test corrections, code, scope and guide. Parent scope check against `165eab2` passed; no files changed and HEAD unchanged.
 - security-reviewer (`8d74e8e`): done, no actionable findings for `5248aafe9b1e3ce40fc89e97ce77020116b1846d..165eab292c8b85a76d612f267e580897385c8bf9`. ACC-5.2's reused ACC-2.8 CSPRNG draws passed code inspection. Parent scope check against `165eab2` passed; no files changed and HEAD unchanged. This reviewer did not independently reproduce CI outcomes or verify hosted/browser controls.
+- test-writer (`3d65dbb`), additional E2E journey: done; added `src/e2e/test_requester_creation_journey.py` in `93e95f4`. Parent scope check against `dd2602eeb24162e26eac4d96cd0fd695784c3f14`, explicit-path Ruff lint/format checks and diff check passed; HEAD unchanged. No local tests ran. No application, dependency, spec or plan change was needed.
+- reviewer (`8d74e8e`), supplemental review: done, no actionable findings for `165eab292c8b85a76d612f267e580897385c8bf9..93e95f4b1f359b5598b69caafc669106e762efa9`. Inspected the public-form journey, reused helpers and final-head CI logs; the new test was collected and passed. Parent scope check against `93e95f4` passed; no files changed and HEAD unchanged. No commands, tests or manual browser checks ran in the role.
+- security-reviewer (`8d74e8e`), supplemental review: done, no actionable findings for `165eab292c8b85a76d612f267e580897385c8bf9..93e95f4b1f359b5598b69caafc669106e762efa9`. Inspected CSRF-enforcing clients, rendered forms, separate Requester sign-in, same-ticket visibility, and workspace/session preservation. Parent scope check against `93e95f4` passed; no files changed and HEAD unchanged. No commands or tests ran; supplied CI outcomes were not independently reproduced. The unchanged generator retains the prior code-inspection result.
 
 ## Decisions and corrections
 
@@ -34,9 +38,11 @@ Cost: Ten role-agent runs across specification, build and review. Wall time, tok
 - Slice #85 merged through #86 and its remote branch was deleted while preparing the draft PR. Fetch confirmed its `0ef7a0b` tip was an ancestor of new `main` at `5248aaf`. Integrated that merge without conflicts in `310ceef`; #84 still builds on #85 and PR #87 targets `main`. Final pre-delivery fetch found `main` unchanged.
 - The existing CI workflow already runs on draft PRs against any base; no workflow changes were needed. The human's CI-only instruction required committing and pushing before remote verification. No local pytest, unittest or manual UI tests ran; only static lint/format, scope and diff checks ran locally.
 - [CI 39569820035](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39569820035) at `8a8c9f6`: actual logs showed lint/format passed and 2,447 tests passed in 213.97 seconds.
-- [CI 39570687249](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39570687249) at reviewed source head `165eab2`: actual logs showed lint/format passed and 2,447 tests passed in 205.33 seconds. Both review reports cover this source head; subsequent delivery changes are logs only.
+- [CI 39570687249](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39570687249) at reviewed source head `165eab2`: actual logs showed lint/format passed and 2,447 tests passed in 205.33 seconds. The original review reports cover this source head; the supplemental reports cover the later E2E addition and log consolidation.
 - [CI 39571957154](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39571957154) at log-only commit `5eb9d87`: actual logs showed lint/format passed and 2,447 tests passed in 194.75 seconds. The reviewed-source and log-only Product website builds also passed; PR deployment was skipped.
-- Draft PR metadata maps every changed criterion to tests and the CSPRNG code inspection. Human checkboxes remain unticked; no human GitHub approval, manual testing or log verification is claimed. The combined log retains the recorded requests, decisions, agent runs and problems and replaces both earlier files.
+- The added Django-client journey follows rendered links and submits public forms throughout, signs in with generated credentials, and checks the same ticket by identifier and content from the officer session. Workspace labels and the officer session remain intact. It adds coverage of existing behavior without another requirement or application change; the source diff remains 161 lines. It does not establish real-browser behavior.
+- [CI 39574987614](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/actions/runs/39574987614) at `93e95f4`: actual logs showed Ruff passed, 128 files already formatted, and 2,448 tests passed in 213.57 seconds. The Product website build also passed. Both supplemental reviews cover this test head; subsequent delivery changes are logs only.
+- PR metadata maps every changed criterion to tests and the CSPRNG code inspection. The PR was opened as a draft and was subsequently observed ready for review; that state and the existing human checkbox selections are preserved. No human GitHub approval, manual testing or log verification is claimed. The combined log retains the recorded requests, decisions, agent runs and problems and replaces both earlier files.
 
 ## Problems
 
