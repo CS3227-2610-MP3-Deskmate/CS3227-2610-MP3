@@ -16,9 +16,11 @@ The limits' clock is `django.utils.timezone.now`, which the `clock` fixture
 stops. Whether a password was checked or hashed is seen through the tests'
 hasher in `deskmate.tests.hashing`, which `fast_hashing` configures. Nothing
 here names how Deskmate stores what it counts: the limits' records are found
-as the rows that counting an attempt adds to tables other than those of
-accounts and workspaces, and the statements that check and count an attempt
-as those it runs before it first reads or writes an account or a workspace.
+as the rows that counting an attempt adds to tables other than those that hold
+what a creation stores in its new workspace (accounts, workspaces, and the
+sample articles and tickets of ACC-2.9), and the statements that check and
+count an attempt as those it runs before it first reads or writes an account
+or a workspace.
 """
 
 import json
@@ -34,6 +36,7 @@ from django.core.servers.basehttp import ThreadedWSGIServer, WSGIRequestHandler
 from django.db import DEFAULT_DB_ALIAS, connection, connections
 
 from deskmate.accounts.models import Workspace
+from deskmate.knowledge.models import Article
 from deskmate.tests.demo_workspaces import (
     DEMO_WORKSPACE,
     press_create,
@@ -50,6 +53,7 @@ from deskmate.tests.signing_in import (
     new_browser,
     submit_sign_in,
 )
+from deskmate.tickets.models import Ticket
 
 # The two kinds of attempt, and the route each is sent to.
 SIGN_IN_ATTEMPT = "sign-in"
@@ -251,10 +255,17 @@ def account_tables():
     return {get_user_model()._meta.db_table, Workspace._meta.db_table}
 
 
+def workspace_tables():
+    """Return the names of the tables that hold what a creation stores in its
+    new workspace under ACC-2: accounts, workspaces, and the sample articles
+    and tickets of ACC-2.9."""
+    return account_tables() | {Article._meta.db_table, Ticket._meta.db_table}
+
+
 def added_rows(before):
     """Return each row stored now but not in `before`, a stored_rows, as a
-    `(table, text)` pair, leaving out accounts and workspaces."""
-    left_out = account_tables()
+    `(table, text)` pair, leaving out those of `workspace_tables`."""
+    left_out = workspace_tables()
     return [
         (table, text)
         for table, texts in stored_rows().items()
