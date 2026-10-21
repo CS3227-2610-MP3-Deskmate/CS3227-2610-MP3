@@ -953,7 +953,7 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
     assert untrusted == f"{TITLE}\n\n{DESCRIPTION}"
 
 
-@pytest.mark.ac("RQ-5.1", "RQ-5.4", "RQ-5.6")
+@pytest.mark.ac("RQ-5.1", "RQ-5.3", "RQ-5.6")
 @pytest.mark.parametrize(
     "encoded",
     [
