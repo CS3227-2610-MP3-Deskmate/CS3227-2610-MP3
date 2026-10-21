@@ -746,9 +746,7 @@ def test_find_a_fix_gateway_error_and_admission_refusal_are_safe_form_responses(
 
 
 @pytest.mark.ac("RQ-5.4", "RQ-5.5", "RQ-5.6")
-@pytest.mark.parametrize(
-    "table", [Session._meta.db_table, User._meta.db_table, Article._meta.db_table]
-)
+@pytest.mark.parametrize("table", [Session._meta.db_table, User._meta.db_table])
 def test_find_a_fix_database_failure_before_ai_is_generic_500(
     requester, provider, table, written_output
 ):
@@ -786,6 +784,73 @@ def test_find_a_fix_database_failure_before_ai_is_generic_500(
     assert snapshot() == before
     assert provider.requests == [] and attempts() == 0 and events() == []
     assert not any(value in written_output.text() for value in (TITLE, DESCRIPTION))
+
+
+@pytest.mark.ac("RQ-5.2", "RQ-5.3", "RQ-5.4")
+@pytest.mark.parametrize("outcome", ["refused", "error", "over-cap"])
+def test_find_a_fix_reads_no_article_before_an_accepted_call(
+    requester, provider, outcome
+):
+    article_reads = []
+
+    def record(execute, sql, params, many, context):
+        if Article._meta.db_table in sql and sql.lstrip().upper().startswith("SELECT"):
+            article_reads.append(sql)
+        return execute(sql, params, many, context)
+
+    if outcome == "refused":
+        for _ in range(10):
+            assert check_and_count(requester.u) is None
+    elif outcome == "error":
+        provider.error = TimeoutError("synthetic")
+    data = {"Title": "T", "Description": "x" * 4001} if outcome == "over-cap" else VALID
+    reply(provider, ["printer"])
+    token = auth.csrf_token(requester.b, auth.REQUESTER)
+    with connection.execute_wrapper(record):
+        response = send(requester, token, data=data)
+    assert response.status_code == 200
+    assert article_reads == []
+    assert attempts() == 1 and provider.requests == []
+
+
+@pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.6")
+def test_find_a_fix_article_failure_after_ok_is_generic_500(requester, provider):
+    requester.b.raise_request_exception = False
+    reads = []
+
+    def fail(execute, sql, params, many, context):
+        if Article._meta.db_table in sql and sql.lstrip().upper().startswith("SELECT"):
+            reads.append(sql)
+            raise DatabaseError("Synthetic private article read failure")
+        return execute(sql, params, many, context)
+
+    token = auth.csrf_token(requester.b, auth.REQUESTER)
+    reply(provider, ["printer"])
+    before = snapshot()
+    with connection.execute_wrapper(fail):
+        response = send(requester, token)
+    auth.assert_server_error(
+        response,
+        {
+            "private read failure": "Synthetic private article read failure",
+            "own title": requester.own.title,
+            "draft title": TITLE,
+            "draft body": DESCRIPTION,
+        },
+    )
+    security(response)
+    body = response.content.decode()
+    assert all(
+        value not in body
+        for value in (TITLE, DESCRIPTION, BUTTON, SUBMIT, HEADING, requester.own.title)
+    )
+    assert len(reads) == 1 and "Location" not in response
+    ignorable = (ATTEMPTS, AICallAuditEvent._meta.db_table)
+    assert {k: v for k, v in snapshot().items() if k not in ignorable} == {
+        k: v for k, v in before.items() if k not in ignorable
+    }
+    assert provider.requests != [] and attempts() == 1
+    assert events() == recorded(requester.u, "success", FEATURE)
 
 
 @pytest.mark.ac("RQ-5.5")
