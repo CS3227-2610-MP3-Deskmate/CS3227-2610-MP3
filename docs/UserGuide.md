@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, write and edit its knowledge-base articles, and reset Requester passwords.
+Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, write and edit its knowledge-base articles, create Requester accounts and reset Requester passwords.
 
 Its home page shows the heading **Deskmate**, this text and a **Sign in** link:
 
@@ -56,7 +56,7 @@ After signing in, you land on your role's page:
 - a Requester on `/requester/`, headed **Requester**;
 - a Support Officer on `/support/`, headed **Support Officer**.
 
-Both role pages show the same line directly below the heading, as do their ticket, knowledge-base and Requester-password-reset pages, including validation errors and results:
+Both role pages show the same line directly below the heading, as do their ticket, knowledge-base, Requester-password-reset and Requester-account-creation pages, including validation errors and results:
 
 > Workspace: *code*
 
@@ -69,6 +69,30 @@ Press **Sign out** to sign out and go back to the sign-in page.
 While signed in, `/sign-in/` takes you to your role's page. While signed out, a role's page takes you to the sign-in page.
 
 You are signed out 8 hours after signing in, however active you are. Closing your browser may also sign you out, but not if it reopens your previous tabs, so press **Sign out** on a shared computer.
+
+## Creating a Requester account
+
+As a Support Officer, choose **Create Requester account** on your role's page. The form shows:
+
+> Create one Requester account in this workspace.
+
+Press **Create account**. On success, **Requester account created** shows a table with **Username** and **Password** columns and this message:
+
+> Copy this password now. It will not be shown again.
+
+The new account gets the next numbered username, starting with `requester3-`*code*, and preserves your workspace's code. The workspace can hold 20 Requesters in total, including its initial two. The new Requester can sign in with the displayed credentials; you stay signed in.
+
+Choose **Support Officer** to return to your role's page. Reopening the form shows no credentials. Submitting again creates another account when permitted. If the response fails or is lost after creation, the account may already exist and its password cannot be recovered; another submission may create another account.
+
+At the workspace's Requester limit, the form shows:
+
+> This workspace already has 20 Requester accounts.
+
+Otherwise, if its stored accounts do not identify a canonical workspace, it shows:
+
+> Requester accounts cannot be created for this workspace.
+
+These rejections create no account. See [ACC-5](../workflow/specs/product/accounts.md#acc-5-create-a-requester-in-the-current-workspace) for the complete rules.
 
 ## Resetting a Requester's password
 
@@ -156,7 +180,7 @@ If you submit a form that has expired, it says:
 
 ## Too many attempts
 
-After too many sign-in attempts, workspace creations or password resets in a short time, from your internet address or from everyone, a page headed **Too many attempts** shows one line instead. If you pressed **Sign in**, it says:
+After too many sign-in attempts, workspace or Requester account creations, or password resets in a short time, from your internet address or from everyone, a page headed **Too many attempts** shows one line instead. If you pressed **Sign in**, it says:
 
 > Too many sign-in attempts. Wait a few minutes, then try again.
 
@@ -164,8 +188,14 @@ If you pressed **Create demo workspace**, it says:
 
 > Too many demo workspaces have been created. Wait a few minutes, then try again.
 
+If you pressed **Create account**, it says:
+
+> Too many account creation attempts. Wait a few minutes, then try again.
+
 If you pressed **Reset password**, it says:
 
 > Too many password resets. Wait a few minutes, then try again.
+
+Demo workspace and Requester account creations share one allowance: 3 attempts from your address group or 5 from everyone in the preceding 10 minutes. Rejections for the workspace quota or invalid membership count toward it. Sign-in and reset allowances are separate; see [ACC-3](../workflow/specs/product/accounts.md#acc-3-rate-limit-signing-in-and-creating-demo-workspaces) and [ACC-5](../workflow/specs/product/accounts.md#acc-5-create-a-requester-in-the-current-workspace) for the complete rules.
 
 If you are already signed in, you stay signed in, and your role's page and **Sign out** work as usual.
