@@ -21,18 +21,25 @@ ROUTES = (LIST, MISSING)
 MAX_ID = 9223372036854775807
 
 
-DEVELOPER_BLOCKS = re.compile(
-    r"<template\b.*?</template>|<script\b.*?</script>", re.DOTALL | re.IGNORECASE
+DEVELOPER_TEMPLATE = (
+    '<template id="key-sentences-pending"><p>Highlighting key sentences...</p>'
+    "</template>"
 )
 
 
 def without_developer_blocks(html):
-    """Return `html` without the page's own pending template and script.
+    """Return `html` without the detail page's own fixed pending blocks.
 
-    Ticket text must not create markup, and these two blocks are the only
-    developer-written ones on the detail page (RQ-4.7).
+    Ticket text must not create markup. Exactly these two developer-written
+    blocks are allowed, so any other script or template still fails the checks
+    that call this helper (RQ-4.7).
     """
-    return DEVELOPER_BLOCKS.sub("", html)
+    if DEVELOPER_TEMPLATE not in html:
+        return html
+    assert html.count("<script>") == 1 and "<script src" not in html
+    start = html.index("<script>")
+    end = html.index("</script>", start) + len("</script>")
+    return html.replace(html[start:end], "", 1).replace(DEVELOPER_TEMPLATE, "", 1)
 
 
 @pytest.fixture
