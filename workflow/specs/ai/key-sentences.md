@@ -12,7 +12,7 @@ After the route's current stored Support Officer/workspace authorization and tic
 | `feature` | Developers | Exactly `key_sentences` |
 | `instructions` | Developers | The fixed text below, with no trailing line break |
 | `schema` | Developers | The fixed bounded schema below |
-| `text` | The ticket's Requester | The entire saved description, unchanged |
+| `text` | The ticket's Requester, or developers for a demo workspace's [sample tickets](../product/accounts.md#acc-2-create-a-demo-workspace) | The entire saved description, unchanged |
 
 The title, resolution reply, articles, identities, workspace values and request fields are not AI input. The feature does not clean, truncate or split the description. The gateway's [input guard](llm-gateway.md#input-guard) applies unchanged, including its length check before removal: a description over 4,000 code points gets its existing `error` result without a provider request if admitted, and an admission refusal still takes precedence. Existing admission and audit behavior, provider transport, model and limits remain the gateway's responsibility.
 
