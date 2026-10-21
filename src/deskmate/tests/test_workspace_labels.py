@@ -72,6 +72,29 @@ def test_workspace_label_every_member_uses_same_code_without_writes(trio, index)
     assert stored_rows() == before
 
 
+@pytest.mark.parametrize("count", [3, 19, 20, 21])
+@pytest.mark.parametrize("index", [0, 2])
+def test_workspace_label_contiguous_requester_extension_preserves_code_through_20(
+    trio, make_account, count, index
+):
+    browser = signed_browser(trio[index])
+    for number in range(3, count + 1):
+        make_account(f"requester{number}-{CODE}", auth.PASSWORD, auth.REQUESTER)
+    before = stored_rows()
+    assert_workspace(
+        browser.get(auth.ROLE_PAGES[trio[index].role]),
+        CODE if count <= 20 else "unavailable",
+    )
+    assert stored_rows() == before
+
+
+@pytest.mark.parametrize("number", ["0", "02", "3", "-2"])
+def test_workspace_label_noncanonical_requester_number_is_unavailable(trio, number):
+    browser = signed_browser(trio[0])
+    User.objects.filter(pk=trio[1].pk).update(username=f"requester{number}-{CODE}")
+    assert_workspace(browser.get("/requester/"), "unavailable")
+
+
 def test_workspace_label_all_content_routes_and_validation(
     trio, transactional_db, provider
 ):
