@@ -20,9 +20,22 @@ Press **Create demo workspace**. A new workspace is created, and a page headed *
 
 The table's **Username**, **Role** and **Password** columns list the workspace's two Requesters, `requester1-`*code* and `requester2-`*code*, and its Support Officer, `support1-`*code*, where *code* is the workspace's code from the first line.
 
+The new workspace also starts with two sample articles and three sample tickets, which you see after signing in. Both roles' **Knowledge base** lists show, earliest first:
+
+- **Fix a printer that will not print**
+- **Connect to the office Wi-Fi**
+
+Both roles' **Tickets** lists show, earliest first, these tickets, whose pages show their status:
+
+- **Printer will not print**: **Closed**, with the saved answer under **Reply**
+- **Wi-Fi keeps disconnecting**: **Open**
+- **Need a spreadsheet app**: **Open**
+
+From then on, they are ordinary articles and tickets of that workspace, and the rest of this guide applies to them as to any other.
+
 Creating a workspace signs no one in. Press **Sign in** to go to the sign-in page.
 
-Pressing **Create demo workspace** again, or reloading the page and resending the form, creates another workspace, with new usernames and passwords.
+Pressing **Create demo workspace** again, or reloading the page and resending the form, creates another workspace, with new usernames and passwords and its own copies of the sample articles and tickets.
 
 ## Signing in
 
