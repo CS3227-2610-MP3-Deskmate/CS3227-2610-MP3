@@ -2,7 +2,7 @@ Implement [ACC-5.1–ACC-5.7 and ACC-1.2](../specs/product/accounts.md) within t
 
 Budget: estimated 250–345 changed source lines, with a hard maximum of 400 against `main`; reuse existing records, dependencies, settings, middleware and `Kind.CREATION`.
 
-- [ ] implementer: Own `src/deskmate/accounts/{membership,creations,views}.py`, `src/deskmate/accounts/templatetags/workspace_labels.py`, `src/deskmate/urls.py`, and `src/deskmate/accounts/templates/accounts/{create_requester,role_page}.html`.
+- [x] implementer: Own `src/deskmate/accounts/{membership,creations,views}.py`, `src/deskmate/accounts/templatetags/workspace_labels.py`, `src/deskmate/urls.py`, and `src/deskmate/accounts/templates/accounts/{create_requester,role_page}.html`.
   - Extract one canonical membership resolver shared by the workspace-label tag and creation; retain stored-workspace access snapshots and propagate database failures.
   - Serialize creation by locking the existing Workspace row inside the insertion transaction; recheck the Requester count and membership together, applying the fixed quota before canonical-membership rejection and generating nothing for either rejection.
   - Reuse `demo.random_password`, Django's salted hasher and the existing database-error sanitization pattern; insert only the next numbered account, never retry a collision, and commit before rendering the one-time credentials.
