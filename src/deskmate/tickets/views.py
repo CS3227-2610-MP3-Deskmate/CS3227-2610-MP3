@@ -138,18 +138,38 @@ def _new_ticket_page(request, form, suggestions=None, message=None):
     )
 
 
+# How many articles one keyset page reads, so a large workspace is never
+# materialised in one query while matching stops as soon as three match.
+_ARTICLE_PAGE = 100
+
+
 def _matching_articles(workspace_id, phrases):
-    """Return the earliest three workspace articles matching a phrase (RQ-5.3)."""
+    """Return the earliest three workspace articles matching a phrase (RQ-5.3).
+
+    Articles are read in ascending identity, one page at a time, and the read
+    stops as soon as three match. A phrase list that folds to nothing matches
+    nothing and reads no article.
+    """
     folded = [phrase.casefold() for phrase in phrases]
     folded = [phrase for phrase in folded if phrase]
+    if not folded:
+        return []
     matches = []
-    articles = Article.objects.filter(workspace_id=workspace_id).order_by("pk")
-    for article in articles.only("pk", "title", "body"):
-        title, body = article.title.casefold(), article.body.casefold()
-        if any(phrase in title or phrase in body for phrase in folded):
-            matches.append(article)
-            if len(matches) == 3:
-                break
+    last_pk = None
+    while len(matches) < 3:
+        page = Article.objects.filter(workspace_id=workspace_id)
+        if last_pk is not None:
+            page = page.filter(pk__gt=last_pk)
+        articles = list(page.order_by("pk").only("pk", "title", "body")[:_ARTICLE_PAGE])
+        if not articles:
+            break
+        for article in articles:
+            title, body = article.title.casefold(), article.body.casefold()
+            if any(phrase in title or phrase in body for phrase in folded):
+                matches.append(article)
+                if len(matches) == 3:
+                    break
+        last_pk = articles[-1].pk
     return matches
 
 
