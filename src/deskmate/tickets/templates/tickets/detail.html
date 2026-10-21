@@ -13,9 +13,25 @@
   {% if can_resolve_ticket %}
     <form method="post" action="{% url 'support-ticket-key-sentences' ticket.pk %}">
       {% csrf_token %}
-      <button type="submit">Highlight key sentences</button>
+      <button type="submit" data-pending-caption="Highlighting..." data-pending-message="Highlighting key sentences...">Highlight key sentences</button>
     </form>
   {% endif %}
   {% if key_sentence_message %}<p>{{ key_sentence_message }}</p>{% endif %}
   <p><a href="{% url ticket_list_route %}">Tickets</a></p>
+  {% if can_resolve_ticket %}
+    <script>
+      (function () {
+        var form = document.querySelector("form[action$='/key-sentences/']");
+        if (!form) { return; }
+        var button = form.querySelector("button[type='submit']");
+        form.addEventListener("submit", function () {
+          var message = document.createElement("p");
+          message.textContent = button.getAttribute("data-pending-message");
+          form.insertAdjacentElement("afterend", message);
+          button.textContent = button.getAttribute("data-pending-caption");
+          button.disabled = true;
+        });
+      })();
+    </script>
+  {% endif %}
 {% endblock %}
