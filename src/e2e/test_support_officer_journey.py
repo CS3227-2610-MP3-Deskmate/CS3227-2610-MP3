@@ -82,7 +82,9 @@ def highlight_and_reopen(officer, requester, ticket_path, requester_path, provid
     calls = len(provider.requests)
     saved = snapshot()
     ticket = highlighting.result(officer.get(ticket_path, secure=True), DESCRIPTION)
-    requester_before = Page(requester.get(requester_path, secure=True))
+    requester_response = requester.get(requester_path, secure=True)
+    assert requester_response.status_code == 200
+    requester_before = Page(requester_response)
     assert len(provider.requests) == attempts() == calls
     form = ticket.form_with_button(highlighting.BUTTON)
     assert form.method == "post" and form.path == f"{ticket_path}key-sentences/"
@@ -109,6 +111,7 @@ def highlight_and_reopen(officer, requester, ticket_path, requester_path, provid
     reopened = highlighting.result(officer.get(ticket_path, secure=True), DESCRIPTION)
     assert reopened.text == ticket.text and reopened.links == ticket.links
     requester_response = requester.get(requester_path, secure=True)
+    assert requester_response.status_code == 200
     requester_after = Page(requester_response)
     assert requester_after.text == requester_before.text
     assert requester_after.headings == requester_before.headings
