@@ -6,10 +6,12 @@ new route without an access decision fails here.
 """
 
 import re
+from unittest.mock import Mock
 
 import pytest
 from django.urls import get_resolver
 
+from deskmate import llm_gateway
 from deskmate.accounts.models import Workspace
 from deskmate.knowledge.models import Article
 from deskmate.tests.signing_in import (
@@ -17,16 +19,17 @@ from deskmate.tests.signing_in import (
     REQUESTER,
     SUPPORT_OFFICER,
     assert_redirects,
+    csrf_token,
     new_browser,
+    send,
     sign_in,
     sign_in_as,
 )
 from deskmate.tickets.models import Ticket
 
-pytestmark = pytest.mark.django_db
-
 SIGN_IN = "/sign-in/"
 ROLE_PAGES = {REQUESTER: "/requester/", SUPPORT_OFFICER: "/support/"}
+KEY_SENTENCES = "/support/tickets/<id>/key-sentences/"
 # The deliberate alias that gives PLT-3.3's 404 (PLT-1.9).
 NO_SLASH = "/health/llm"
 
@@ -47,6 +50,7 @@ ACCESS = {
     "/support/tickets/": SUPPORT_OFFICER,
     "/support/tickets/<id>/": SUPPORT_OFFICER,
     "/support/tickets/<id>/resolve/": SUPPORT_OFFICER,
+    KEY_SENTENCES: SUPPORT_OFFICER,
 }
 # Routes that are not about a role's records: their answer is the same for
 # every visitor, and the route's own criteria cover it.
@@ -70,6 +74,14 @@ PUBLIC_ANSWERS = {
     "/demo-workspace/": {None: 405, REQUESTER: 405, SUPPORT_OFFICER: 405},
 }
 NAMED_GROUP = re.compile(r"\(\?P<[^>]+>.+?\)")
+
+
+@pytest.fixture
+def gateway_call(monkeypatch):
+    """Replace the gateway so authorization tests never contact a provider."""
+    call = Mock(return_value={"status": "ok", "output": {"sentences": []}})
+    monkeypatch.setattr(llm_gateway, "call", call)
+    return call
 
 
 def pattern_route(pattern):
@@ -110,6 +122,14 @@ def concrete(path, ticket, article):
     return path.replace("<id>", str(article.pk))
 
 
+def request_route(browser, route, ticket, article, visitor):
+    """Use a route's allowed method, with valid CSRF and Origin for POST."""
+    path = concrete(route, ticket, article)
+    if route == KEY_SENTENCES:
+        return send(browser, "POST", path, csrf_token(browser, visitor), secure=True)
+    return browser.get(path, secure=True)
+
+
 @pytest.mark.ac("ACC-1.5")
 def test_every_registered_route_has_an_access_decision():
     routes = set(registered_routes())
@@ -129,8 +149,12 @@ def test_every_registered_route_has_an_access_decision():
     "KB-1.6",
     "KB-2.4",
     "ACC-4.5",
+    "RQ-4.5",
 )
-def test_a_visitor_without_the_routes_role_is_redirected_or_refused(make_account):
+@pytest.mark.django_db
+def test_a_visitor_without_the_routes_role_is_redirected_or_refused(
+    make_account, gateway_call
+):
     requester_browser, owner = sign_in_as(make_account, REQUESTER)
     officer_browser, _ = sign_in_as(make_account, SUPPORT_OFFICER)
     ticket, article = records(owner.workspace)
@@ -142,7 +166,20 @@ def test_a_visitor_without_the_routes_role_is_redirected_or_refused(make_account
             (REQUESTER, requester_browser),
             (SUPPORT_OFFICER, officer_browser),
         ):
-            response = browser.get(concrete(route, ticket, article), secure=True)
+            gateway_call.reset_mock()
+            if route == KEY_SENTENCES:
+                for method in ("GET", "HEAD"):
+                    response = send(
+                        browser, method, concrete(route, ticket, article), secure=True
+                    )
+                    assert response.status_code == 405, (route, visitor, method)
+                    assert response.content == b""
+                    gateway_call.assert_not_called()
+            response = request_route(browser, route, ticket, article, visitor)
+            if route == KEY_SENTENCES and visitor == SUPPORT_OFFICER:
+                gateway_call.assert_called_once()
+            else:
+                gateway_call.assert_not_called()
             if visitor is None:
                 if response.status_code != 302 or response["Location"] != SIGN_IN:
                     mismatches.append((route, visitor, "302 to /sign-in/", response))
@@ -157,6 +194,7 @@ def test_a_visitor_without_the_routes_role_is_redirected_or_refused(make_account
 
 
 @pytest.mark.ac("ACC-1.2", "ACC-1.3", "ACC-1.4", "ACC-1.5", "PLT-1.9")
+@pytest.mark.django_db
 def test_every_public_route_answers_each_visitor_the_same_way(make_account):
     requester_browser, _ = sign_in_as(make_account, REQUESTER)
     officer_browser, _ = sign_in_as(make_account, SUPPORT_OFFICER)
@@ -178,8 +216,9 @@ def test_every_public_route_answers_each_visitor_the_same_way(make_account):
     assert not mismatches, f"Route, visitor, expected, actual: {mismatches}"
 
 
-@pytest.mark.ac("RQ-1.7", "RQ-2.4", "RQ-3.5", "KB-1.7", "KB-2.3")
-def test_each_role_cannot_reach_another_workspaces_records(make_account):
+@pytest.mark.ac("RQ-1.7", "RQ-2.4", "RQ-3.5", "KB-1.7", "KB-2.3", "RQ-4.5")
+@pytest.mark.django_db
+def test_each_role_cannot_reach_another_workspaces_records(make_account, gateway_call):
     _, owner = sign_in_as(make_account, REQUESTER)
     officer_browser, officer = sign_in_as(make_account, SUPPORT_OFFICER)
     ticket, article = records(owner.workspace)
@@ -202,25 +241,33 @@ def test_each_role_cannot_reach_another_workspaces_records(make_account):
         ROLE_PAGES[SUPPORT_OFFICER],
     )
 
-    # The owner's own officer can open both routes, so the 404s below are
+    # The owner's own officer can reach these routes, so the 404s below are
     # about the workspace and not about a missing route or record.
-    for path in (
-        f"/support/tickets/{ticket.pk}/",
-        f"/support/articles/{article.pk}/edit/",
+    for route in (
+        "/support/tickets/<id>/",
+        "/support/articles/<id>/edit/",
+        KEY_SENTENCES,
     ):
-        assert officer_browser.get(path, secure=True).status_code == 200, path
+        response = request_route(
+            officer_browser, route, ticket, article, SUPPORT_OFFICER
+        )
+        assert response.status_code == 200, route
+    gateway_call.assert_called_once()
+    gateway_call.reset_mock()
     assert officer.workspace_id == owner.workspace_id
 
     outside = (
-        (officer_outside, f"/support/tickets/{ticket.pk}/"),
-        (officer_outside, f"/support/tickets/{ticket.pk}/resolve/"),
-        (officer_outside, f"/support/articles/{article.pk}/edit/"),
-        (requester_browser, f"/requester/tickets/{ticket.pk}/"),
-        (requester_browser, f"/requester/articles/{article.pk}/"),
+        (officer_outside, "/support/tickets/<id>/"),
+        (officer_outside, "/support/tickets/<id>/resolve/"),
+        (officer_outside, KEY_SENTENCES),
+        (officer_outside, "/support/articles/<id>/edit/"),
+        (requester_browser, "/requester/tickets/<id>/"),
+        (requester_browser, "/requester/articles/<id>/"),
     )
-    for browser, path in outside:
-        response = browser.get(path, secure=True)
-        assert response.status_code == 404, (path, response.status_code)
+    for browser, route in outside:
+        response = request_route(browser, route, ticket, article, ACCESS[route])
+        assert response.status_code == 404, (route, response.status_code)
+        gateway_call.assert_not_called()
         assert b"Workspace ticket" not in response.content
         assert b"Workspace article" not in response.content
         assert b"Ticket body" not in response.content
