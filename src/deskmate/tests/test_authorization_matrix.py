@@ -43,6 +43,7 @@ ACCESS = {
     "/requester/tickets/new/": REQUESTER,
     "/requester/tickets/<id>/": REQUESTER,
     "/support/": SUPPORT_OFFICER,
+    "/support/create-requester/": SUPPORT_OFFICER,
     "/support/reset-requester-password/": SUPPORT_OFFICER,
     "/support/articles/": SUPPORT_OFFICER,
     "/support/articles/new/": SUPPORT_OFFICER,
@@ -130,7 +131,7 @@ def request_route(browser, route, ticket, article, visitor):
     return browser.get(path, secure=True)
 
 
-@pytest.mark.ac("ACC-1.5")
+@pytest.mark.ac("ACC-1.5", "ACC-5.4")
 def test_every_registered_route_has_an_access_decision():
     routes = set(registered_routes())
     decided = set(ACCESS) | PUBLIC | {NO_SLASH}
@@ -149,6 +150,7 @@ def test_every_registered_route_has_an_access_decision():
     "KB-1.6",
     "KB-2.4",
     "ACC-4.5",
+    "ACC-5.4",
     "RQ-4.5",
 )
 @pytest.mark.django_db

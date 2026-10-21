@@ -1,0 +1,5 @@
+{% extends "deskmate/base.html" %}
+{% load workspace_labels %}
+{% block workspace %}
+  <p>Workspace: {% workspace_label %}</p>
+{% endblock %}

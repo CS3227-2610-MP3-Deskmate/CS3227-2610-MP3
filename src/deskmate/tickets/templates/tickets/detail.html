@@ -1,4 +1,4 @@
-{% extends "deskmate/base.html" %}
+{% extends "deskmate/authorized.html" %}
 {% block content %}
   <h2>{{ ticket.title }}</h2>
   <p>{% for fragment, selected in description_fragments %}{% if selected %}<mark>{% endif %}{{ fragment|linebreaksbr }}{% if selected %}</mark>{% endif %}{% empty %}{{ ticket.description|linebreaksbr }}{% endfor %}</p>

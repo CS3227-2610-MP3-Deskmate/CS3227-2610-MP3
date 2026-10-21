@@ -1,10 +1,11 @@
-{% extends "deskmate/base.html" %}
+{% extends "deskmate/authorized.html" %}
 {% block content %}
   <p>Signed in as {{ username }}.</p>
   {% if title == "Support Officer" %}
     <p><a href="{% url 'support-ticket-list' %}">Tickets</a></p>
     <p><a href="{% url 'article-list' %}">Knowledge base</a></p>
     <p><a href="{% url 'reset-requester-password' %}">Reset Requester password</a></p>
+    <p><a href="{% url 'create-requester' %}">Create Requester account</a></p>
   {% elif title == "Requester" %}
     <p><a href="{% url 'article-read-list' %}">Knowledge base</a></p>
     <p><a href="{% url 'ticket-list' %}">Tickets</a></p>

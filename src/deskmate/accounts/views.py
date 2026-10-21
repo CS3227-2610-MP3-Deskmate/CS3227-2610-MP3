@@ -1,4 +1,4 @@
-"""Account pages, demo creation, Requester resets and their limits (ACC-1–ACC-4)."""
+"""Account pages, creation, Requester resets and their limits (ACC-1–ACC-5)."""
 
 from functools import wraps
 
@@ -8,7 +8,7 @@ from django.shortcuts import redirect, render
 from django.views.decorators.debug import sensitive_post_parameters
 from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
-from deskmate.accounts import demo, limits, resets, sessions
+from deskmate.accounts import creations, demo, limits, resets, sessions
 from deskmate.accounts.forms import (
     RESET_REJECTED,
     ResetRequesterPasswordForm,
@@ -30,11 +30,13 @@ REFUSALS = {
 }
 
 
-def _refused_attempt(request, kind):
+def _refused_attempt(request, kind, message=None):
     """Count an allowed attempt, or return its fixed refusal page."""
     retry_after = limits.check_and_count(request, kind)
     if retry_after is not None:
-        response = message_page(request, "Too many attempts", REFUSALS[kind], 429)
+        response = message_page(
+            request, "Too many attempts", message or REFUSALS[kind], 429
+        )
         response["Retry-After"] = str(retry_after)
         return response
     return None
@@ -141,6 +143,34 @@ def reset_requester_password(request):
         form.add_error("username", RESET_REJECTED)
     context["form"] = form.redisplay()
     return render(request, "accounts/reset_requester_password.html", context)
+
+
+@require_http_methods(["GET", "POST"])
+@login_required(login_url="sign-in", redirect_field_name=None)
+def create_requester(request):
+    """Create within the stored officer access snapshot, showing credentials once."""
+    role, workspace_id = request.user.role, request.user.workspace_id
+    if role != Role.SUPPORT_OFFICER:
+        return forbidden(request, "This page is not for your role.")
+    context = {"title": "Create Requester account"}
+    if request.method == "POST":
+        response = _refused_attempt(
+            request,
+            Kind.CREATION,
+            "Too many account creation attempts. Wait a few minutes, then try again.",
+        )
+        if response is not None:
+            return response
+        result = creations.create_requester(workspace_id)
+        if result.error:
+            context["error"] = result.error
+        else:
+            context.update(
+                title="Requester account created",
+                username=result.username,
+                password=result.password,
+            )
+    return render(request, "accounts/create_requester.html", context)
 
 
 @require_GET
