@@ -8,13 +8,13 @@ contract; attack payloads stay percent-encoded until a test decodes them.
 import json
 from datetime import timedelta
 from html import escape as html_escape
-from html.parser import HTMLParser
 from types import SimpleNamespace
 from urllib.parse import unquote, urlencode, urljoin, urlsplit
 
 import pytest
 from django.contrib.sessions.models import Session
 from django.db import DatabaseError, connection
+from django.test.html import Element, parse_html
 
 from deskmate.accounts.models import User, Workspace
 from deskmate.knowledge.models import Article
@@ -82,109 +82,54 @@ SCHEMA = {
 }
 
 
-class Node:
-    """A small HTML element tree, enough to check result structure."""
-
-    def __init__(self, tag, attributes=None):
-        self.tag = tag
-        self.attributes = attributes or {}
-        self.children = []
-
-    def text(self):
-        return "".join(
-            child if isinstance(child, str) else child.text() for child in self.children
-        )
-
-    def walk(self):
-        yield self
-        for child in self.children:
-            if isinstance(child, Node):
-                yield from child.walk()
-
-
-VOID = frozenset(
-    {
-        "area",
-        "base",
-        "br",
-        "col",
-        "embed",
-        "hr",
-        "img",
-        "input",
-        "link",
-        "meta",
-        "param",
-        "source",
-        "track",
-        "wbr",
-    }
-)
 HIDDEN = frozenset({"script", "style", "template"})
 
 
-class Tree(HTMLParser):
-    """Build the page's element tree without depending on production markup."""
-
-    def __init__(self):
-        super().__init__(convert_charrefs=True)
-        self.root = Node("#document")
-        self.stack = [self.root]
-        self.hidden = 0
-
-    def handle_starttag(self, tag, attrs):
-        if tag in HIDDEN:
-            self.hidden += 1
-            return
-        if self.hidden:
-            return
-        node = Node(tag, dict(attrs))
-        self.stack[-1].children.append(node)
-        if tag not in VOID:
-            self.stack.append(node)
-
-    def handle_startendtag(self, tag, attrs):
-        if not self.hidden and tag not in HIDDEN:
-            self.stack[-1].children.append(Node(tag, dict(attrs)))
-
-    def handle_endtag(self, tag):
-        if tag in HIDDEN:
-            self.hidden = max(0, self.hidden - 1)
-            return
-        if self.hidden:
-            return
-        for index in range(len(self.stack) - 1, 0, -1):
-            if self.stack[index].tag == tag:
-                del self.stack[index:]
-                return
-
-    def handle_data(self, data):
-        if not self.hidden:
-            self.stack[-1].children.append(data)
-
-
 def tree_of(response):
-    tree = Tree()
-    tree.feed(response.content.decode())
-    tree.close()
-    return tree.root
+    """Return the response's HTML element tree."""
+    return parse_html(response.content.decode())
+
+
+def attribute(element, name):
+    """Return `element`'s first `name` attribute value, or None."""
+    return dict(element.attributes).get(name)
+
+
+def element_text(element):
+    """Return the text of `element` and its descendants."""
+    return "".join(
+        child if isinstance(child, str) else element_text(child)
+        for child in element.children
+    )
+
+
+def element_walk(element):
+    """Yield `element` and its descendant elements, skipping hidden content."""
+    if element.name in HIDDEN:
+        return
+    yield element
+    for child in element.children:
+        if isinstance(child, Element):
+            yield from element_walk(child)
 
 
 def buttons(form):
-    return [node for node in form.walk() if node.tag == "button"]
+    return [node for node in element_walk(form) if node.name == "button"]
 
 
 def suggestion_form(tree):
-    for form in (node for node in tree.walk() if node.tag == "form"):
-        captions = {normalise(button.text()) for button in buttons(form)}
+    for form in (node for node in element_walk(tree) if node.name == "form"):
+        captions = {normalise(element_text(button)) for button in buttons(form)}
         if {BUTTON, SUBMIT} <= captions:
             return form
     raise AssertionError("The suggestion form with both buttons is missing.")
 
 
 def button_path(form, caption, page_url):
-    button = next(node for node in buttons(form) if normalise(node.text()) == caption)
-    target = button.attributes.get("formaction") or form.attributes.get("action")
+    button = next(
+        node for node in buttons(form) if normalise(element_text(node)) == caption
+    )
+    target = attribute(button, "formaction") or attribute(form, "action")
     return urlsplit(urljoin(page_url, target or page_url)).path
 
 
@@ -201,7 +146,8 @@ def after_form(tree, form):
                 texts.append(node)
             else:
                 nodes.append(node)
-        if isinstance(node, Node):
+                texts.append(" ")
+        if isinstance(node, Element) and node.name not in HIDDEN:
             for child in node.children:
                 visit(child)
 
@@ -303,10 +249,10 @@ def result(
     form = page.form_with_button(SUBMIT)
     tree = tree_of(response)
     form_node = suggestion_form(tree)
-    assert (form_node.attributes.get("method") or "get").lower() == "post"
-    captions = [normalise(button.text()) for button in buttons(form_node)]
+    assert (attribute(form_node, "method") or "get").lower() == "post"
+    captions = [normalise(element_text(button)) for button in buttons(form_node)]
     assert len(captions) == 2 and set(captions) == {BUTTON, SUBMIT}
-    assert all(button.tag == "button" for button in buttons(form_node))
+    assert all(button.name == "button" for button in buttons(form_node))
     assert button_path(form_node, BUTTON, page.url) == SUGGEST
     assert button_path(form_node, SUBMIT, page.url) == NEW
     assert ("Tickets", f"{ORIGIN}{LIST}") in page.links
@@ -318,11 +264,12 @@ def result(
         assert article.body not in after
     if message:
         assert any(
-            node.tag == "p" and normalise(node.text()) == message for node in nodes
+            node.name == "p" and normalise(element_text(node)) == message
+            for node in nodes
         )
         assert normalise(after).startswith(message)
-        assert not any(node.tag == "h2" for node in nodes)
-        assert not any(node.tag in ("ul", "li") for node in nodes)
+        assert not any(node.name == "h2" for node in nodes)
+        assert not any(node.name in ("ul", "li") for node in nodes)
         assert not any(
             urlsplit(url).path.startswith("/requester/articles/")
             for _, url in page.links
@@ -334,21 +281,21 @@ def result(
         text = " ".join([HEADING, *(normalise(article.title) for article in expected)])
         assert normalise(after).startswith(text)
         assert page.heading_texts == ["New ticket", HEADING]
-        headings = [node for node in nodes if node.tag == "h2"]
-        assert len(headings) == 1 and normalise(headings[0].text()) == HEADING
+        headings = [node for node in nodes if node.name == "h2"]
+        assert len(headings) == 1 and normalise(element_text(headings[0])) == HEADING
         index = nodes.index(headings[0])
-        assert nodes[index + 1].tag == "ul"
-        lists = [node for node in nodes if node.tag == "ul"]
+        assert nodes[index + 1].name == "ul"
+        lists = [node for node in nodes if node.name == "ul"]
         assert lists == [nodes[index + 1]]
-        items = [child for child in lists[0].children if isinstance(child, Node)]
-        assert len(items) == len(expected) and all(item.tag == "li" for item in items)
+        items = [child for child in lists[0].children if isinstance(child, Element)]
+        assert len(items) == len(expected) and all(item.name == "li" for item in items)
         for item, article in zip(items, expected):
-            children = [child for child in item.children if isinstance(child, Node)]
-            assert [child.tag for child in children] == ["a"]
+            children = [child for child in item.children if isinstance(child, Element)]
+            assert [child.name for child in children] == ["a"]
             link = children[0]
-            assert not [child for child in link.children if isinstance(child, Node)]
-            assert normalise(item.text()) == normalise(article.title)
-            assert link.attributes["href"] == ARTICLE.format(article.pk)
+            assert not [child for child in link.children if isinstance(child, Element)]
+            assert normalise(element_text(item)) == normalise(article.title)
+            assert attribute(link, "href") == ARTICLE.format(article.pk)
         article_links = [
             (text, urlsplit(url).path)
             for text, url in page.links
@@ -376,10 +323,10 @@ def test_find_a_fix_new_form_has_both_buttons_routes_and_get_makes_no_ai_call(
     page = Page(response)
     tree = tree_of(response)
     form = suggestion_form(tree)
-    assert (form.attributes.get("method") or "get").lower() == "post"
-    captions = [normalise(button.text()) for button in buttons(form)]
+    assert (attribute(form, "method") or "get").lower() == "post"
+    captions = [normalise(element_text(button)) for button in buttons(form)]
     assert len(captions) == 2 and set(captions) == {BUTTON, SUBMIT}
-    assert all(button.tag == "button" for button in buttons(form))
+    assert all(button.name == "button" for button in buttons(form))
     assert button_path(form, BUTTON, page.url) == SUGGEST
     assert button_path(form, SUBMIT, page.url) == NEW
     assert not any(text == BUTTON for text, _ in page.links)
@@ -487,7 +434,7 @@ def test_find_a_fix_invalid_field_uses_rq_1_4_before_ai(
     assert (DESCRIPTION_ERROR in page.text) == (field == "Description")
     tree = tree_of(response)
     node = suggestion_form(tree)
-    captions = [normalise(button.text()) for button in buttons(node)]
+    captions = [normalise(element_text(button)) for button in buttons(node)]
     assert len(captions) == 2 and set(captions) == {BUTTON, SUBMIT}
     assert button_path(node, BUTTON, page.url) == SUGGEST
     assert button_path(node, SUBMIT, page.url) == NEW
