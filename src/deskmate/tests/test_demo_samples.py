@@ -8,13 +8,17 @@ as SAMPLE_ARTICLES and SAMPLE_TICKETS in demo_workspaces.py hold them.
 its new workspace and nowhere else.
 """
 
+from unittest.mock import Mock
+
 import pytest
 
 from deskmate.knowledge.models import Article
+from deskmate.tests import test_llm_gateway as llm
 from deskmate.tests.demo_workspaces import (
     SAMPLE_ARTICLES,
     SAMPLE_TICKETS,
     assert_created,
+    found_in,
     listed_items,
     press_create,
     stored_state,
@@ -27,6 +31,7 @@ from deskmate.tests.signing_in import (
     SUPPORT_OFFICER,
     assert_redirects,
     new_browser,
+    send,
     sign_in,
     sign_in_as,
 )
@@ -34,6 +39,8 @@ from deskmate.tests.test_support_tickets import page_at
 from deskmate.tickets.models import Ticket
 
 pytestmark = pytest.mark.usefixtures("fast_hashing")
+# The gateway tests' fake provider, which records every request sent to it.
+provider = llm.provider
 
 # Each role's knowledge-base and ticket lists (KB-1.1, KB-2.1, RQ-1.1, RQ-2.1):
 # the list's path, and a pattern of the paths its items link to whose group is
@@ -62,6 +69,16 @@ TICKET_TITLES = [sample.title for sample in SAMPLE_TICKETS]
 # sample article.
 REPLY = "Forget the office network on your laptop, then connect again."
 EDITED_BODY = "Choose the office network and enter the password on the board."
+# Every text of ACC-2.9's samples, by the sample's number and the field.
+SAMPLE_TEXTS = {
+    f"sample {number} {field}": text
+    for number, sample in enumerate((*SAMPLE_ARTICLES, *SAMPLE_TICKETS), 1)
+    for field, text in sample._asdict().items()
+    if isinstance(text, str) and text
+}
+# An id no article or ticket has, whose generic 404 a request for another
+# workspace's record must match (RQ-1.7, RQ-2.4, RQ-3.5, KB-1.7, KB-2.3).
+UNKNOWN = 999999999
 
 
 def create_workspace(browser):
@@ -120,6 +137,21 @@ def assert_lists(browser, role, articles, tickets):
 def titles_with(titles, ids):
     """Return each of `titles` with the id in `ids` at the same place."""
     return list(zip(titles, ids, strict=True))
+
+
+def sample_ids(browser, role):
+    """Return the ids of the sample articles and of the sample tickets that
+    `browser`, signed in with `role`, sees on its lists, after checking each
+    list shows exactly ACC-2.9's samples, in order."""
+    ids = []
+    for (path, pattern), titles in (
+        (ARTICLE_LISTS[role], ARTICLE_TITLES),
+        (TICKET_LISTS[role], TICKET_TITLES),
+    ):
+        items = listed_items(open_page(browser, path), pattern)
+        assert [title for title, _ in items] == titles, f"{path} lists other items."
+        ids.append([pk for _, pk in items])
+    return ids
 
 
 @pytest.mark.ac("ACC-2.9")
@@ -199,6 +231,57 @@ def test_demo_samples_each_workspace_has_own_copies_changed_independently(db, br
     edit = open_page(other, f"/support/articles/{first_articles[1]}/edit/")
     form = edit.form_with_button("Save article")
     assert form.field("Body").value == SAMPLE_ARTICLES[1].body
+
+
+@pytest.mark.ac(
+    "ACC-2.9", "ACC-2.2", "RQ-1.7", "RQ-2.4", "RQ-3.5", "RQ-4.5", "KB-1.7", "KB-2.3"
+)
+def test_demo_samples_other_workspaces_copies_by_id_get_generic_404(
+    db, browser, provider, monkeypatch
+):
+    first, _ = create_workspace(browser)
+    second, _ = create_workspace(new_browser())
+    # The first workspace's sample ids, as its own Support Officer's lists show.
+    articles, tickets = sample_ids(signed_in(first[2]), SUPPORT_OFFICER)
+    officer, requester = signed_in(second[2]), signed_in(second[0])
+    # The second workspace's Support Officer fills in the forms for its own
+    # copies of ticket 4 and article 2, each with a valid CSRF token, and sends
+    # them to the first workspace's copies instead.
+    own_articles, own_tickets = sample_ids(officer, SUPPORT_OFFICER)
+    detail = f"/support/tickets/{own_tickets[1]}/"
+    page = open_page(officer, f"{detail}resolve/")
+    reply = page.form_with_button("Resolve ticket").data({"Reply": REPLY})
+    highlight = open_page(officer, detail).form_with_button("Highlight key sentences")
+    page = open_page(officer, f"/support/articles/{own_articles[1]}/edit/")
+    save = page.form_with_button("Save article").data({"Body": EDITED_BODY})
+    # Each request: who sends it, its method and route, with {} for the id, its
+    # form data, and the first workspace's ids it is sent for.
+    ticket, article = "/support/tickets/{}/", "/support/articles/{}/edit/"
+    attacks = (
+        (officer, "GET", ticket, None, tickets),
+        (officer, "GET", f"{ticket}resolve/", None, tickets),
+        (officer, "POST", f"{ticket}resolve/", reply, tickets),
+        (officer, "POST", f"{ticket}key-sentences/", highlight.data(), tickets),
+        (officer, "GET", article, None, articles),
+        (officer, "POST", article, save, articles),
+        (requester, "GET", "/requester/tickets/{}/", None, tickets),
+        (requester, "GET", "/requester/articles/{}/", None, articles),
+    )
+    gateway = Mock(side_effect=AssertionError("A foreign ticket reached the gateway."))
+    monkeypatch.setattr("deskmate.tickets.views.llm_gateway.call", gateway)
+    before = stored_state()
+    for user, method, route, data, ids in attacks:
+        # The generic 404 of an id that does not exist, which each must match.
+        missing = send(user, method, route.format(UNKNOWN), data=data, secure=True)
+        for pk in ids:
+            response = send(user, method, route.format(pk), data=data, secure=True)
+            request = f"{method} {route.format(pk)}"
+            assert response.status_code == missing.status_code == 404, request
+            assert response.content == missing.content, request
+            assert not found_in(response.content.decode(), SAMPLE_TEXTS), request
+    assert stored_state() == before
+    gateway.assert_not_called()
+    assert provider.requests == [] and llm.attempts() == 0 and llm.events() == []
 
 
 @pytest.mark.ac("ACC-2.9")
