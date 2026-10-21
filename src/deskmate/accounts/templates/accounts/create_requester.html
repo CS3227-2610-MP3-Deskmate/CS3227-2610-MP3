@@ -1,0 +1,18 @@
+{% extends "deskmate/authorized.html" %}
+{% block content %}
+  {% if password %}
+    <p>Copy this password now. It will not be shown again.</p>
+    <table>
+      <tr><th scope="col">Username</th><th scope="col">Password</th></tr>
+      <tr><td>{{ username }}</td><td>{{ password }}</td></tr>
+    </table>
+  {% else %}
+    <p>Create one Requester account in this workspace.</p>
+    {% if error %}<p role="alert">{{ error }}</p>{% endif %}
+    <form method="post" action="{% url 'create-requester' %}">
+      {% csrf_token %}
+      <button type="submit">Create account</button>
+    </form>
+  {% endif %}
+  <p><a href="{% url 'support' %}">Support Officer</a></p>
+{% endblock %}
