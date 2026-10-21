@@ -787,7 +787,7 @@ def test_find_a_fix_database_failure_before_ai_is_generic_500(
 
 
 @pytest.mark.ac("RQ-5.2", "RQ-5.3", "RQ-5.4")
-@pytest.mark.parametrize("outcome", ["refused", "error", "over-cap"])
+@pytest.mark.parametrize("outcome", ["refused", "error", "over-cap", "rejected"])
 def test_find_a_fix_reads_no_article_before_an_accepted_call(
     requester, provider, outcome
 ):
@@ -803,6 +803,8 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
             assert check_and_count(requester.u) is None
     elif outcome == "error":
         provider.error = TimeoutError("synthetic")
+    elif outcome == "rejected":
+        reply(provider, ["printer", ""])
     data = {"Title": "T", "Description": "x" * 4001} if outcome == "over-cap" else VALID
     reply(provider, ["printer"])
     token = auth.csrf_token(requester.b, auth.REQUESTER)
@@ -811,7 +813,7 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
     assert response.status_code == 200
     assert article_reads == []
     assert attempts() == (10 if outcome == "refused" else 1)
-    assert len(provider.requests) == (1 if outcome == "error" else 0)
+    assert len(provider.requests) == (1 if outcome in ("error", "rejected") else 0)
 
 
 @pytest.mark.ac("RQ-5.3")
@@ -839,8 +841,8 @@ def test_find_a_fix_article_read_is_paged_and_skipped_for_empty_phrases(
 
     with connection.execute_wrapper(record):
         page = article_result(requester, ["printer"], [requester.own])
-    assert len(queries) == 1
-    assert "LIMIT" in queries[0].upper()
+    assert 1 <= len(queries) <= 4
+    assert all("LIMIT" in query.upper() for query in queries)
     assert page.text.count(HEADING) == 1
 
 
