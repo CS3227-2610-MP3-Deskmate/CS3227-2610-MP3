@@ -34,3 +34,11 @@ Cost: One session with eleven role runs (spec-writer twice, spec-critic, test-wr
 - One self-inflicted process error: I read a Product website success as the CI job and briefly reported a green build that was red. The CI job was then read directly.
 - The repository head moved twice during the session (PR #81 merged; a teammate opened #86). #24's branch merges cleanly into current `main`.
 - Untrusted content seen: issue text, agent handoffs and test attack payloads. They were treated as data.
+
+## Follow-up: the article-read Medium
+
+- **spec-writer** (`246260a`), `done`: `c91d68a` and `4dc1224` move every article read behind an accepted `ok` result and add the post-`ok` database-failure outcome. Scope and whitespace checks passed.
+- **implementer** (orchestrator fallback), `done`: `42e58f8` removes the pre-call article load; `01c30b8` replaces the normal QuerySet iteration, which materialised the whole workspace, with keyset pages of 100 that stop at three matches.
+- **test-writer** (orchestrator fallback), `done`: `bc5b5b4` pins the accepted-call boundary; `b72cc45`, `045c02f`, `a7ebc64` and `a022196` correct the test's own counts and a provider reply that was overwritten. CI at `a022196` passed 2,427 tests.
+- **reviewer** and **security-reviewer** (`8d74e8e`), `done`: the pre-admission Medium was closed; the reviewer's High on #82's script and the security reviewer's Medium on `.only()` row materialisation were both real and fixed.
+- The remaining honest gap: when fewer than three articles match, the paged read may still visit every saved article; the spec records this instead of claiming a bound.
