@@ -135,7 +135,7 @@ def request_route(browser, route, ticket, article, visitor):
     path = concrete(route, ticket, article)
     if route in GATEWAY_ROUTES:
         data = (
-            {"Title": "Printer", "Description": "It jams"}
+            {"title": "Printer", "description": "It jams"}
             if route == SUGGEST_ARTICLES
             else None
         )

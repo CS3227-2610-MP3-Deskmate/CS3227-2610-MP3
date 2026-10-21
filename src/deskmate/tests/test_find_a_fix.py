@@ -614,13 +614,13 @@ def test_find_a_fix_casefolded_substring_matches_title_or_body_independently(
 def test_find_a_fix_casefolded_title_and_body_are_separate_sources(requester):
     body_only = Article.objects.create(
         workspace=requester.u.workspace,
-        title="Unrelated",
+        title="Threading guide",
         body="Use the CLEAR button",
     )
     title_only = Article.objects.create(
         workspace=requester.u.workspace,
         title="RESET steps",
-        body="Unrelated",
+        body="Press the button twice",
     )
     article_result(
         requester,
@@ -690,13 +690,16 @@ def test_find_a_fix_matching_is_limited_to_current_stored_workspace(
     requester, provider, make_account
 ):
     _, account = auth.sign_in_as(make_account, auth.REQUESTER)
+    foreign = Workspace.objects.create()
+    User.objects.filter(pk=account.pk).update(workspace=foreign)
+    account.refresh_from_db()
     foreign_article = Article.objects.create(
-        workspace=account.workspace, title="Foreign printer", body="Foreign body"
+        workspace=foreign, title="Foreign printer", body="Foreign body"
     )
     page = article_result(requester, ["foreign printer"], [], EMPTY)
     assert foreign_article.title not in page.text
     assert foreign_article.body not in page.text
-    User.objects.filter(pk=requester.u.pk).update(workspace=account.workspace)
+    User.objects.filter(pk=requester.u.pk).update(workspace=foreign)
     reply(provider, ["foreign printer"])
     page = result(send(requester), [foreign_article])
     assert requester.own.title not in page.text
@@ -891,20 +894,23 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
     requester, provider, make_account
 ):
     _, account = auth.sign_in_as(make_account, auth.REQUESTER)
+    foreign_workspace = Workspace.objects.create()
+    User.objects.filter(pk=account.pk).update(workspace=foreign_workspace)
+    account.refresh_from_db()
     foreign = Article.objects.create(
-        workspace=account.workspace, title="Foreign printer", body="Foreign body"
+        workspace=foreign_workspace, title="Foreign printer", body="Foreign body"
     )
     own_ticket = Ticket.objects.create(
         workspace=requester.u.workspace, title="Own ticket", description="Own body"
     )
     foreign_ticket = Ticket.objects.create(
-        workspace=account.workspace, title="Foreign ticket", description="Foreign"
+        workspace=foreign_workspace, title="Foreign ticket", description="Foreign"
     )
-    requester.b.cookies["workspace"] = str(account.workspace_id)
+    requester.b.cookies["workspace"] = str(foreign_workspace.pk)
     requester.b.cookies["role"] = auth.SUPPORT_OFFICER
     extra = {
-        "workspace": account.workspace_id,
-        "workspace_id": account.workspace_id,
+        "workspace": foreign_workspace.pk,
+        "workspace_id": foreign_workspace.pk,
         "role": auth.SUPPORT_OFFICER,
         "id": foreign.pk,
         "article_id": foreign.pk,
@@ -917,8 +923,8 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
         data={**form_data(), **extra},
         query=extra,
         headers={
-            "Workspace": str(account.workspace_id),
-            "Workspace-Id": str(account.workspace_id),
+            "Workspace": str(foreign_workspace.pk),
+            "Workspace-Id": str(foreign_workspace.pk),
             "Role": auth.SUPPORT_OFFICER,
         },
     )
