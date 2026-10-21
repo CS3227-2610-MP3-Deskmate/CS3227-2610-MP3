@@ -968,7 +968,7 @@ def test_find_a_fix_adversarial_draft_and_reply_stay_data(requester, provider, e
     attack = unquote(encoded)
     reply(provider, [attack, "<b>unsafe</b>"])
     response = send(requester, data={"Title": "Printer", "Description": attack})
-    page = result(response, [], EMPTY)
+    page = result(response, [], EMPTY, title="Printer", description=attack)
     body = response.content.decode()
     assert attack not in body
     assert "unsafe" not in page.text
