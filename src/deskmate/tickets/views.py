@@ -1,16 +1,37 @@
-"""Workspace ticket submission, reading and resolution (RQ-1, RQ-2, RQ-3)."""
+"""Workspace ticket submission, reading, resolution and highlighting (RQ-1–4)."""
 
+import re
 from functools import wraps
 
 from django.contrib.auth.decorators import login_required
 from django.http import Http404
 from django.shortcuts import get_object_or_404, redirect, render
-from django.views.decorators.http import require_GET, require_http_methods
+from django.views.decorators.http import require_GET, require_http_methods, require_POST
 
+from deskmate import llm_gateway
 from deskmate.accounts.models import Role
 from deskmate.tickets.forms import ResolutionForm, TicketForm
 from deskmate.tickets.models import Ticket
 from deskmate.views import forbidden
+
+_KEY_SENTENCE_INSTRUCTIONS = (
+    "Extract up to three key sentences from the ticket description in "
+    "untrusted_text. Copy each selected sentence exactly, without rewriting, "
+    "trimming or adding characters. Each quotation must contain 1 to 1000 "
+    "Unicode code points. Return exactly one JSON object with only the field "
+    '"sentences", an array of the quoted strings. Return {"sentences": []} if '
+    "no suitable sentence is available. Return no explanation or markup."
+)
+_KEY_SENTENCE_SCHEMA = {
+    "type": "object",
+    "fields": {
+        "sentences": {
+            "type": "array",
+            "items": {"type": "string", "max_length": 1000},
+            "max_items": 3,
+        }
+    },
+}
 
 
 def _ticket_role(view):
@@ -98,6 +119,62 @@ def ticket_detail(request, ticket_id):
         request,
         "tickets/detail.html",
         {"title": "Ticket", "ticket": ticket, **_navigation(request.user.role)},
+    )
+
+
+def _description_fragments(text, quotations):
+    """Return source fragments and selection flags, or None for invalid quotes."""
+    if any(not quote or quote not in text for quote in quotations):
+        return None
+    if not quotations:
+        return []
+    pattern = "|".join(
+        re.escape(quote) for quote in sorted(set(quotations), key=len, reverse=True)
+    )
+    fragments = []
+    end = 0
+    for match in re.finditer(pattern, text):
+        fragments.append((text[end : match.start()], False))
+        fragments.append((text[match.start() : match.end()], True))
+        end = match.end()
+    fragments.append((text[end:], False))
+    return fragments
+
+
+@require_POST
+@_ticket_role
+def ticket_key_sentences(request, ticket_id):
+    """Highlight source quotations for one authorized ticket without saving them."""
+    ticket = get_object_or_404(
+        Ticket, pk=_ticket_id(ticket_id), workspace_id=request.user.workspace_id
+    )
+    result = llm_gateway.call(
+        request.user,
+        feature="key_sentences",
+        instructions=_KEY_SENTENCE_INSTRUCTIONS,
+        schema=_KEY_SENTENCE_SCHEMA,
+        text=ticket.description,
+    )
+    message = "Key sentences are unavailable. Try again later."
+    fragments = None
+    if result["status"] == "refused":
+        message = "AI limit reached. Try again later."
+    elif result["status"] == "ok":
+        fragments = _description_fragments(
+            ticket.description, result["output"]["sentences"]
+        )
+        if fragments is not None:
+            message = "" if fragments else "No key sentences found."
+    return render(
+        request,
+        "tickets/detail.html",
+        {
+            "title": "Ticket",
+            "ticket": ticket,
+            "description_fragments": fragments,
+            "key_sentence_message": message,
+            **_navigation(request.user.role),
+        },
     )
 
 
