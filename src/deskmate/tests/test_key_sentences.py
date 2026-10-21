@@ -25,6 +25,7 @@ from deskmate.tests import test_llm_probe as probe
 from deskmate.tests.demo_workspaces import stored_rows
 from deskmate.tests.pages import ORIGIN, Page, normalise
 from deskmate.tests.test_llm_gateway import KEYS, RULES, attempts, events, recorded
+from deskmate.tests.test_sessions import save_session_again
 from deskmate.tests.test_support_tickets import checked_send, security, snapshot
 from deskmate.tickets.models import Ticket
 
@@ -367,6 +368,9 @@ def test_key_sentences_saved_attacks_remain_escaped_source_data(
     "state", ["before", "expired", "past", "deleted", "role", "workspace"]
 )
 def test_key_sentences_current_stored_session_role_workspace(c, provider, clock, state):
+    if state in ("expired", "past"):
+        clock.set_elapsed(timedelta(hours=8) - timedelta(seconds=1))
+        save_session_again(c.b)
     if state in ("before", "expired", "past"):
         clock.set_elapsed(
             timedelta(hours=8, seconds={"before": -1, "expired": 0, "past": 1}[state])
