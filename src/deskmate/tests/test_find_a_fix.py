@@ -935,7 +935,11 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
     assert Ticket.objects.count() == 2
     assert Ticket.objects.get(pk=own_ticket.pk).title == "Own ticket"
     assert Ticket.objects.get(pk=foreign_ticket.pk).title == "Foreign ticket"
-    assert Article.objects.count() == 2
+    assert Article.objects.count() == 3
+    assert {article.workspace_id for article in Article.objects.all()} == {
+        requester.u.workspace_id,
+        foreign_workspace.pk,
+    }
     assert User.objects.get(pk=requester.u.pk).role == auth.REQUESTER
     body = probe.request_body(provider.requests[0][0])
     untrusted = json.loads(body["messages"][1]["content"])["untrusted_text"]
