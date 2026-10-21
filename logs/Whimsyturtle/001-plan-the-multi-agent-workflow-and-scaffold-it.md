@@ -2,6 +2,8 @@
 
 Slice: none · Tool: Claude Code (Claude Opus 5.5) · Date: 2026-10-12
 
+Cost: One orchestrated session, with no role-agent runs recorded; wall time, tokens and monetary cost were not measured.
+
 ## Requests
 
 - Propose a multi-agent, spec-driven workflow for this project, grounded in the lecture notes for weeks 6–8, the assignment brief and a one-pager plan (local reference files, not committed). It had to fix four MP2 problems: plans too long for humans to read, one big commit per feature, drift from creating many issues up front, and unclear issue granularity.

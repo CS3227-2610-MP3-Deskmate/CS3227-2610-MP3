@@ -2,6 +2,8 @@
 
 Slice: none · Tool: Claude Code (Claude Opus 5.5) · Date: 2026-10-12
 
+Cost: One session with no role-agent runs; wall time, tokens and monetary cost were not measured.
+
 ## Requests
 
 - Read the local reference files and the repository, and say what is next.

@@ -2,6 +2,8 @@
 
 Slice: none · Tool: Claude Code (Claude Opus 5.5) · Date: 2026-10-15
 
+Cost: One session; the log records no role-agent runs, and wall time, tokens and monetary cost were not measured.
+
 ## Requests
 
 - In MP2, agents built planned features as PRs of thousands of lines that couldn't be reviewed thoroughly. Check whether anything in this workflow keeps a slice small enough to review, and how to fix it if not.
