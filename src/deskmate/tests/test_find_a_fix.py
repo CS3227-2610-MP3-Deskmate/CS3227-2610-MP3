@@ -799,7 +799,7 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
         return execute(sql, params, many, context)
 
     if outcome == "refused":
-        for _ in range(9):
+        for _ in range(10):
             assert check_and_count(requester.u) is None
     elif outcome == "error":
         provider.error = TimeoutError("synthetic")
@@ -811,7 +811,7 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
     assert response.status_code == 200
     assert article_reads == []
     assert attempts() == (10 if outcome == "refused" else 1)
-    assert provider.requests == []
+    assert len(provider.requests) == (1 if outcome == "error" else 0)
 
 
 @pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.6")
