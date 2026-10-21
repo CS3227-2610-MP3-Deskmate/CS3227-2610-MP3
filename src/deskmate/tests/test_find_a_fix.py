@@ -970,7 +970,9 @@ def test_find_a_fix_adversarial_draft_and_reply_stay_data(requester, provider, e
     response = send(requester, data={"Title": "Printer", "Description": attack})
     page = result(response, [], EMPTY, title="Printer", description=attack)
     body = response.content.decode()
-    assert attack not in body
+    form = page.form_with_button(SUBMIT)
+    assert form.field("Title").value == "Printer"
+    assert form.field("Description").value == display("Description", attack)
     assert "unsafe" not in page.text
     assert "<b>" not in body and "<script" not in body
     assert not any(
