@@ -814,6 +814,36 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
     assert len(provider.requests) == (1 if outcome == "error" else 0)
 
 
+@pytest.mark.ac("RQ-5.3")
+def test_find_a_fix_article_read_is_paged_and_skipped_for_empty_phrases(
+    requester, provider
+):
+    for index in range(250):
+        Article.objects.create(
+            workspace=requester.u.workspace,
+            title=f"Unrelated {index}",
+            body="Nothing here",
+        )
+    queries = []
+
+    def record(execute, sql, params, many, context):
+        if Article._meta.db_table in sql and sql.lstrip().upper().startswith("SELECT"):
+            queries.append(sql)
+        return execute(sql, params, many, context)
+
+    reply(provider, [])
+    with connection.execute_wrapper(record):
+        page = article_result(requester, [], [], EMPTY)
+    assert queries == []
+    assert page.text.count(EMPTY) == 1
+
+    with connection.execute_wrapper(record):
+        page = article_result(requester, ["printer"], [requester.own])
+    assert len(queries) == 1
+    assert "LIMIT" in queries[0].upper()
+    assert page.text.count(HEADING) == 1
+
+
 @pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.6")
 def test_find_a_fix_article_failure_after_ok_is_generic_500(requester, provider):
     requester.b.raise_request_exception = False
