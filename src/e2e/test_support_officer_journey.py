@@ -1,11 +1,14 @@
 """The Support Officer's journey through the merged product, from demo workspace
 to sign-out, plus the workspace boundary around tickets and articles."""
 
+import json
+from unittest.mock import Mock
 from urllib.parse import urlsplit
 
 import pytest
 
 from deskmate.accounts.models import Workspace
+from deskmate.tests import test_key_sentences as highlighting
 from deskmate.tests.demo_workspaces import press_create
 from deskmate.tests.pages import ORIGIN, Page
 from deskmate.tests.signing_in import (
@@ -15,11 +18,16 @@ from deskmate.tests.signing_in import (
     assert_redirects,
     assert_role_page,
     assert_signed_out,
+    csrf_token,
     get_sign_in_page,
     new_browser,
+    send,
     sign_in,
     sign_in_as,
 )
+from deskmate.tests.test_llm_gateway import attempts, events, recorded
+from deskmate.tests.test_llm_probe import provider_body, request_body
+from deskmate.tests.test_support_tickets import snapshot
 
 pytestmark = pytest.mark.django_db
 SIGN_IN = "/sign-in/"
@@ -27,6 +35,7 @@ SUPPORT_PAGE = "/support/"
 TICKETS = "/support/tickets/"
 ARTICLES = "/support/articles/"
 RESET = "/support/reset-requester-password/"
+DESCRIPTION = "Line one\nLine two\nhttps://evil.example"
 
 
 def demo_accounts(browser):
@@ -68,23 +77,82 @@ def support_path(requester_path):
     return f"{TICKETS}{ticket_id}/"
 
 
+def highlight_and_reopen(officer, requester, ticket_path, requester_path, provider):
+    """Highlight saved source, then reopen both roles' unchanged ticket views."""
+    calls = len(provider.requests)
+    saved = snapshot()
+    ticket = highlighting.result(officer.get(ticket_path, secure=True), DESCRIPTION)
+    requester_before = Page(requester.get(requester_path, secure=True))
+    assert len(provider.requests) == attempts() == calls
+    form = ticket.form_with_button(highlighting.BUTTON)
+    assert form.method == "post" and form.path == f"{ticket_path}key-sentences/"
+    provider.body = provider_body(json.dumps({"sentences": ["Line two"]}))
+    response = form.submit(officer, button=highlighting.BUTTON, secure=True)
+    shown = highlighting.result(response, DESCRIPTION, ["Line two"])
+    assert (shown.title, shown.headings, shown.text, shown.links) == (
+        ticket.title,
+        ticket.headings,
+        ticket.text,
+        ticket.links,
+    )
+    assert not any("evil.example" in url for _, url in shown.links)
+    assert len(provider.requests) == attempts() == calls + 1
+    request, _ = provider.requests[-1]
+    assert json.loads(request_body(request)["messages"][1]["content"]) == {
+        "untrusted_text": DESCRIPTION
+    }
+    expected_events = recorded(
+        response.wsgi_request.user, "success", "key_sentences", times=calls + 1
+    )
+    assert events() == expected_events and snapshot() == saved
+
+    reopened = highlighting.result(officer.get(ticket_path, secure=True), DESCRIPTION)
+    assert reopened.text == ticket.text and reopened.links == ticket.links
+    requester_response = requester.get(requester_path, secure=True)
+    requester_after = Page(requester_response)
+    assert requester_after.text == requester_before.text
+    assert requester_after.headings == requester_before.headings
+    assert requester_after.links == requester_before.links
+    assert b"<mark>" not in requester_response.content
+    assert not any(
+        text in requester_after.text
+        for text in (
+            highlighting.BUTTON,
+            highlighting.EMPTY,
+            highlighting.ERROR,
+            highlighting.REFUSED,
+        )
+    )
+    assert not any(control.is_field() for control in requester_after.controls)
+    assert len(provider.requests) == attempts() == calls + 1
+    assert events() == expected_events and snapshot() == saved
+
+
 @pytest.mark.ac(
     "ACC-2.2",
     "ACC-1.1",
     "ACC-1.2",
     "ACC-4.1",
     "ACC-4.2",
+    "RQ-1.3",
     "RQ-2.1",
     "RQ-2.2",
     "RQ-2.3",
     "RQ-3.1",
     "RQ-3.2",
     "RQ-3.7",
+    "RQ-4.1",
+    "RQ-4.2",
+    "RQ-4.3",
+    "RQ-4.6",
     "KB-1.1",
     "KB-1.2",
     "KB-1.3",
 )
-def test_support_officer_journey_from_demo_workspace_to_sign_out():
+def test_support_officer_journey_from_demo_workspace_to_sign_out(
+    transactional_db,
+    provider,
+):
     creator = new_browser()
     accounts = demo_accounts(creator)
     officer_name, _, officer_password = next(
@@ -113,7 +181,7 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out():
     requester_path = submit_ticket(
         requester,
         "Printer on fire",
-        "Line one\nLine two\nhttps://evil.example",
+        DESCRIPTION,
     )
     ticket_path = support_path(requester_path)
 
@@ -129,6 +197,8 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out():
     assert ("Tickets", f"{ORIGIN}{TICKETS}") in ticket.links
     assert ("Resolve ticket", f"{ORIGIN}{ticket_path}resolve/") in ticket.links
     assert not any(control.is_field() for control in ticket.controls)
+
+    highlight_and_reopen(officer, requester, ticket_path, requester_path, provider)
 
     resolve_page = Page(officer.get(f"{ticket_path}resolve/", secure=True))
     assert resolve_page.title == "Resolve ticket"
@@ -150,6 +220,8 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out():
     assert "Reply" in closed.heading_texts
     assert "Restart the printer. Then check the paper tray." in closed.text
     assert not any("resolve" in url for _, url in closed.links)
+
+    highlight_and_reopen(officer, requester, ticket_path, requester_path, provider)
 
     article_list = Page(officer.get(ARTICLES, secure=True))
     assert article_list.title == "Knowledge base"
@@ -220,8 +292,12 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out():
     assert_signed_out(officer)
 
 
-@pytest.mark.ac("RQ-2.4", "RQ-3.5", "KB-1.7")
-def test_support_officer_cannot_reach_another_workspaces_records(make_account):
+@pytest.mark.ac("RQ-2.4", "RQ-3.5", "RQ-4.5", "KB-1.7")
+def test_support_officer_cannot_reach_another_workspaces_records(
+    make_account,
+    provider,
+    monkeypatch,
+):
     officer, _ = sign_in_as(make_account, SUPPORT_OFFICER)
     outsider_account = make_account("outsider", PASSWORD, SUPPORT_OFFICER)
     outsider_account.workspace = Workspace.objects.create()
@@ -251,3 +327,19 @@ def test_support_officer_cannot_reach_another_workspaces_records(make_account):
     assert response.status_code == 404
     assert b"Owner guide" not in response.content
     assert b"Private article body" not in response.content
+
+    gateway = Mock(side_effect=AssertionError("A foreign ticket reached the gateway."))
+    monkeypatch.setattr("deskmate.tickets.views.llm_gateway.call", gateway)
+    response = send(
+        outsider,
+        "POST",
+        f"{support_path(ticket_path)}key-sentences/",
+        csrf_token(outsider, SUPPORT_OFFICER),
+        secure=True,
+    )
+    assert response.status_code == 404
+    assert response.content == outsider.get("/no-such-route/", secure=True).content
+    assert b"Owner only" not in response.content
+    assert b"Private ticket body" not in response.content
+    gateway.assert_not_called()
+    assert provider.requests == [] and attempts() == 0 and events() == []

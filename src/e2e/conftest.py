@@ -14,3 +14,4 @@ from deskmate.tests.conftest import (  # noqa: F401
     make_account,
     written_output,
 )
+from deskmate.tests.test_llm_gateway import provider  # noqa: F401
