@@ -27,7 +27,10 @@
         if (!form || !pending) { return; }
         var button = form.querySelector("button[type='submit']");
         form.addEventListener("submit", function () {
-          form.insertAdjacentElement("afterend", pending.content.cloneNode(true));
+          form.parentNode.insertBefore(
+            pending.content.cloneNode(true),
+            form.nextSibling
+          );
           button.textContent = "Highlighting...";
           button.disabled = true;
         });
