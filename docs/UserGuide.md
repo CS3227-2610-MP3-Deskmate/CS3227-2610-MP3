@@ -119,7 +119,13 @@ A successful submission opens **Ticket**, showing **Closed** and the saved answe
 
 A closed ticket has no **Resolve ticket** link. Repeated submissions, including from an older open form, keep the first saved answer. There are no controls to edit the reply or reopen the ticket.
 
-See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer) and [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) for the complete rules.
+As a Support Officer, press **Highlight key sentences** on an **Open** or **Closed** ticket. Highlighting sends its description to SoC LLM to select up to three copied passages; matching occurrences may also be highlighted, while the complete original description stays visible. Selection is best effort.
+
+The result is temporary: opening the ticket again from **Tickets** shows no highlights or result message and makes no AI request. Press **Highlight key sentences** again to request a new result.
+
+The result may show **No key sentences found.**, **Key sentences are unavailable. Try again later.** or **AI limit reached. Try again later.**
+
+See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) and [RQ-4](../workflow/specs/product/tickets.md#rq-4-highlight-a-tickets-key-sentences) for the complete rules and limits.
 
 ## Forbidden pages
 
