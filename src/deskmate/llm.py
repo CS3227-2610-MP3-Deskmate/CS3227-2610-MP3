@@ -1,6 +1,6 @@
-"""The one fixed SoC LLM production probe (PLT-3, AI contract llm-health.md).
+"""SoC LLM calls, made only by the probe (PLT-3) and the AI gateway (PLT-8).
 
-The probe sends one server-authored request with no user input, then checks
+The probe sends one server-authored request with no user input. Each call checks
 only the response's shape. It never retries, follows no redirect, uses no
 proxy, enforces a total deadline, and never logs the key, the token or the
 provider's text.
@@ -83,25 +83,27 @@ def token_matches(header):
     return hmac.compare_digest(supplied, f"Bearer {expected}".encode("ascii"))
 
 
-def _shape_ok(body):
-    """Return whether `body` is the provider answer the AI contract allows."""
+def _content(body):
+    """Return the `content` of the provider answer the AI contract allows, or None."""
     try:
         document = json.loads(body.decode("utf-8"))
     except (UnicodeError, ValueError):
-        return False
+        return None
     if not isinstance(document, dict):
-        return False
+        return None
     choices = document.get("choices")
     if not isinstance(choices, list) or not choices:
-        return False
+        return None
     first = choices[0]
     if not isinstance(first, dict):
-        return False
+        return None
     message = first.get("message")
     if not isinstance(message, dict):
-        return False
+        return None
     content = message.get("content")
-    return isinstance(content, str) and content.strip() != ""
+    if isinstance(content, str) and content.strip() != "":
+        return content
+    return None
 
 
 def _read_body(response, deadline):
@@ -133,12 +135,21 @@ def _read_body(response, deadline):
 
 def probe():
     """Return whether one provider call returned an allowed answer."""
+    return reply(_BODY) is not None
+
+
+def reply(body):
+    """Send the JSON bytes `body` to the provider once; return the answer's content.
+
+    Reads `SOC_LLM_API_KEY` on each call. Returns None, without a request when
+    the key is unset or empty, on every failure the probe's contract lists.
+    """
     key = os.environ.get("SOC_LLM_API_KEY", "")
     if not key:
-        return False
+        return None
     request = Request(
         PROVIDER_URL,
-        data=_BODY,
+        data=body,
         method="POST",
         headers={
             "Authorization": f"Bearer {key}",
@@ -151,10 +162,10 @@ def probe():
         response = urlopen(request, timeout=TIMEOUT_SECONDS)
         with response:
             if response.status != 200:
-                return False
-            body = _read_body(response, deadline)
+                return None
+            answer = _read_body(response, deadline)
     except (HTTPError, URLError, OSError, http.client.HTTPException, ValueError):
-        return False
-    if body is None or time.monotonic() > deadline:
-        return False
-    return _shape_ok(body)
+        return None
+    if answer is None or time.monotonic() > deadline:
+        return None
+    return _content(answer)
