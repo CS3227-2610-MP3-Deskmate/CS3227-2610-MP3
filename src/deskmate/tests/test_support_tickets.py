@@ -73,7 +73,12 @@ def page_at(browser, path=LIST):
     response = checked_send(browser, "GET", path)
     assert response.status_code == 200
     page = Page(response)
-    assert all(form.path == "/sign-out/" for form in page.forms)
+    forms = list(page.forms)
+    if re.fullmatch(f"{LIST}[0-9]+/", path):
+        form = page.form_with_button("Highlight key sentences")
+        assert form.method == "post" and form.path == path + "key-sentences/"
+        forms.remove(form)
+    assert all(form.path == "/sign-out/" for form in forms)
     assert not any(control.is_field() for control in page.controls)
     assert not any("/requester/" in url for _, url in page.links)
     assert all(
