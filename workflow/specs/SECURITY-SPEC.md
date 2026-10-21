@@ -57,6 +57,7 @@ Threat: anyone, without signing in, makes the app create workspaces and accounts
 - Gap: the page shows the passwords in plain view, and a browser that keeps pages in its back-forward cache may show the page again in the same tab after Back or Forward, so anyone who sees the screen, or uses that tab soon after, may read them.
 - Gap: workspaces, with their accounts and sample articles and tickets (ACC-2.9), are never deleted, and neither are sessions that end without their user signing out, so the database's storage still grows, though no faster than the limits for everyone allow creations and sign-ins (ACC-3.1). Once it is full, writes that need more storage, such as the sessions that sign-in creates, fail for every user.
 - Gap: when an insert fails, the database server may log the failing statement and its detail, such as `Key (username)=(…) already exists.` or `Failing row contains (…)`, so a generated username and password hash can reach the database provider's logs, which the app does not control.
+- Gap: article and ticket identifiers are sequential and appear in URLs, and each creation uses up a fixed number of them for ACC-2.9's sample articles and tickets, as a failed one may too. So, although usernames reveal no count, a visitor who creates two workspaces can roughly estimate from their sample identifiers how many workspaces were created in between, and from the first how many since launch. No control is added.
 
 ## Requester password resets
 
