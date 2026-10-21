@@ -2,8 +2,7 @@
 
 from django import template
 
-from deskmate.accounts import demo
-from deskmate.accounts.models import User
+from deskmate.accounts import membership
 
 register = template.Library()
 
@@ -14,15 +13,4 @@ def workspace_label(context):
     user = context.request.user
     if not user.is_authenticated or user._state.adding:
         return "unavailable"
-    members = list(
-        User.objects.filter(workspace_id=user.workspace_id).values_list(
-            "username", "role"
-        )[:4]
-    )
-    if len(members) != len(demo.ACCOUNTS):
-        return "unavailable"
-    code = members[0][0].rpartition("-")[2]
-    if len(code) != demo.CODE_LENGTH or any(char not in demo.ALPHABET for char in code):
-        return "unavailable"
-    expected = {(f"{prefix}-{code}", role) for prefix, role in demo.ACCOUNTS}
-    return code if set(members) == expected else "unavailable"
+    return membership.resolve(user.workspace_id).code or "unavailable"
