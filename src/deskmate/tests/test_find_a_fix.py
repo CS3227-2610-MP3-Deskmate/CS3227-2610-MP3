@@ -59,6 +59,7 @@ HEADING = "Suggested articles"
 TITLE = "Printer jams"
 DESCRIPTION = "Paper jams on every job."
 VALID = {"Title": TITLE, "Description": DESCRIPTION}
+FIELD_NAMES = {"Title": "title", "Description": "description"}
 FEATURE = "find_a_fix"
 provider = gateway.provider
 INSTRUCTIONS = (
@@ -259,7 +260,7 @@ def press(browser, response, caption, typed=None, *, changes=None, query=None):
 
 def send(c, token=None, **options):
     """Submit to the suggestion route with a fresh CSRF token."""
-    data = options.pop("data", VALID)
+    data = form_data(options.pop("data", VALID))
     query = options.pop("query", None)
     path = SUGGEST + (f"?{urlencode(query)}" if query else "")
     return auth.send(
@@ -271,6 +272,12 @@ def send(c, token=None, **options):
         secure=True,
         **options,
     )
+
+
+def form_data(typed=None):
+    """Return `typed` under TicketForm's POST field names, keyed by label."""
+    typed = VALID if typed is None else typed
+    return {FIELD_NAMES.get(label, label): value for label, value in typed.items()}
 
 
 def security(response):
@@ -362,7 +369,7 @@ def article_result(c, phrases, expected=(), message=None, **options):
 
 @pytest.mark.ac("RQ-5.1")
 def test_find_a_fix_new_form_has_both_buttons_routes_and_get_makes_no_ai_call(
-    requester,
+    requester, provider
 ):
     browser = requester.b
     response = browser.get(NEW, secure=True)
@@ -392,7 +399,7 @@ def test_find_a_fix_new_form_has_both_buttons_routes_and_get_makes_no_ai_call(
 
 @pytest.mark.ac("RQ-5.1", "RQ-5.3")
 def test_find_a_fix_success_shows_form_then_articles_without_body_or_phrases(
-    requester,
+    requester, provider
 ):
     second = Article.objects.create(
         workspace=requester.u.workspace,
@@ -415,7 +422,7 @@ def test_find_a_fix_success_shows_form_then_articles_without_body_or_phrases(
 
 @pytest.mark.ac("RQ-5.1")
 def test_find_a_fix_successful_submit_ticket_still_creates_exactly_one_ticket(
-    requester,
+    requester, provider
 ):
     reply(provider, [])
     suggestions = send(requester)
@@ -454,7 +461,9 @@ def test_find_a_fix_successful_submit_ticket_still_creates_exactly_one_ticket(
         else repr(value)
     ),
 )
-def test_find_a_fix_invalid_field_uses_rq_1_4_before_ai(requester, field, invalid):
+def test_find_a_fix_invalid_field_uses_rq_1_4_before_ai(
+    requester, provider, field, invalid
+):
     before = snapshot()
     tickets = list(Ticket.objects.values_list())
     articles = list(Article.objects.values_list())
@@ -494,7 +503,7 @@ def test_find_a_fix_invalid_field_uses_rq_1_4_before_ai(requester, field, invali
 
 @pytest.mark.ac("RQ-5.2")
 def test_find_a_fix_joined_text_is_normalised_title_two_lfs_normalised_description(
-    requester,
+    requester, provider
 ):
     title = "  \u3000 Printer\t \u00a0"
     description = "  \u3000Line one\r\nLine two\rLine three\nEnd \u2003 "
@@ -520,7 +529,7 @@ def test_find_a_fix_joined_text_is_normalised_title_two_lfs_normalised_descripti
     [(3996, True), (3997, True), (3998, False)],
     ids=["3999-total", "4000-total", "4001-total"],
 )
-def test_find_a_fix_joined_text_4000_cap_boundary(requester, size, sent):
+def test_find_a_fix_joined_text_4000_cap_boundary(requester, provider, size, sent):
     description = "x" * size
     reply(provider, [])
     response = send(requester, data={"Title": "T", "Description": description})
@@ -541,7 +550,9 @@ def test_find_a_fix_joined_text_4000_cap_boundary(requester, size, sent):
 
 
 @pytest.mark.ac("RQ-5.2", "RQ-5.4")
-def test_find_a_fix_valid_but_over_cap_draft_is_unavailable_not_invalid(requester):
+def test_find_a_fix_valid_but_over_cap_draft_is_unavailable_not_invalid(
+    requester, provider
+):
     description = "x" * 4001
     reply(provider, ["x"])
     response = send(requester, data={"Title": "T", "Description": description})
@@ -588,7 +599,7 @@ def test_find_a_fix_empty_selection_and_whole_reply_rejection(
     ],
 )
 def test_find_a_fix_casefolded_substring_matches_title_or_body_independently(
-    requester, phrase, matches
+    requester, provider, phrase, matches
 ):
     reply(provider, [phrase])
     result(
@@ -676,7 +687,7 @@ def test_find_a_fix_more_than_three_matches_use_earliest_stored_identity(
 
 @pytest.mark.ac("RQ-5.3")
 def test_find_a_fix_matching_is_limited_to_current_stored_workspace(
-    requester, make_account
+    requester, provider, make_account
 ):
     _, account = auth.sign_in_as(make_account, auth.REQUESTER)
     foreign_article = Article.objects.create(
@@ -703,7 +714,7 @@ def test_find_a_fix_matching_is_limited_to_current_stored_workspace(
     ],
 )
 def test_find_a_fix_gateway_error_and_admission_refusal_are_safe_form_responses(
-    requester, monkeypatch, kind, message, calls, attempt_count, audit
+    requester, provider, monkeypatch, kind, message, calls, attempt_count, audit
 ):
     reply(provider, [])
     if kind == "error":
@@ -736,7 +747,7 @@ def test_find_a_fix_gateway_error_and_admission_refusal_are_safe_form_responses(
     "table", [Session._meta.db_table, User._meta.db_table, Article._meta.db_table]
 )
 def test_find_a_fix_database_failure_before_ai_is_generic_500(
-    requester, table, written_output
+    requester, provider, table, written_output
 ):
     requester.b.raise_request_exception = False
     reads = []
@@ -786,7 +797,7 @@ def test_find_a_fix_unsupported_methods_are_empty_405_before_access(
         method,
         SUGGEST,
         auth.csrf_token(browser, visitor),
-        data=VALID,
+        data=form_data(),
         secure=True,
     )
     auth.assert_method_not_allowed(response)
@@ -801,7 +812,7 @@ def test_find_a_fix_unsupported_methods_are_empty_405_before_access(
     + [(auth.REQUESTER, "empty"), (auth.REQUESTER, "wrong")],
 )
 def test_find_a_fix_csrf_and_origin_denial_precedes_access(
-    make_account, visitor, fault
+    make_account, provider, visitor, fault
 ):
     browser, _ = auth.browser_as(make_account, visitor)
     token = auth.csrf_token(browser, visitor)
@@ -816,7 +827,7 @@ def test_find_a_fix_csrf_and_origin_denial_precedes_access(
         else "wrong"
         if fault == "wrong"
         else token,
-        data=VALID,
+        data=form_data(),
         headers={"Origin": auth.EVIL_ORIGIN} if fault == "origin" else None,
         secure=True,
     )
@@ -838,7 +849,7 @@ def test_find_a_fix_csrf_and_origin_denial_precedes_access(
     ],
 )
 def test_find_a_fix_stored_session_and_role_denial_precedes_validation(
-    requester, make_account, clock, state, status
+    requester, provider, make_account, clock, state, status
 ):
     browser = requester.b
     token = auth.csrf_token(browser, auth.REQUESTER)
@@ -862,7 +873,7 @@ def test_find_a_fix_stored_session_and_role_denial_precedes_validation(
     tickets = list(Ticket.objects.values_list())
     articles = list(Article.objects.values_list())
     users = list(User.objects.values_list())
-    response = auth.send(browser, "POST", SUGGEST, token, data=VALID, secure=True)
+    response = auth.send(browser, "POST", SUGGEST, token, data=form_data(), secure=True)
     if status == "redirect":
         auth.assert_redirects(response, "/sign-in/")
     else:
@@ -877,7 +888,7 @@ def test_find_a_fix_stored_session_and_role_denial_precedes_validation(
 
 @pytest.mark.ac("RQ-5.5")
 def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
-    requester, make_account
+    requester, provider, make_account
 ):
     _, account = auth.sign_in_as(make_account, auth.REQUESTER)
     foreign = Article.objects.create(
@@ -903,7 +914,7 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
     reply(provider, ["printer"])
     response = send(
         requester,
-        data={**VALID, **extra},
+        data={**form_data(), **extra},
         query=extra,
         headers={
             "Workspace": str(account.workspace_id),
@@ -934,7 +945,9 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
         "%26lt%3Bb%26gt%3B%20%2A%2Abold%2A%2A%20%5Blink%5D%28https%3A%2F%2Fevil.example%29",
     ],
 )
-def test_find_a_fix_submitted_values_and_article_titles_are_escaped(requester, encoded):
+def test_find_a_fix_submitted_values_and_article_titles_are_escaped(
+    requester, provider, encoded
+):
     attack = unquote(encoded)
     article = Article.objects.create(
         workspace=requester.u.workspace,
@@ -974,7 +987,7 @@ def test_find_a_fix_submitted_values_and_article_titles_are_escaped(requester, e
     ],
 )
 def test_find_a_fix_cache_and_framing_controls_cover_all_outcomes(
-    requester, make_account, outcome, status
+    requester, provider, make_account, outcome, status
 ):
     browser = requester.b
     if outcome == "success":
@@ -994,7 +1007,9 @@ def test_find_a_fix_cache_and_framing_controls_cover_all_outcomes(
     elif outcome == "invalid":
         response = send(requester, data={"Title": "", "Description": ""})
     elif outcome == "csrf":
-        response = auth.send(browser, "POST", SUGGEST, "wrong", data=VALID, secure=True)
+        response = auth.send(
+            browser, "POST", SUGGEST, "wrong", data=form_data(), secure=True
+        )
     elif outcome == "method":
         response = auth.send(
             browser,
@@ -1010,7 +1025,7 @@ def test_find_a_fix_cache_and_framing_controls_cover_all_outcomes(
             "POST",
             SUGGEST,
             auth.csrf_token(browser),
-            data=VALID,
+            data=form_data(),
             secure=True,
         )
     else:
@@ -1020,7 +1035,7 @@ def test_find_a_fix_cache_and_framing_controls_cover_all_outcomes(
             "POST",
             SUGGEST,
             auth.csrf_token(browser, auth.SUPPORT_OFFICER),
-            data=VALID,
+            data=form_data(),
             secure=True,
         )
     assert response.status_code == status
@@ -1029,7 +1044,7 @@ def test_find_a_fix_cache_and_framing_controls_cover_all_outcomes(
 
 @pytest.mark.ac("RQ-5.6")
 def test_find_a_fix_stores_no_suggestion_outside_gateway_admission_and_audit(
-    requester,
+    requester, provider
 ):
     article = Article.objects.create(
         workspace=requester.u.workspace, title="Stored searchable title", body="Body"
@@ -1053,7 +1068,7 @@ def test_find_a_fix_stores_no_suggestion_outside_gateway_admission_and_audit(
 
 @pytest.mark.ac("RQ-5.6")
 def test_find_a_fix_reopening_form_clears_results_and_resubmitting_calls_again(
-    requester,
+    requester, provider
 ):
     article_result(requester, ["printer"], [requester.own])
     fresh = requester.b.get(NEW, secure=True)
