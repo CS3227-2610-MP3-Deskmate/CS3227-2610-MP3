@@ -67,3 +67,11 @@ The app has one operator-only probe, `GET /health/llm/` (PLT-3). It makes one fi
 
 The probe writes no database record, never retries and gives up after 10 seconds. A missing key makes it return `503`; a missing or wrong token makes it return `404`.
 
+## Product website
+
+See the [website design and operator prerequisites](../workflow/specs/TECHNICAL-SPEC.md#product-website) for publishing and manual Pages setup.
+
+## Acknowledgements
+
+The product site adapts [Arbiter's documentation site](https://github.com/CS3227-2610-MP2-Arbiter/CS3227-2610-MP2/tree/main/docs), using GitHub's [Cayman theme](https://github.com/pages-themes/cayman) and [Jekyll Pages builder](https://github.com/actions/jekyll-build-pages).
+
