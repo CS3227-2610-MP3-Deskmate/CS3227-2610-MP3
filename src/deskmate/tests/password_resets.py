@@ -35,7 +35,7 @@ def protected(response):
     return response
 
 
-def read_form(response, value="", *, rejected=False):
+def read_form(response, value="", *, rejected=False, workspace="unavailable"):
     """Check the exact form and optional generic rejection."""
     assert response.status_code == 200, response.status_code
     page = Page(protected(response))
@@ -50,13 +50,13 @@ def read_form(response, value="", *, rejected=False):
     assert page.links == [("Support Officer", urljoin(page.url, "/support/"))]
     assert page.text.count(REJECTED) == int(rejected)
     assert normalise(page.text.replace(REJECTED, "")) == (
-        f"{FORM} {FORM} Username {BUTTON} Support Officer"
+        f"{FORM} {FORM} Workspace: {workspace} Username {BUTTON} Support Officer"
     )
     assert not page.tables
     return page
 
 
-def read_success(response, username):
+def read_success(response, username, *, workspace="unavailable"):
     """Check the exact one-row result and return its generated password."""
     assert response.status_code == 200, response.status_code
     page = Page(protected(response))
@@ -68,7 +68,8 @@ def read_success(response, username):
     password = row[1][1]
     assert len(password) == 16 and set(password) <= set(ALPHABET)
     assert page.text == (
-        f"{SUCCESS} {SUCCESS} {COPY} Username Password {username} {password} "
+        f"{SUCCESS} {SUCCESS} Workspace: {workspace} {COPY} "
+        f"Username Password {username} {password} "
         "Support Officer"
     )
     assert page.links == [("Support Officer", urljoin(page.url, "/support/"))]

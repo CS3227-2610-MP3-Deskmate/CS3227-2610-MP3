@@ -1,4 +1,4 @@
-{% extends "deskmate/base.html" %}
+{% extends "deskmate/authorized.html" %}
 {% block content %}
   {% if can_create_ticket %}
     <p><a href="{% url 'ticket-new' %}">New ticket</a></p>
