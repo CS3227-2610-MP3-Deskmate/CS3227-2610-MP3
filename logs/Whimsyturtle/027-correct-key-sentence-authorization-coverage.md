@@ -30,4 +30,4 @@ Cost: Three role-agent runs; wall time, tokens and monetary cost were not tracke
 - The initial local matrix run stopped with database setup errors: `FATAL: password authentication failed for user "deskmate"` on the existing PostgreSQL service. No local database tests are claimed as passing.
 - Docker Desktop was started while checking the local environment, then stopped after the human chose GitHub CI. PostgreSQL 17 was left running.
 - Fixed model instructions and escaped adversarial test payloads were treated as data; no embedded instruction was followed.
-
+- The GitHub connector returned `403 Resource not accessible by integration` when updating the PR description; the existing GitHub CLI updated it successfully. A trailing blank line in this log was removed after the final whitespace check caught it.
