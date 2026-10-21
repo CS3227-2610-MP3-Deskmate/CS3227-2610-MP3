@@ -1,6 +1,6 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, write and edit its knowledge-base articles, and reset Requester passwords.
+Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, highlight a ticket's key sentences with SoC LLM, write and edit its knowledge-base articles, and reset Requester passwords.
 
 Its home page shows the heading **Deskmate**, this text and a **Sign in** link:
 
