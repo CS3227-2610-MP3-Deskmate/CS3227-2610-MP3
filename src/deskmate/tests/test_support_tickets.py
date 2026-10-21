@@ -21,6 +21,20 @@ ROUTES = (LIST, MISSING)
 MAX_ID = 9223372036854775807
 
 
+DEVELOPER_BLOCKS = re.compile(
+    r"<template\b.*?</template>|<script\b.*?</script>", re.DOTALL | re.IGNORECASE
+)
+
+
+def without_developer_blocks(html):
+    """Return `html` without the page's own pending template and script.
+
+    Ticket text must not create markup, and these two blocks are the only
+    developer-written ones on the detail page (RQ-4.7).
+    """
+    return DEVELOPER_BLOCKS.sub("", html)
+
+
 @pytest.fixture
 def officer(make_account):
     """A browser authenticated through the existing sign-in form."""
@@ -160,7 +174,10 @@ def test_support_tickets_text_and_line_breaks_are_plain(officer, encoded):
         assert response.status_code == 200
         page, html = Page(response), response.content.decode()
         assert payload in page.text
-        assert all(tag not in html for tag in ("<script", "<img", "<strong", "<b>"))
+        assert all(
+            tag not in without_developer_blocks(html)
+            for tag in ("<script", "<img", "<strong", "<b>")
+        )
         assert not any("evil.example" in url for _, url in page.links)
         if target != LIST:
             assert re.search(r"Line two<br\s*/?>\s*https://evil\.example", html)

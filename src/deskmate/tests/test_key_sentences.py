@@ -378,8 +378,9 @@ def test_key_sentences_detail_carries_one_fixed_inline_pending_script(c, provide
     assert scripts[0] == scripts[1]
     for value in (c.t.title, "Printer jams on every job.", c.u.username):
         assert value not in scripts[0]
-    assert "Highlighting key sentences..." in scripts[0]
     assert "Highlighting..." in scripts[0]
+    assert "<p>Highlighting key sentences...</p>" in html
+    assert html.count("<p>Highlighting key sentences...</p>") == 1
 
 
 @pytest.mark.ac("RQ-4.7")
@@ -394,9 +395,9 @@ def test_key_sentences_pending_state_uses_fixed_developer_values(c, provider):
     script = html.split("<script>", 1)[1].split("</script>", 1)[0]
     assert "alert(1)" not in script and "quotes" not in script
     assert "&lt;/script&gt;" in html
-    form = html.split("</form>", 1)[0]
-    assert 'data-pending-caption="Highlighting..."' in form
-    assert 'data-pending-message="Highlighting key sentences..."' in form
+    template = html.split('<template id="key-sentences-pending">', 1)[1]
+    template = template.split("</template>", 1)[0]
+    assert template == "<p>Highlighting key sentences...</p>"
     assert page.form_with_button(BUTTON).button(BUTTON).caption == BUTTON
 
 
