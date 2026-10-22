@@ -18,3 +18,4 @@ Create a demo workspace to get accounts for both roles, then follow the [User Gu
 
 - [Developer Guide](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/DeveloperGuide.md)
 - [Source code](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3)
+- [Reflections](Reflections.html)
