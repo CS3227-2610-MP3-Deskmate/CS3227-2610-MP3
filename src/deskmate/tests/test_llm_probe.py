@@ -11,6 +11,7 @@ import pytest
 from django.contrib.sessions.models import Session
 from django.db import connection
 
+from deskmate import llm
 from deskmate.tests.environment import valid_environment
 from deskmate.tests.helpers import cache_directives, media_type, run_manage
 from deskmate.tests.signing_in import REQUESTER, sign_in_as
@@ -142,7 +143,7 @@ def test_llm_probe_bad_provider_answer_returns_error(client, provider, body, sta
     assert_probe(response, 503, {"status": "error"})
 
 
-MAX_BODY = 65536  # The probe's response limit (llm-health.md "Request").
+MAX_BODY = llm.MAX_BODY  # The probe's response limit (llm-health.md "Request").
 
 
 def nested_arrays(depth):
@@ -169,6 +170,26 @@ NESTED = {
 @pytest.mark.ac("PLT-3.2")
 @pytest.mark.parametrize("body", NESTED.values(), ids=NESTED.keys())
 def test_llm_probe_deeply_nested_provider_body_returns_error(client, provider, body):
+    assert len(body) <= MAX_BODY
+    provider.body, provider.status = body, 200
+    response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
+    assert_probe(response, 503, {"status": "error"})
+
+
+# Integers past Python's int-string conversion limit: json.loads raises a
+# ValueError subclass, which llm-health.md counts as invalid JSON.
+HUGE_INTEGERS = {
+    "extra-field": b'{"choices":[{"message":{"content":"OK"}}],"x":'
+    + b"1" * 10000
+    + b"}",
+    "as-content": b'{"choices":[{"message":{"content":' + b"7" * 5000 + b"}}]}",
+    "negative-top-level": b"-" + b"9" * 60000,
+}
+
+
+@pytest.mark.ac("PLT-3.2")
+@pytest.mark.parametrize("body", HUGE_INTEGERS.values(), ids=HUGE_INTEGERS.keys())
+def test_llm_probe_integer_too_long_to_parse_returns_error(client, provider, body):
     assert len(body) <= MAX_BODY
     provider.body, provider.status = body, 200
     response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
