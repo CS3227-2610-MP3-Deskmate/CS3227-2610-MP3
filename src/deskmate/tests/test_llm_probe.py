@@ -142,6 +142,59 @@ def test_llm_probe_bad_provider_answer_returns_error(client, provider, body, sta
     assert_probe(response, 503, {"status": "error"})
 
 
+MAX_BODY = 65536  # The probe's response limit (llm-health.md "Request").
+
+
+def nested_arrays(depth):
+    return "[" * depth + "]" * depth
+
+
+def deepest(prefix, suffix):
+    """Return `prefix`, the deepest arrays that fit the limit, then `suffix`."""
+    depth = (MAX_BODY - len(prefix) - len(suffix)) // 2
+    return (prefix + nested_arrays(depth) + suffix).encode()
+
+
+# Issue #104: arrays nested past the parser's limit but within the body limit.
+NESTED = {
+    "issue-32000-arrays": nested_arrays(32000).encode(),
+    "arrays-filling-limit": deepest("", ""),
+    "as-choices": deepest('{"choices": ', "}"),
+    "as-message": deepest('{"choices": [{"message": ', "}]}"),
+    "as-content": deepest('{"choices": [{"message": {"content": ', "}}]}"),
+    "mid-depth-arrays": nested_arrays(900).encode(),
+}
+
+
+@pytest.mark.ac("PLT-3.2")
+@pytest.mark.parametrize("body", NESTED.values(), ids=NESTED.keys())
+def test_llm_probe_deeply_nested_provider_body_returns_error(client, provider, body):
+    assert len(body) <= MAX_BODY
+    provider.body, provider.status = body, 200
+    response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
+    assert_probe(response, 503, {"status": "error"})
+
+
+@pytest.mark.ac("PLT-3.2")
+def test_llm_probe_body_too_deep_to_parse_returns_error(client, provider, monkeypatch):
+    # Whether real nesting overflows depends on the stack, so every stdlib
+    # JSON parse of this one body raises as the C scanner does when it does.
+    target = nested_arrays(32000)
+    parse, hits = json.JSONDecoder.raw_decode, []
+
+    def too_deep(decoder, document, *args, **kwargs):
+        if document == target:
+            hits.append(document)
+            raise RecursionError("synthetic: nested too deeply to parse")
+        return parse(decoder, document, *args, **kwargs)
+
+    monkeypatch.setattr(json.JSONDecoder, "raw_decode", too_deep)
+    provider.body, provider.status = target.encode(), 200
+    response = get_probe(client, {"Authorization": f"Bearer {TOKEN}"})
+    assert_probe(response, 503, {"status": "error"})
+    assert len(hits) == 1 and len(provider.requests) == 1
+
+
 @pytest.mark.ac("PLT-3.2")
 def test_llm_probe_transport_error_returns_error(client, provider, monkeypatch):
     def fail(*args, **kwargs):
