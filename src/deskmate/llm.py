@@ -87,7 +87,8 @@ def _content(body):
     """Return the `content` of the provider answer the AI contract allows, or None."""
     try:
         document = json.loads(body.decode("utf-8"))
-    except (UnicodeError, ValueError):
+    # RecursionError: JSON nested too deeply to parse.
+    except (UnicodeError, ValueError, RecursionError):
         return None
     if not isinstance(document, dict):
         return None
