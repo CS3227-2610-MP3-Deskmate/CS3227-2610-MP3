@@ -1,6 +1,7 @@
 {% extends "deskmate/authorized.html" %}
 {% block content %}
   <h2>{{ ticket.title }}</h2>
+  {% if flagged %}<p><strong>Possible manipulation</strong></p>{% endif %}
   <p>{% for fragment, selected in description_fragments %}{% if selected %}<mark>{% endif %}{{ fragment|linebreaksbr }}{% if selected %}</mark>{% endif %}{% empty %}{{ ticket.description|linebreaksbr }}{% endfor %}</p>
   <p>{% if ticket.open %}Open{% else %}Closed{% endif %}</p>
   {% if ticket.reply %}
