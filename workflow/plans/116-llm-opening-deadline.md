@@ -1,6 +1,6 @@
 Goal: Repair the provider response-opening deadline for [PLT-3.6 and PLT-8.5](../specs/product/platform.md), preserving the [existing transport contract](../specs/ai/llm-health.md#request) shared by the [gateway](../specs/ai/llm-gateway.md#request).
 
-- [ ] **implementer**: Change only `src/deskmate/llm.py` (estimated 80–130 changed source lines; target at most 200 and remain below the confirmed 400-line application cap).
+- [x] **implementer**: Change only `src/deskmate/llm.py` (estimated 80–130 changed source lines; target at most 200 and remain below the confirmed 400-line application cap).
   Share `reply()`'s absolute monotonic deadline with the real opener through the request while preserving the replaceable `urlopen(request, timeout=...)` interface and its existing timeout argument.
   Reuse urllib handlers and `http.client.HTTPResponse`; install a per-call response factory for HTTP and HTTPS, without global monkeypatching or replacing the protocol parser.
   Before parsing begins, wrap the response's initially empty raw socket stream in a buffered reader whose raw `readinto()` sets the socket timeout to the remaining budget and raises `TimeoutError` when none remains.
