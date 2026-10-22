@@ -72,28 +72,23 @@ def test_product_website_links_existing_guides_and_repository():
     assert (REPO_ROOT / "docs/DeveloperGuide.md").is_file()
 
 
-def links(markdown):
-    """(text, target) of each inline, reference or HTML link in Markdown source."""
-    definitions = {
-        label.strip().lower(): target
-        for label, target in re.findall(
-            r"(?m)^ {0,3}\[([^\]]+)\]:[ \t]*<?([^\s>]+)>?", markdown
-        )
-    }
-    found = re.findall(
-        r"(?<!!)\[([^\]]+)\]\(\s*<?([^\s)>]+)>?(?:\s+(?:\"[^\"]*\"|'[^']*'))?\s*\)",
-        markdown,
-    )
-    for text, label in re.findall(
-        r"(?<![!\]])\[([^\]]+)\](?:\[([^\]]*)\])?(?![(:\[])", markdown
-    ):
-        if target := definitions.get((label or text).strip().lower()):
-            found.append((text, target))
-    for target, text in re.findall(
-        r"(?is)<a\s[^>]*?\bhref\s*=\s*[\"']([^\"']*)[\"'][^>]*>(.*?)</a>", markdown
-    ):
-        found.append((re.sub(r"<[^>]*>", "", text), target))
-    return [(text.strip(), target) for text, target in found]
+HIDDEN = re.compile(
+    r"""
+    <!--.*?-->                                      # HTML comment
+    | ^[ ]{0,3}(`{3,}|~{3,}).*?(?:^[ ]{0,3}\1|\Z)   # fenced code block
+    | ^(?:[ ]{4}|\t).*?$                            # indented code or nested block
+    | (`+).*?\2                                     # code span
+    """,
+    re.DOTALL | re.MULTILINE | re.VERBOSE,
+)
+
+
+def shown_link(markdown, text, target):
+    """First inline link outside comments and code whose text and target match.
+
+    Indented lines are dropped too, so a nested link reads as missing, never as shown.
+    """
+    return re.search(rf"(?<![!\\])\[({text})\]\(({target})\)", HIDDEN.sub("", markdown))
 
 
 def front_matter(page):
@@ -121,16 +116,22 @@ def site_source():
 @pytest.mark.ac("PLT-7.7")
 def test_product_website_landing_page_links_reflections_page_from_same_build():
     index = source("docs/index.md")
-    targets = [target for text, target in links(index) if text == "Reflections"]
-    assert targets, "Landing page has no Reflections link"
-    for target in targets:
-        assert urljoin(SITE, target) == f"{SITE}Reflections.html", target
+    link = shown_link(index, "Reflections", r"[^)\s]+")
+    assert link, "Landing page shows no Reflections link"
+    assert urljoin(SITE, link[2]) == f"{SITE}Reflections.html", link[2]
+    # Shown or hidden, no other link labelled Reflections may lead elsewhere.
+    rest = index.replace(link[0], "", 1)
+    others = re.findall(r"\[\s*Reflections\s*\]|>\s*Reflections\s*<", rest)
+    assert not others, others
     assert site_source() == (REPO_ROOT / "docs").resolve()
+    config = source("docs/_config.yml")
+    # A site-wide or defaults permalink could move the page off Reflections.html.
+    assert "permalink" not in config
     front, _ = front_matter(source("docs/Reflections.md"))
     assert re.search(r"(?m)^layout:\s*default\s*$", front)
     permalink = re.search(r"(?m)^permalink:\s*['\"]?(.*?)['\"]?\s*$", front)
     assert not permalink or permalink[1] == "/Reflections.html", permalink
-    for item in excluded(source("docs/_config.yml")):
+    for item in excluded(config):
         assert not fnmatchcase("Reflections.md", item), item
         assert not "Reflections.md".startswith(item), item
 
@@ -142,15 +143,12 @@ def test_product_website_reflections_page_titles_and_links_each_member_once():
     headings = re.findall(r"(?m)^ {0,3}#(?!#)[ \t]*(.*?)[ \t#]*$", body)
     headings += re.findall(r"(?m)^ {0,3}(\S.*?)[ \t]*\n {0,3}=+[ \t]*$", body)
     assert all(heading == "Reflections" for heading in headings), headings
-    found = links(body)
     for member in MEMBERS:
         destination = f"{REPOSITORY}/blob/main/reflections/{member}/reflection.md"
-        to_member = [
-            (text, target)
-            for text, target in found
-            if re.search(rf"(?i)(?:^|/)reflections/{re.escape(member)}(?:/|$)", target)
-        ]
-        assert to_member == [(member, destination)], member
+        assert shown_link(body, re.escape(member), re.escape(destination)), member
+        # Shown or hidden, nothing else may point at this member's reflection.
+        rest = body.replace(f"[{member}]({destination})", "", 1)
+        assert not re.search(rf"(?i)reflections/{re.escape(member)}\b", rest), member
 
 
 def assert_reflection_links_present(page, root):
@@ -160,14 +158,13 @@ def assert_reflection_links_present(page, root):
         for path in root.glob("reflections/*/reflection.md")
         if path.is_file()
     }
-    targets = [
-        target
-        for _, target in links(page)
-        if re.search(r"(?i)(?:^|/)reflections/", target)
-    ]
-    assert targets, "Reflections page has no reflection links"
-    for target in targets:
-        assert target.removeprefix(f"{REPOSITORY}/blob/main/") in documents, target
+    prefix = f"{REPOSITORY}/blob/main/"
+    shown = shown_link(page, r"[^\]]+", rf"{re.escape(prefix)}reflections/[^)\s]*")
+    assert shown, "Reflections page shows no reflection links"
+    # Every reflection path, shown or hidden, must be a document present here.
+    path = r"[^\s\"'<>()\[\]]*"
+    for target in re.findall(rf"(?i){path}reflections/{path}", page):
+        assert target.removeprefix(prefix) in documents, target
 
 
 @pytest.mark.ac("PLT-7.9")
@@ -201,6 +198,19 @@ def test_product_website_reflection_link_check_accepts_stub_rejects_missing(
     else:
         with pytest.raises(AssertionError):
             assert_reflection_links_present(page, tmp_path)
+
+
+@pytest.mark.ac("PLT-7.7", "PLT-7.8", "PLT-7.9")
+@pytest.mark.parametrize(
+    "hidden",
+    ["<!-- {} -->", "`{}`", "```\n{}\n```", "~~~\n{}\n~~~", "Text\n\n    {}"],
+    ids=["comment", "code-span", "backtick-fence", "tilde-fence", "indented-code"],
+)
+def test_product_website_link_check_ignores_hidden_keeps_shown_links(hidden):
+    link = "[Reflections](Reflections.html)"
+    assert not shown_link(hidden.format(link), "Reflections", r"[^)\s]+")
+    page = f"{hidden.format('x')}\n\n- {link}\n"
+    assert shown_link(page, "Reflections", r"[^)\s]+")
 
 
 @pytest.mark.ac("PLT-7.4", "PLT-7.6")
