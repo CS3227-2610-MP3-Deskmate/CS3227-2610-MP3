@@ -18,4 +18,23 @@
   {% endif %}
   {% if key_sentence_message %}<p>{{ key_sentence_message }}</p>{% endif %}
   <p><a href="{% url ticket_list_route %}">Tickets</a></p>
+  {% if can_resolve_ticket %}
+    <template id="key-sentences-pending"><p>Highlighting key sentences...</p></template>
+    <script>
+      (function () {
+        var form = document.querySelector("form[action$='/key-sentences/']");
+        var pending = document.getElementById("key-sentences-pending");
+        if (!form || !pending) { return; }
+        var button = form.querySelector("button[type='submit']");
+        form.addEventListener("submit", function () {
+          form.parentNode.insertBefore(
+            pending.content.cloneNode(true),
+            form.nextSibling
+          );
+          button.textContent = "Highlighting...";
+          button.disabled = true;
+        });
+      })();
+    </script>
+  {% endif %}
 {% endblock %}

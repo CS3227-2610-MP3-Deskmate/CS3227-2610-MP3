@@ -21,6 +21,27 @@ ROUTES = (LIST, MISSING)
 MAX_ID = 9223372036854775807
 
 
+DEVELOPER_TEMPLATE = (
+    '<template id="key-sentences-pending"><p>Highlighting key sentences...</p>'
+    "</template>"
+)
+
+
+def without_developer_blocks(html):
+    """Return `html` without the detail page's own fixed pending blocks.
+
+    Ticket text must not create markup. Exactly these two developer-written
+    blocks are allowed, so any other script or template still fails the checks
+    that call this helper (RQ-4.7).
+    """
+    if DEVELOPER_TEMPLATE not in html:
+        return html
+    assert html.count("<script>") == 1 and "<script src" not in html
+    start = html.index("<script>")
+    end = html.index("</script>", start) + len("</script>")
+    return html.replace(html[start:end], "", 1).replace(DEVELOPER_TEMPLATE, "", 1)
+
+
 @pytest.fixture
 def officer(make_account):
     """A browser authenticated through the existing sign-in form."""
@@ -160,7 +181,10 @@ def test_support_tickets_text_and_line_breaks_are_plain(officer, encoded):
         assert response.status_code == 200
         page, html = Page(response), response.content.decode()
         assert payload in page.text
-        assert all(tag not in html for tag in ("<script", "<img", "<strong", "<b>"))
+        assert all(
+            tag not in without_developer_blocks(html)
+            for tag in ("<script", "<img", "<strong", "<b>")
+        )
         assert not any("evil.example" in url for _, url in page.links)
         if target != LIST:
             assert re.search(r"Line two<br\s*/?>\s*https://evil\.example", html)

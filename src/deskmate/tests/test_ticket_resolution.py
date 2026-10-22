@@ -13,7 +13,12 @@ from django.db.migrations.executor import MigrationExecutor
 from deskmate.accounts.models import User, Workspace
 from deskmate.tests import signing_in as auth
 from deskmate.tests.pages import ORIGIN, Page
-from deskmate.tests.test_support_tickets import checked_send, security, snapshot
+from deskmate.tests.test_support_tickets import (
+    checked_send,
+    security,
+    snapshot,
+    without_developer_blocks,
+)
 from deskmate.tickets.models import Ticket
 
 pytestmark = pytest.mark.django_db
@@ -90,7 +95,9 @@ def test_resolution_form_save_plaintext_and_readers_refresh(c, make_account, kin
     assert payload in page.text and ("Ticket", ORIGIN + c.detail) in page.links
     assert "Body Second line" in page.text
     html = read(c).content.decode()
-    assert "Body<br>" in html and "<script" not in html and "<img" not in html
+    text_html = without_developer_blocks(html)
+    assert "Body<br>" in text_html and "<script" not in text_html
+    assert "<img" not in text_html
     assert form.field("Reply").tag == "textarea" and not form.field("Reply").value
     before = list(Ticket.objects.values())
     auth.assert_redirects(submit(c, form, raw), c.detail)
@@ -108,7 +115,10 @@ def test_resolution_form_save_plaintext_and_readers_refresh(c, make_account, kin
             assert not any(x.is_field() for x in page.controls)
             assert not any("resolve" in url for _, url in page.links)
             assert not any("evil.example" in url for _, url in page.links)
-            assert all(tag not in html for tag in ("<script", "<img", "<strong"))
+            assert all(
+                tag not in without_developer_blocks(html)
+                for tag in ("<script", "<img", "<strong")
+            )
             if kind == "markup":
                 assert "Line two<br>" in html
 
@@ -137,7 +147,7 @@ def test_resolution_invalid_reply_retains_raw_text(c, kind):
     assert page.text.count(ERROR) == 1 and "valid title" not in page.text
     assert (
         "valid description" not in page.text
-        and "<script" not in response.content.decode()
+        and "<script" not in without_developer_blocks(response.content.decode())
     )
     retained = page.form_with_button("Resolve ticket").field("Reply").value
     expected = (raw or "").replace("\r\n", "\n").replace("\r", "\n")
