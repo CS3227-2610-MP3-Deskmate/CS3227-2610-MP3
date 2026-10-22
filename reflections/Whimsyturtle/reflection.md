@@ -111,7 +111,9 @@ For AI features, whether the intent is met depends on both our code _and_ the re
 
 Tests can also pass for the wrong reason, meaning they lack Week 2's **defect-finding power**. My key-sentences feature passed two rounds of agent review, but a later review found that its test for expired sign-ins would still pass even if our sign-in time limit were broken, because a different rule rejected the request first. This suggests a practical way to check intent: for each test, ask what broken code would still pass it.
 
-_(See [026](../../logs/Whimsyturtle/026-specify-ticket-key-sentence-highlighting.md), [033](../../logs/Whimsyturtle/033-specify-whole-word-article-matching.md))_
+One practice I kept from MP1/MP2 was checking what a failed operation leaves behind. For example, if creating a demo workspace fails partway through, our tests check that nothing from that attempt remains and existing records are unchanged. Tests for saving articles and resolving tickets make the same check. This gives me more confidence in our failure handling, since the tests would catch a partial write even if the error page looked correct.
+
+_(See [026](../../logs/Whimsyturtle/026-specify-ticket-key-sentence-highlighting.md), [033](../../logs/Whimsyturtle/033-specify-whole-word-article-matching.md); rollback tests for [demo workspaces](../../src/deskmate/tests/test_demo_failures.py), [articles](../../src/deskmate/tests/test_articles.py) and [ticket resolution](../../src/deskmate/tests/test_ticket_resolution.py))_
 
 ## Basic Multi-Agent SE
 

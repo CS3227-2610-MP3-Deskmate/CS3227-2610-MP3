@@ -23,6 +23,10 @@ Deskmate's architecture, routes, configuration and environments are in [`TECHNIC
 
 How we work, and what each file in `workflow/` is for, is in [`workflow/README.md`](../workflow/README.md).
 
+### Coding standards
+
+Ruff continues MP2's Checkstyle practice with public class, method and function docstrings (`D101`–`D103`), 88-character lines (`E501`), top-level imports (`PLC0415`) and unused-import checks; the exact rules and exceptions are in [`pyproject.toml`](../pyproject.toml). The [verify command](../AGENTS.md#commands) also checks formatting with `ruff format --check .`.
+
 ### Why role scopes need a script
 
 Claude Code and Codex can both make an agent read-only natively, so the critic and the reviewers get only read tools in Claude Code and `sandbox_mode = "read-only"` in Codex. Neither tool can limit which paths a writing agent may change (checked against both tools' documentation in October 2026):

@@ -9,6 +9,10 @@ How Deskmate is built and run. What it does is in [`PRODUCT-SPEC.md`](PRODUCT-SP
 - The app reads its configuration only from environment variables.
 - Repository dependencies, CI tooling and PostgreSQL container images have exact version pins, except the Vercel CLI's own dependencies ([gap](SECURITY-SPEC.md#ci-and-dependencies)); container images also have digest pins.
 
+The domain packages keep related responsibilities together: [`accounts`](../../src/deskmate/accounts/) owns workspaces, users, sign-in, sessions and account operations; [`knowledge`](../../src/deskmate/knowledge/) owns article authoring and reading; [`tickets`](../../src/deskmate/tickets/) owns ticket submission, reading, resolution and its AI actions. The project-level [`urls.py`](../../src/deskmate/urls.py) connects their views to the [route contracts](#routes).
+
+Templates share [`deskmate/base.html`](../../src/deskmate/templates/deskmate/base.html) for the page structure and styles. Authorized pages extend [`deskmate/authorized.html`](../../src/deskmate/templates/deskmate/authorized.html), which inherits the base, supplies the common workspace line of [ACC-1.2](product/accounts.md#acc-1-sign-in-and-out-by-role), and leaves each page's content to its child template.
+
 Production uses Vercel's native [Python 3.14](https://vercel.com/docs/functions/runtimes/python)/[Django](https://vercel.com/docs/frameworks/full-stack/django) runtime. Docker is used for development and CI PostgreSQL and the separate [product website build](#product-website); there is no app image or app-image CI job. Vercel builds from the checked source and manages Python patch updates within 3.14; CI and production are not claimed to run identical artifacts or runtimes. The official Vercel CLI is pinned in the [deployment workflow](../../.github/workflows/deploy.yml), without adding a Django dependency. Runtime configuration is in [`.python-version`](../../.python-version) and [`vercel.json`](../../vercel.json); hosted setup and verification remain subject to the [operator prerequisites](#review-decisions-and-operator-prerequisites).
 
 ## Data model
