@@ -152,7 +152,7 @@ def _output(instructions, text, schema):
         if inner is None:
             return None
         value = json.loads(inner, parse_constant=_refuse, object_pairs_hook=_unique)
-    # RecursionError: JSON nested too deeply at either level.
+    # RecursionError: the reply's inner JSON nested too deeply to parse.
     except (ValueError, RecursionError):
         return None
     if _has_surrogate(value) or not _matches(value, schema):
