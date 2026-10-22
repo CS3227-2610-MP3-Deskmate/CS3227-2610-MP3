@@ -5,7 +5,7 @@
   {% endif %}
   <ul>
     {% for ticket in tickets %}
-      <li><a href="{% url ticket_detail_route ticket.pk %}">{% if can_resolve_ticket %}<bdi>{{ ticket.title }}</bdi>{% else %}{{ ticket.title }}{% endif %}</a>{% if ticket.pk in flagged_tickets %} <strong>Possible manipulation</strong>{% endif %}</li>
+      <li><a href="{% url ticket_detail_route ticket.pk %}">{% if can_resolve_ticket %}<bdi>{{ ticket.title }}</bdi>{% else %}{{ ticket.title }}{% endif %}</a>{% if ticket.pk in flagged_tickets %}<p><strong>Possible manipulation</strong></p>{% endif %}</li>
     {% empty %}
       <li>No tickets yet.</li>
     {% endfor %}
