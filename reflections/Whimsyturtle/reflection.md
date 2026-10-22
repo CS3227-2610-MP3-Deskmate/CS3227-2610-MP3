@@ -91,7 +91,7 @@ _(See [013](../../logs/Whimsyturtle/013-define-requester-password-reset-slice.md
 
 In Week 7's terms, our specs are **spec-anchored**: each test is tagged with the IDs of the criteria it checks, so when a criterion changes, we can find exactly which tests must change too. A requirement change therefore follows the same steps as new work:
 
-1. **Spec**: The spec-writer changes the criteria and records why, and the critic checks the change.
+1. **Spec**: The spec-writer changes the criteria and records why, and for high-risk slices, the spec-critic checks the change.
 2. **Checkpoint**: The person running the slice confirms the criteria, the approach and the size before any tests are written.
 3. **Tests**: The test-writer updates the tests, which must fail, for the expected reason, before any code changes.
 4. **Plan and Build**: The implementer plans and makes the change, and updates the User Guide.
