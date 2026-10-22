@@ -7,6 +7,7 @@ from urllib.parse import unquote, urlsplit
 import pytest
 from django.apps import apps
 from django.contrib.auth import get_user_model
+from django.db import connection
 
 from deskmate.accounts.models import Workspace
 from deskmate.tests.pages import CSRF_FIELD, ORIGIN, Page
@@ -471,6 +472,106 @@ def test_tickets_database_outage_returns_generic_error(
     browser.raise_request_exception = False
     with database_outage():
         assert_server_error(browser.get(path, secure=True))
+
+
+# A valid creation whose text a failed creation's 500 must not show.
+PRIVATE = {"Title": "Private printer title", "Description": "Private jam details"}
+LOST_CONNECTION = "server closed the connection unexpectedly"
+
+
+class TicketInserts:
+    """A database execute wrapper that records the type of the error each
+    statement inserting a ticket row raised.
+
+    With `lose_connection`, each such statement fails before it is sent, as the
+    driver fails when the database stops answering.
+    """
+
+    def __init__(self, tickets, lose_connection=False):
+        table = re.escape(tickets.model._meta.db_table)
+        pattern = rf'\s*INSERT\s+INTO\s+"?{table}"?[\s(]'
+        self._insert = re.compile(pattern, re.IGNORECASE)
+        self._lose_connection = lose_connection
+        self.errors = []
+
+    def __call__(self, execute, sql, params, many, context):
+        """Run one statement for Deskmate, recording a ticket insert's error."""
+        if not self._insert.match(sql):
+            return execute(sql, params, many, context)
+        try:
+            if self._lose_connection:
+                database = context["connection"]
+                # Django raises the driver's errors as its own, chained to them.
+                with database.wrap_database_errors:
+                    raise database.Database.OperationalError(LOST_CONNECTION)
+            return execute(sql, params, many, context)
+        except Exception as error:
+            self.errors.append(type(error).__name__)
+            raise
+
+
+def creation_setup(requester, tickets, settings):
+    """Turn debug off, store one ticket and open the creation form.
+
+    Returns the browser, the form and the stored tickets.
+    """
+    settings.DEBUG = False
+    browser, account = requester
+    tickets.create(workspace=account.workspace, title="Existing", description="Body")
+    form = form_at(browser)
+    browser.raise_request_exception = False
+    return browser, form, list(tickets.order_by("pk").values())
+
+
+def assert_creation_failed(response, browser, tickets, before, hidden=None):
+    """Assert `response` is PLT-1.4's generic 500, not a success redirect, and
+    that, with the database answering, no ticket was created or changed."""
+    shown = {"the submitted title": PRIVATE["Title"]}
+    shown["the submitted description"] = PRIVATE["Description"]
+    assert_server_error(response, {**shown, **(hidden or {})})
+    assert "Location" not in response
+    assert list(tickets.order_by("pk").values()) == before
+    assert [title for title, _ in ticket_links(browser)] == ["Existing"]
+
+
+@pytest.mark.ac("RQ-1.8")
+@pytest.mark.parametrize("kind", ["not-null", "disk-full"])
+def test_tickets_creation_rejected_insert_returns_generic_error_creates_nothing(
+    requester, tickets, settings, failing_rows, kind
+):
+    browser, form, before = creation_setup(requester, tickets, settings)
+    inserts = TicketInserts(tickets)
+    with (
+        failing_rows(kind, tickets.model, 1) as failure,
+        connection.execute_wrapper(inserts),
+    ):
+        response = form.submit(browser, PRIVATE)
+    assert inserts.errors == [failure.error_type], "No ticket insert was rejected."
+    hidden = {"the rejection's type": failure.error_type}
+    assert_creation_failed(response, browser, tickets, before, hidden)
+
+
+@pytest.mark.ac("RQ-1.8")
+def test_tickets_creation_connection_lost_at_insert_returns_generic_error(
+    transactional_db, requester, tickets, settings
+):
+    browser, form, before = creation_setup(requester, tickets, settings)
+    inserts = TicketInserts(tickets, lose_connection=True)
+    with connection.execute_wrapper(inserts):
+        response = form.submit(browser, PRIVATE)
+    assert inserts.errors == ["OperationalError"], "No ticket insert was sent."
+    hidden = {"the lost connection's message": LOST_CONNECTION}
+    assert_creation_failed(response, browser, tickets, before, hidden)
+
+
+@pytest.mark.ac("RQ-1.8")
+def test_tickets_creation_database_outage_returns_generic_error_creates_nothing(
+    requester, tickets, settings, database_outage
+):
+    browser, form, before = creation_setup(requester, tickets, settings)
+    with database_outage():
+        response = form.submit(browser, PRIVATE)
+    assert_creation_failed(response, browser, tickets, before)
 
 
 @pytest.mark.ac("RQ-1.7")
