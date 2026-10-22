@@ -1090,16 +1090,12 @@ def test_find_a_fix_third_match_stops_before_another_article_page(
         )
         for title in ("Zulu reference", "Alpha reference")
     ]
-    Article.objects.bulk_create(
-        [
-            Article(
-                workspace=requester.u.workspace,
-                title=f"Later printer {index}",
-                body="Details",
-            )
-            for index in range(250)
-        ]
-    )
+    for index in range(250):
+        Article.objects.create(
+            workspace=requester.u.workspace,
+            title=f"Later printer {index}",
+            body="Details",
+        )
     article_result(requester, ["printer"], first)
     assert len(article_reads) == 1
     assert "LIMIT" in article_reads[0].upper()
