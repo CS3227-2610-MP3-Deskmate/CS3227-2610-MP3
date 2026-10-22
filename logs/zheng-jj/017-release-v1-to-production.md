@@ -17,7 +17,7 @@ Cost: 8 role-agent runs (including 2 resumes) using about 0.5M subagent tokens. 
 - **implementer** (`3d65dbb`), 1 run and 2 resumes, within scope: plan `e27c452`; `be1a205` changes `home.html`, `release.py` and two `views.py` docstrings together (11 lines); `d7cbe99` updates the User Guide's home sentence and summary. pytest: 2795 passed, 17 failed, all environment-only.
 - **reviewer** (`8d74e8e`), `2aa5c1f..7a7fdbf`: no Critical/High/Medium. Low: `docs/index.md` said SoC LLM suggests articles, when it suggests search phrases (fixed in `6842f03`); the checkpoint relied on the human's delegation.
 - **security-reviewer** (`8d74e8e`), `2aa5c1f..7a7fdbf`: no findings. The verifier's checks are unchanged except the expected text, a deployment still showing the old sentence fails, and `deploy.yml` deploys and verifies from the same commit.
-- **Orchestrator commits:** `7a7fdbf` and `6842f03` update the product website's landing page under `maintain-docs`; neither changes a PLT-7 criterion, and `test_product_website.py` passes 23 tests. After the review on #103, `0b1aacb` links https://deskmate-prod.vercel.app/ from the README, website and Developer Guide.
+- **Orchestrator commits:** `7a7fdbf` and `6842f03` update the product website's landing page under `maintain-docs`; neither changes a PLT-7 criterion, and `test_product_website.py` passes 23 tests. After the review on #103, `0b1aacb` links https://deskmate-prod.vercel.app/ from the README, website and Developer Guide; after a second review comment, the Developer Guide keeps its `<hostname>` placeholder and gives production as an example.
 - **implementer** (`3d65dbb`), review fix: the User Guide links the production app; ruff and `test_product_website.py` pass.
 
 ## Decisions and corrections
