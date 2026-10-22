@@ -1,5 +1,6 @@
-"""The Support Officer's journey through the merged product, from demo workspace
-to sign-out, plus the workspace boundary around tickets and articles."""
+"""The Support Officer's journey through the merged product, from demo workspace,
+with its sample articles and tickets, to sign-out, plus the workspace boundary
+around tickets and articles."""
 
 import json
 from unittest.mock import Mock
@@ -9,7 +10,12 @@ import pytest
 
 from deskmate.accounts.models import Workspace
 from deskmate.tests import test_key_sentences as highlighting
-from deskmate.tests.demo_workspaces import press_create
+from deskmate.tests.demo_workspaces import (
+    SAMPLE_ARTICLES,
+    SAMPLE_TICKETS,
+    listed_items,
+    press_create,
+)
 from deskmate.tests.pages import ORIGIN, Page
 from deskmate.tests.signing_in import (
     PASSWORD,
@@ -36,6 +42,13 @@ TICKETS = "/support/tickets/"
 ARTICLES = "/support/articles/"
 RESET = "/support/reset-requester-password/"
 DESCRIPTION = "Line one\nLine two\nhttps://evil.example"
+# The paths the Support Officer's ticket and article lists link their items to.
+TICKET_ITEM = rf"{TICKETS}([0-9]+)/"
+ARTICLE_ITEM = rf"{ARTICLES}([0-9]+)/edit/"
+# The titles of the demo workspace's samples, in the order its lists show them
+# (ACC-2.9).
+SAMPLE_TICKET_TITLES = [sample.title for sample in SAMPLE_TICKETS]
+SAMPLE_ARTICLE_TITLES = [sample.title for sample in SAMPLE_ARTICLES]
 
 
 def demo_accounts(browser):
@@ -69,6 +82,11 @@ def submit_ticket(requester, title, description):
         secure=True,
     )
     return path_of(response)
+
+
+def titles(page, pattern):
+    """Return the text of each item link on the list `page`, in order."""
+    return [text for text, _ in listed_items(page, pattern)]
 
 
 def support_path(requester_path):
@@ -133,6 +151,7 @@ def highlight_and_reopen(officer, requester, ticket_path, requester_path, provid
 
 @pytest.mark.ac(
     "ACC-2.2",
+    "ACC-2.9",
     "ACC-1.1",
     "ACC-1.2",
     "ACC-4.1",
@@ -171,11 +190,13 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out(
     assert ("Knowledge base", f"{ORIGIN}{ARTICLES}") in role_page.links
     assert ("Reset Requester password", f"{ORIGIN}{RESET}") in role_page.links
 
-    empty = Page(officer.get(TICKETS, secure=True))
-    assert empty.title == "Tickets" and empty.h1s == ["Tickets"]
-    assert "No tickets yet." in empty.text
-    assert ("Support Officer", f"{ORIGIN}{SUPPORT_PAGE}") in empty.links
-    assert not any(text == "New ticket" for text, _ in empty.links)
+    # The new workspace already holds the sample tickets of ACC-2.9.
+    samples = Page(officer.get(TICKETS, secure=True))
+    assert samples.title == "Tickets" and samples.h1s == ["Tickets"]
+    assert titles(samples, TICKET_ITEM) == SAMPLE_TICKET_TITLES
+    assert "No tickets yet." not in samples.text
+    assert ("Support Officer", f"{ORIGIN}{SUPPORT_PAGE}") in samples.links
+    assert not any(text == "New ticket" for text, _ in samples.links)
 
     requester = new_browser()
     assert_redirects(
@@ -190,6 +211,7 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out(
 
     listed = Page(officer.get(TICKETS, secure=True))
     assert ("Printer on fire", f"{ORIGIN}{ticket_path}") in listed.links
+    assert titles(listed, TICKET_ITEM) == [*SAMPLE_TICKET_TITLES, "Printer on fire"]
 
     ticket = Page(officer.get(ticket_path, secure=True))
     assert ticket.title == "Ticket" and ticket.h1s == ["Ticket"]
@@ -226,10 +248,12 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out(
 
     highlight_and_reopen(officer, requester, ticket_path, requester_path, provider)
 
+    # The new workspace already holds the sample articles of ACC-2.9.
     article_list = Page(officer.get(ARTICLES, secure=True))
     assert article_list.title == "Knowledge base"
     assert article_list.h1s == ["Knowledge base"]
-    assert "No articles yet." in article_list.text
+    assert titles(article_list, ARTICLE_ITEM) == SAMPLE_ARTICLE_TITLES
+    assert "No articles yet." not in article_list.text
     assert ("New article", f"{ORIGIN}{ARTICLES}new/") in article_list.links
     assert ("Support Officer", f"{ORIGIN}{SUPPORT_PAGE}") in article_list.links
 
@@ -260,6 +284,7 @@ def test_support_officer_journey_from_demo_workspace_to_sign_out(
 
     edit_list = Page(officer.get(ARTICLES, secure=True))
     assert ("Printer guide", f"{ORIGIN}{edit_path}") in edit_list.links
+    assert titles(edit_list, ARTICLE_ITEM) == [*SAMPLE_ARTICLE_TITLES, "Printer guide"]
     edited = Page(officer.get(edit_path, secure=True))
     assert edited.form_with_button("Save article").field("Body").value == (
         "Check the cable.\nThen restart twice."

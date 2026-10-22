@@ -1,6 +1,7 @@
 """ACC-2.1, ACC-2.2, ACC-2.3 and ACC-2.7: creating a demo workspace from the
 sign-in page, signing in with its accounts, the usernames and passwords it
-generates, codes that clash, and signed-in users who send the form.
+generates, the sample articles and tickets it adds only to the new workspace,
+codes that clash, and signed-in users who send the form.
 
 Tests where codes clash choose the codes Deskmate draws with the `codes`
 fixture, and their database is not wrapped in a transaction, so what a
@@ -11,10 +12,13 @@ from datetime import timedelta
 
 import pytest
 
+from deskmate.knowledge.models import Article
 from deskmate.tests.demo_workspaces import (
     ACCOUNTS,
     CLASH_TIMES,
     DEMO_WORKSPACE,
+    SAMPLE_ARTICLES,
+    SAMPLE_TICKETS,
     assert_created,
     assert_demo_form,
     assert_nothing_created,
@@ -48,6 +52,7 @@ from deskmate.tests.signing_in import (
     sign_in_as,
     submit_sign_in,
 )
+from deskmate.tickets.models import Ticket
 
 pytestmark = pytest.mark.usefixtures("fast_hashing")
 
@@ -106,10 +111,38 @@ def test_demo_button_creates_workspace_of_3_accounts_and_shows_them(
     make_account, browser
 ):
     # assert_created also checks each username, code and password against
-    # ACC-2.3, and that no account that existed before changes.
+    # ACC-2.3, that the new workspace holds the samples of ACC-2.9, and that
+    # no account that existed before changes.
     make_account("alice", PASSWORD, REQUESTER)
     make_account("bob", PASSWORD, SUPPORT_OFFICER)
     before = stored_state()
+    assert_created(press_create(browser), before)
+
+
+@pytest.mark.ac("ACC-2.2", "ACC-2.9")
+def test_demo_creation_adds_samples_only_to_new_workspace_changes_no_other(
+    make_account, browser
+):
+    workspace = make_account("alice", PASSWORD, SUPPORT_OFFICER).workspace
+    # An existing workspace's records, two with a sample's title, which the
+    # creation must neither change nor add to.
+    Article.objects.create(
+        workspace=workspace, title=SAMPLE_ARTICLES[1].title, body="Ask at the desk."
+    )
+    Ticket.objects.create(
+        workspace=workspace, title=SAMPLE_TICKETS[0].title, description="It jams."
+    )
+    Ticket.objects.create(
+        workspace=workspace,
+        title="Projector",
+        description="No signal.",
+        open=False,
+        reply="Replaced the cable.",
+    )
+    before = stored_state()
+    # assert_created checks the 2 articles and 3 tickets added are exactly the
+    # samples of ACC-2.9, all in the new workspace, and that every article
+    # and ticket that existed before is unchanged.
     assert_created(press_create(browser), before)
 
 
@@ -130,8 +163,8 @@ def test_demo_creating_signs_no_one_in(db, browser):
     before = stored_state()
     assert_created(press_create(browser), before)
     assert_signed_out(browser)
-    _, accounts = stored_state()
-    new_ids = {str(pk) for pk in accounts if pk not in before[1]}
+    accounts = stored_state().accounts
+    new_ids = {str(pk) for pk in accounts if pk not in before.accounts}
     assert signed_in_account_ids().isdisjoint(new_ids)
 
 
@@ -145,7 +178,7 @@ def test_demo_no_clash_draws_one_code_and_uses_it(db, browser, codes):
     assert [account.username for account in accounts] == usernames_for(FIRST)
 
 
-@pytest.mark.ac("ACC-2.3", "ACC-2.1")
+@pytest.mark.ac("ACC-2.3", "ACC-2.1", "ACC-2.2")
 @pytest.mark.parametrize("when", CLASH_TIMES)
 @pytest.mark.parametrize("taken", TAKEN)
 def test_demo_first_code_clashes_creates_with_second_code(
@@ -156,13 +189,14 @@ def test_demo_first_code_clashes_creates_with_second_code(
     before, response = press_with_taken(make_account, browser, [username], when)
     assert draws.count == 2
     # Nothing the clashing attempt wrote remains: one new workspace, holding
-    # only the second code's accounts. assert_created also checks the page
-    # shows `Workspace: <code>` with the code its usernames share.
+    # only the second code's accounts and one copy of the samples of ACC-2.9,
+    # and no article or ticket elsewhere (ACC-2.2). assert_created also checks
+    # the page shows `Workspace: <code>` with the code its usernames share.
     accounts = assert_created(response, before, elsewhere=[username])
     assert [account.username for account in accounts] == usernames_for(SECOND)
 
 
-@pytest.mark.ac("ACC-2.3", "ACC-2.1")
+@pytest.mark.ac("ACC-2.3", "ACC-2.1", "ACC-2.2")
 @pytest.mark.parametrize("when", CLASH_TIMES)
 def test_demo_first_2_codes_clash_creates_with_third_code(
     transactional_db, make_account, browser, codes, when
@@ -171,8 +205,9 @@ def test_demo_first_2_codes_clash_creates_with_third_code(
     taken = [usernames_for(FIRST)[1], usernames_for(SECOND)[2]]
     before, response = press_with_taken(make_account, browser, taken, when)
     assert draws.count == 3
-    # assert_created also checks the page shows `Workspace: <code>` with the
-    # code its usernames share.
+    # assert_created also checks the new workspace holds one copy of the
+    # samples of ACC-2.9 and no article or ticket is elsewhere (ACC-2.2), and
+    # that the page shows `Workspace: <code>` with the code its usernames share.
     accounts = assert_created(response, before, elsewhere=taken)
     assert [account.username for account in accounts] == usernames_for(THIRD)
 
@@ -200,6 +235,8 @@ def test_demo_signed_in_post_redirects_to_own_page_creates_nothing(make_account,
     before = stored_state()
     response = send(browser, "POST", DEMO_WORKSPACE, token)
     assert_redirects(response, ROLE_PAGES[role])
+    # No workspace, account, article or ticket, not even in the user's own
+    # workspace.
     assert_nothing_created(before)
     assert_signed_in_as(browser, role, account.username)
     assert session_cookie(browser) == session

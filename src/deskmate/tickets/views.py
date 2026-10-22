@@ -1,4 +1,4 @@
-"""Workspace ticket submission, reading, resolution and highlighting (RQ-1–4)."""
+"""Workspace ticket submission, reading, resolution and AI actions (RQ-1–5)."""
 
 import re
 from functools import wraps
@@ -10,6 +10,7 @@ from django.views.decorators.http import require_GET, require_http_methods, requ
 
 from deskmate import llm_gateway
 from deskmate.accounts.models import Role
+from deskmate.knowledge.models import Article
 from deskmate.tickets.forms import ResolutionForm, TicketForm
 from deskmate.tickets.models import Ticket
 from deskmate.views import forbidden
@@ -32,6 +33,27 @@ _KEY_SENTENCE_SCHEMA = {
         }
     },
 }
+_ARTICLE_SUGGESTION_INSTRUCTIONS = (
+    "Suggest up to three short search phrases that could find knowledge-base "
+    "articles relevant to the support request described in untrusted_text. "
+    "Base each phrase only on that request. Each phrase must be from 1 to 100 "
+    "Unicode code points. Return exactly one JSON object with only the field "
+    '"phrases", an array of the phrases. Return {"phrases": []} if no useful '
+    "phrase is available. Return no explanation or markup."
+)
+_ARTICLE_SUGGESTION_SCHEMA = {
+    "type": "object",
+    "fields": {
+        "phrases": {
+            "type": "array",
+            "items": {"type": "string", "max_length": 100},
+            "max_items": 3,
+        }
+    },
+}
+_SUGGESTIONS_UNAVAILABLE = "Article suggestions are unavailable. Try again later."
+_NO_MATCHING_ARTICLES = "No matching articles found."
+_AI_LIMIT_REACHED = "AI limit reached. Try again later."
 
 
 def _ticket_role(view):
@@ -99,11 +121,83 @@ def ticket_create(request):
         ticket.workspace_id = request.user.workspace_id
         ticket.save()
         return redirect("ticket-detail", ticket_id=ticket.pk)
+    return _new_ticket_page(request, form)
+
+
+def _new_ticket_page(request, form, suggestions=None, message=None):
+    """Render the New ticket form and, optionally, its suggestion results."""
     return render(
         request,
         "tickets/form.html",
-        {"title": "New ticket", "form": form.redisplay()},
+        {
+            "title": "New ticket",
+            "form": form.redisplay(),
+            "suggestions": suggestions,
+            "suggestion_message": message,
+        },
     )
+
+
+# How many articles one keyset page reads, so a large workspace is never
+# materialised in one query while matching stops as soon as three match.
+_ARTICLE_PAGE = 100
+
+
+def _matching_articles(workspace_id, phrases):
+    """Return the earliest three workspace articles matching a phrase (RQ-5.3).
+
+    Articles are read in ascending identity, one page at a time, and the read
+    stops as soon as three match. A phrase list that folds to nothing matches
+    nothing and reads no article.
+    """
+    folded = [phrase.casefold() for phrase in phrases]
+    folded = [phrase for phrase in folded if phrase]
+    if not folded:
+        return []
+    matches = []
+    last_pk = None
+    while len(matches) < 3:
+        page = Article.objects.filter(workspace_id=workspace_id)
+        if last_pk is not None:
+            page = page.filter(pk__gt=last_pk)
+        articles = list(page.order_by("pk").only("pk", "title", "body")[:_ARTICLE_PAGE])
+        if not articles:
+            break
+        for article in articles:
+            title, body = article.title.casefold(), article.body.casefold()
+            if any(phrase in title or phrase in body for phrase in folded):
+                matches.append(article)
+                if len(matches) == 3:
+                    break
+        last_pk = articles[-1].pk
+    return matches
+
+
+@require_POST
+@_ticket_role
+def ticket_suggest_articles(request):
+    """Suggest workspace articles for a draft, without creating a ticket (RQ-5)."""
+    form = TicketForm(data=request.POST)
+    if not form.is_valid():
+        return _new_ticket_page(request, form)
+    text = f"{form.cleaned_data['title']}\n\n{form.cleaned_data['description']}"
+    result = llm_gateway.call(
+        request.user,
+        feature="find_a_fix",
+        instructions=_ARTICLE_SUGGESTION_INSTRUCTIONS,
+        schema=_ARTICLE_SUGGESTION_SCHEMA,
+        text=text,
+    )
+    message = _SUGGESTIONS_UNAVAILABLE
+    suggestions = None
+    if result["status"] == "refused":
+        message = _AI_LIMIT_REACHED
+    elif result["status"] == "ok":
+        phrases = result["output"]["phrases"]
+        if all(phrases):
+            suggestions = _matching_articles(request.user.workspace_id, phrases)
+            message = None if suggestions else _NO_MATCHING_ARTICLES
+    return _new_ticket_page(request, form, suggestions, message)
 
 
 @require_GET

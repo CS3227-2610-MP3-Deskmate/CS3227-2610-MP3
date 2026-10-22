@@ -20,9 +20,22 @@ Press **Create demo workspace**. A new workspace is created, and a page headed *
 
 The table's **Username**, **Role** and **Password** columns list the workspace's two Requesters, `requester1-`*code* and `requester2-`*code*, and its Support Officer, `support1-`*code*, where *code* is the workspace's code from the first line.
 
+The new workspace also starts with two sample articles and three sample tickets, which you see after signing in. Both roles' **Knowledge base** lists show, earliest first:
+
+- **Fix a printer that will not print**
+- **Connect to the office Wi-Fi**
+
+Both roles' **Tickets** lists show, earliest first, these tickets, whose pages show their status:
+
+- **Printer will not print**: **Closed**, with the saved answer under **Reply**
+- **Wi-Fi keeps disconnecting**: **Open**
+- **Need a spreadsheet app**: **Open**
+
+From then on, they are ordinary articles and tickets of that workspace, and the rest of this guide applies to them as to any other.
+
 Creating a workspace signs no one in. Press **Sign in** to go to the sign-in page.
 
-Pressing **Create demo workspace** again, or reloading the page and resending the form, creates another workspace, with new usernames and passwords.
+Pressing **Create demo workspace** again, or reloading the page and resending the form, creates another workspace, with new usernames and passwords and its own copies of the sample articles and tickets.
 
 ## Signing in
 
@@ -126,6 +139,10 @@ Articles are plain text. The reading page shows an article's title and body as s
 As a Requester, choose **Tickets** on your role's page. The list shows your workspace's tickets, earliest first, or **No tickets yet.**
 
 Choose **New ticket**, enter **Title** and **Description**, then press **Submit ticket**. The new ticket opens under **Ticket**, showing **Open** and its saved text; **Tickets** takes you back to the list. Tickets are plain text, and their line breaks are shown.
+
+Before submitting, you can press **Suggest articles** on the same form. The draft's title and description are sent to SoC LLM, which suggests search phrases; articles in your workspace whose saved title or body contains one of those phrases appear under **Suggested articles**, earliest first, up to three titles linking to their reading pages. Article bodies and the phrases themselves are not shown, and matching is best effort rather than a verified solution. Deskmate does not save your draft or the suggestions, though it may count the request toward the AI limit and keep an audit record; the form keeps your draft so **Submit ticket** still works.
+
+The suggestion result may show **No matching articles found.**, **Article suggestions are unavailable. Try again later.** or **AI limit reached. Try again later.**
 
 Tickets need not have unique titles: each valid submission creates a new ticket. Validation errors keep you on the form with your input and show the relevant message:
 
