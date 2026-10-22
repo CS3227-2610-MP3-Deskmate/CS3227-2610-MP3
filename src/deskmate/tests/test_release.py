@@ -24,9 +24,15 @@ OWNER = "team_synthetic"
 PROJECT = "prj_synthetic"
 HOST = "deskmate-synthetic.vercel.app"
 CLI_HOST = "deployment-synthetic.vercel.app"
+# PLT-1.1's sentence, and the sentence a previous deployment's home page showed.
+SENTENCE = (
+    b"Deskmate is a service desk: Requesters raise tickets and Support Officers "
+    b"resolve them."
+)
+PREVIOUS_SENTENCE = b"Deskmate is under construction."
 HOME = (
     b"<!doctype html><html><head><title>Deskmate</title></head>"
-    b"<body><h1>Deskmate</h1><p>Deskmate is under construction.</p>\n"
+    b"<body><h1>Deskmate</h1><p>" + SENTENCE + b"</p>\n"
     b'<p><a href="/sign-in/">Sign in</a></p></body></html>'
 )
 SIGN_IN_LINK = b'<a href="/sign-in/">Sign in</a>'
@@ -259,6 +265,15 @@ def test_release_home_markup_unread_as_browser_reads_it_fails(
     release, scenario, old, new
 ):
     scenario.replies["home"] = [home_with(old, new)]
+    with pytest.raises(release.ReleaseError, match="home"):
+        verify(release, scenario)
+    assert [call[0] for call in scenario.calls].count("home") == 1
+
+
+@pytest.mark.ac("PLT-1.1", "PLT-2.3")
+def test_release_home_previous_sentence_fails(release, scenario):
+    # A healthy previous deployment still shows the earlier home page.
+    scenario.replies["home"] = [home_with(SENTENCE, PREVIOUS_SENTENCE)]
     with pytest.raises(release.ReleaseError, match="home"):
         verify(release, scenario)
     assert [call[0] for call in scenario.calls].count("home") == 1
