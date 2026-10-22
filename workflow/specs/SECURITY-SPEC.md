@@ -184,7 +184,7 @@ Threat: a Requester writes instructions or forged markers in a ticket to steer t
 - The check has no failure outcome for any text RQ-1.4 permits, so it adds no error path; database failures keep the existing generic `500` (RQ-6.7).
 - The marker relaxes no control: ticket text is still escaped, sent to the gateway, guarded and checked exactly as before, and no call is blocked, cleaned or changed because of it (RQ-6.5).
 - The payloads in RQ-6.3–RQ-6.6 form the marker's red-team corpus, which runs in CI with the verify command; payloads are stored escaped and decoded only inside tests ([`AGENTS.md` "Safety"](../../AGENTS.md#safety)).
-- Gap: the marker is a hint, not a verdict. It misses manipulation that no sign matches, including paraphrases, other languages, look-alike letters, encodings, role cues not at a line start and text split across title and description, and the rules are public, so an attacker can avoid them. It flags harmless text, such as a line starting `System:` or pasted JSON. No marker does not mean a ticket is safe.
+- Gap: the marker is a hint, not a verdict. It misses manipulation that no sign matches, including paraphrases, other languages, look-alike letters, encodings, role cues not at a line start and text split across title and description, and the rules are public, so an attacker can avoid them. It flags harmless text, such as a line starting `System:`. No marker does not mean a ticket is safe.
 - Gap: articles, resolution replies and Requester drafts are not checked.
 - Gap: the check runs on every render over every listed ticket's title and description, so list rendering time grows with the workspace's tickets, adding to the unpaginated-list gap in [Tickets](#tickets).
 
