@@ -73,7 +73,7 @@ For `/support/create-requester/`, ACC-5.4 applies the same method, signed-out an
 | `/health/` | GET | Public | Reports whether the app can reach its database | PLT-1.2, PLT-1.3 |
 | `/health/llm/` | GET | Operator probe token | Makes the one SoC LLM production probe call and reports only `ok` or `error` | PLT-3.1–PLT-3.7 |
 | `/sign-in/` | GET, POST | Public; signed-in users are redirected to their role's page | Sign-in page, with the **Create demo workspace** button | ACC-1.1, ACC-1.3–ACC-1.8, ACC-2.1, ACC-3.1–ACC-3.8 |
-| `/sign-out/` | POST | Public | Signs the visitor out | ACC-1.2, ACC-1.8 |
+| `/sign-out/` | POST | Public | Signs the visitor out | ACC-1.2, ACC-1.4, ACC-1.8 |
 | `/demo-workspace/` | POST | Public; signed-in users are redirected to their role's page | Creates a demo workspace with its sample articles and tickets and shows its accounts' passwords once | ACC-1.8, ACC-2.1–ACC-2.9, ACC-3.1–ACC-3.8 |
 | `/requester/` | GET | Requester | Requester's page, with the knowledge-base link | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8, KB-2.1 |
 | `/support/` | GET | Support Officer | Support Officer's page, with links to its tools | ACC-1.2, ACC-1.4–ACC-1.6, ACC-1.8, KB-1.1, ACC-4.1, ACC-5.1, RQ-2.1 |
