@@ -1,4 +1,4 @@
-"""Deskmate's views: the placeholder home page, the health check, and the
+"""Deskmate's views: the home page, the health check, and the
 message pages, such as Forbidden, that any route can return."""
 
 from django import db
@@ -11,7 +11,7 @@ from deskmate import llm
 
 @require_GET
 def home(request):
-    """Render the placeholder home page (PLT-1.1)."""
+    """Render the home page (PLT-1.1)."""
     return render(request, "deskmate/home.html", {"title": "Deskmate"})
 
 

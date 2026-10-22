@@ -1,6 +1,6 @@
 Goal: Show [PLT-1.1](../specs/product/platform.md#plt-1-run-a-safe-placeholder-site)'s service-desk sentence on the home page and in the release smoke test, so v1.0 can be released to production.
 
-- [ ] **implementer**: Update `src/deskmate/templates/deskmate/home.html` and the expected `other` text in `src/deskmate/release.py`'s `verify_release` together in one commit (about 2–6 changed application lines), so `main` never deploys a home page its own release check rejects.
+- [x] **implementer**: Update `src/deskmate/templates/deskmate/home.html` and the expected `other` text in `src/deskmate/release.py`'s `verify_release` together in one commit (about 2–6 changed application lines), so `main` never deploys a home page its own release check rejects.
   Replace only `Deskmate is under construction.` with `Deskmate is a service desk: Requesters raise tickets and Support Officers resolve them.`; keep the page's title, heading, `Sign in` link and markup otherwise unchanged.
   In `src/deskmate/views.py`, reword the module and `home` docstrings' "placeholder home page" to "home page", since they become wrong; change no other docstring or code.
   Make `src/deskmate/tests/test_home.py`, `test_production_settings.py` and `test_release.py` pass, retaining `test_styling.py` and the rest of the suite, then run the verify command.

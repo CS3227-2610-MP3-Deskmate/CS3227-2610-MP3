@@ -292,7 +292,10 @@ def verify_release(deployment_id, owner_id, project_id, hostname, token, job_dea
                 == {
                     "title": "Deskmate",
                     "heading": "Deskmate",
-                    "other": "Deskmate is under construction. Sign in",
+                    "other": (
+                        "Deskmate is a service desk: Requesters raise tickets "
+                        "and Support Officers resolve them. Sign in"
+                    ),
                 }
                 and links == [{"href": "/sign-in/", "text": "Sign in"}],
                 stage,
