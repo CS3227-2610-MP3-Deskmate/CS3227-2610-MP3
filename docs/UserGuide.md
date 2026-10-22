@@ -124,6 +124,8 @@ As a Support Officer, choose **Knowledge base** on your role's page. The list sh
 
 Choose **New article**, enter **Title** and **Body**, then press **Save article**. The saved article opens under **Edit article**. Select an article title from **Knowledge base** to reopen and edit it.
 
+**Title** accepts 1 to 200 Unicode code points on one line and **Body** 1 to 10,000, after surrounding Unicode whitespace is trimmed and body line endings (`CRLF` or `CR`) become line feeds (`LF`); neither field accepts null characters (see [KB-1.4](../workflow/specs/product/knowledge-base.md#kb-1-write-and-edit-knowledge-base-articles)).
+
 Articles use plain text. Titles must be unique within your workspace, ignoring case and surrounding whitespace. Any Support Officer in that workspace can edit its articles. A successful later save replaces both fields, including changes submitted from an older open form.
 
 Validation errors keep you on the form with your input and show the relevant message:
@@ -152,7 +154,11 @@ As a Requester, choose **Tickets** on your role's page. The list shows your work
 
 Choose **New ticket**, enter **Title** and **Description**, then press **Submit ticket**. The new ticket opens under **Ticket**, showing **Open** and its saved text; **Tickets** takes you back to the list. Tickets are plain text, and their line breaks are shown.
 
+**Title** accepts 1 to 200 Unicode code points on one line and **Description** 1 to 10,000, after surrounding Unicode whitespace is trimmed and description line endings (`CRLF` or `CR`) become line feeds (`LF`); neither field accepts null characters (see [RQ-1.4](../workflow/specs/product/tickets.md#rq-1-submit-a-ticket)).
+
 Before submitting, you can press **Suggest articles** on the same form. The draft's title and description are sent to SoC LLM, which suggests search phrases. Deskmate applies [word filtering](../workflow/specs/ai/find-a-fix.md#output-and-source-matching) and finds articles in your workspace whose saved title or body shares at least one whole word with a phrase, ignoring letter case. Matches appear under **Suggested articles**, earliest first, up to three titles linking to their reading pages. Article bodies and the phrases themselves are not shown, and matching is best effort rather than a verified solution. Deskmate does not save your draft or the suggestions, though it may count the request toward the AI limit and keep an audit record; the form keeps your draft so **Submit ticket** still works.
+
+The [input cap](../workflow/specs/ai/find-a-fix.md#inputs-and-authorship) for **Suggest articles** is 4,000 Unicode code points in total: the normalized **Title** + **two line-feed characters (`LF`)** + the normalized **Description**, even though **Description** allows 10,000. A valid longer draft can still be sent with **Submit ticket**; retrying it unchanged will not solve the length issue. The [shared AI limits](#ai-limits) also apply.
 
 While waiting, **Suggest articles** changes to **Suggesting...** and is disabled, and **Suggesting articles...** appears immediately below the form. Your field values, earlier suggestions, messages and validation errors stay visible, and **Submit ticket** remains enabled.
 
@@ -180,7 +186,7 @@ As a Support Officer, choose **Resolve ticket** on an **Open** ticket to open th
 
 A successful submission opens **Ticket**, showing **Closed** and the saved answer under **Reply**. Requesters and Support Officers in the workspace see the same reply as plain text with its line breaks. A ticket without a saved reply has no **Reply** heading.
 
-**Reply** is required. Invalid input stays in the form with:
+**Reply** is required and accepts 1 to 10,000 Unicode code points after surrounding Unicode whitespace is trimmed and line endings (`CRLF` or `CR`) become line feeds (`LF`); null characters are rejected (see [RQ-3.3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply)). Invalid input stays in the form with:
 
 > Enter a valid reply (1 to 10000 characters).
 
@@ -194,6 +200,8 @@ Deskmate does not automatically retry or recover an unsaved reply. See [RQ-3.8](
 
 As a Support Officer, press **Highlight key sentences** on an **Open** or **Closed** ticket. Highlighting sends its description to SoC LLM to select up to three copied passages; matching occurrences may also be highlighted, while the complete original description stays visible. Selection is best effort.
 
+**Highlight key sentences** accepts a saved **Description** of at most 4,000 Unicode code points under its [input contract](../workflow/specs/ai/key-sentences.md#inputs-and-authorship). Retrying an unchanged longer description will not help. The [shared AI limits](#ai-limits) also apply.
+
 The result is temporary: opening the ticket again from **Tickets** shows no highlights or result message and makes no AI request. Press **Highlight key sentences** again to request a new result.
 
 The result may show **No key sentences found.**, **Key sentences are unavailable. Try again later.** or **AI limit reached. Try again later.**
@@ -201,6 +209,14 @@ The result may show **No key sentences found.**, **Key sentences are unavailable
 As a Support Officer, you see **Possible manipulation** on its own line under a ticket's title in your list, and under its title on **Ticket**, including after **Highlight key sentences**, when its saved title or description contains wording or hidden characters that may try to steer Deskmate's AI features. It is only a hint: it can miss manipulation or flag harmless text, names no reason, and changes nothing else about the ticket. Requesters do not see it.
 
 See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply), [RQ-4](../workflow/specs/product/tickets.md#rq-4-highlight-a-tickets-key-sentences) and [RQ-6](../workflow/specs/product/tickets.md#rq-6-flag-tickets-with-possible-manipulation) for the complete rules and limits.
+
+## AI limits
+
+**Suggest articles** and **Highlight key sentences** share allowances of 10 admitted attempts per stored user account and 30 across the whole app in the preceding rolling 10 minutes, across all workspaces (see [PLT-5](../workflow/specs/product/platform.md#plt-5-limit-admission-of-user-ai-calls)).
+
+Each admitted attempt counts toward both allowances even if it fails, including input over the 4,000-code-point cap rejected before a provider request; a refusal adds no count.
+
+**AI limit reached. Try again later.** means either allowance is exhausted; wait before trying again, but ongoing use by others can keep the app allowance full.
 
 ## Forbidden pages
 
