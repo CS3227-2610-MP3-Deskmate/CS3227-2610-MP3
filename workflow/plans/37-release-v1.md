@@ -5,7 +5,7 @@ Goal: Show [PLT-1.1](../specs/product/platform.md#plt-1-run-a-safe-placeholder-s
   In `src/deskmate/views.py`, reword the module and `home` docstrings' "placeholder home page" to "home page", since they become wrong; change no other docstring or code.
   Make `src/deskmate/tests/test_home.py`, `test_production_settings.py` and `test_release.py` pass, retaining `test_styling.py` and the rest of the suite, then run the verify command.
   Add no route, setting, dependency, workflow change or new release check.
-- [ ] **implementer**: Update `docs/UserGuide.md` after the application task (about 2–4 changed lines).
+- [x] **implementer**: Update `docs/UserGuide.md` after the application task (about 2–4 changed lines).
   Replace the quoted home-page sentence near the top with the built sentence, read back against `home.html`.
   Bring the opening summary up to date with what is built: Requesters can press **Suggest articles** while writing a ticket to see suggested knowledge-base articles ([RQ-5](../specs/product/tickets.md#rq-5-suggest-articles-while-writing-a-ticket)), and Support Officers see the **Possible manipulation** marker on tickets whose text may try to steer Deskmate's AI features ([RQ-6](../specs/product/tickets.md#rq-6-flag-tickets-with-possible-manipulation)); use the UI text and the wording of the guide's own **Tickets** section, and add nothing planned. Read the changed lines back for duplication with that section and rerun the verify command.
 
