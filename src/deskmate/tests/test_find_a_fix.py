@@ -6,6 +6,7 @@ contract; attack payloads stay percent-encoded until a test decodes them.
 """
 
 import json
+import re
 from datetime import timedelta
 from html import escape as html_escape
 from types import SimpleNamespace
@@ -39,6 +40,7 @@ from deskmate.tests.test_llm_gateway import (
     recorded,
 )
 from deskmate.tests.test_sessions import save_session_again
+from deskmate.tests.test_styling import assert_common_layout
 from deskmate.tests.test_support_tickets import snapshot
 from deskmate.tickets.models import Ticket
 
@@ -49,6 +51,7 @@ NEW = f"{LIST}new/"
 SUGGEST = f"{NEW}suggest-articles/"
 ARTICLE = "/requester/articles/{}/"
 BUTTON = "Suggest articles"
+PENDING = "Suggesting articles..."
 SUBMIT = "Submit ticket"
 EMPTY = "No matching articles found."
 ERROR = "Article suggestions are unavailable. Try again later."
@@ -115,6 +118,34 @@ def element_walk(element):
 
 def buttons(form):
     return [node for node in element_walk(form) if node.name == "button"]
+
+
+def pending_script(response):
+    """Require one inline script carrying the fixed pending caption."""
+    html = response.content.decode()
+    scripts = re.findall(
+        r"<script\b[^>]*>.*?</script\s*>", html, re.IGNORECASE | re.DOTALL
+    )
+    assert len(scripts) == 1, "Expected one fixed article-suggestion pending script."
+    assert len(re.findall(r"<script\b", html, re.IGNORECASE)) == 1
+    assert not re.search(r"\bsrc\s*=", scripts[0].partition(">")[0], re.IGNORECASE)
+    assert "Suggesting..." in scripts[0] and PENDING in html
+    return scripts[0]
+
+
+def ready_form(response):
+    """A rendered form has usable original buttons and no visible pending p."""
+    tree = tree_of(response)
+    form = suggestion_form(tree)
+    for node in element_walk(form):
+        if node.name in {"button", "fieldset"}:
+            assert "disabled" not in dict(node.attributes)
+    assert not any(
+        node.name == "p" and normalise(element_text(node)) == PENDING
+        for node in element_walk(tree)
+    )
+    pending_script(response)
+    assert_common_layout(response)
 
 
 def suggestion_form(tree):
@@ -244,6 +275,7 @@ def result(
     """Check the complete RQ-5.1/RQ-5.3/RQ-5.4 response structure."""
     assert response.status_code == 200
     security(response)
+    ready_form(response)
     page = Page(response)
     assert page.title == "New ticket" and page.h1s == ["New ticket"]
     form = page.form_with_button(SUBMIT)
@@ -314,12 +346,13 @@ def article_result(c, phrases, expected=(), message=None, **options):
     return result(send(c), expected, message, **options)
 
 
-@pytest.mark.ac("RQ-5.1")
+@pytest.mark.ac("RQ-5.1", "RQ-5.7")
 def test_find_a_fix_new_form_has_both_buttons_routes_and_get_makes_no_ai_call(
     requester, provider
 ):
     browser = requester.b
     response = browser.get(NEW, secure=True)
+    ready_form(response)
     page = Page(response)
     tree = tree_of(response)
     form = suggestion_form(tree)
@@ -344,7 +377,7 @@ def test_find_a_fix_new_form_has_both_buttons_routes_and_get_makes_no_ai_call(
     assert provider.requests == [] and attempts() == 0 and events() == []
 
 
-@pytest.mark.ac("RQ-5.1", "RQ-5.3")
+@pytest.mark.ac("RQ-5.1", "RQ-5.3", "RQ-5.7")
 def test_find_a_fix_success_shows_form_then_articles_without_body_or_phrases(
     requester, provider
 ):
@@ -367,7 +400,7 @@ def test_find_a_fix_success_shows_form_then_articles_without_body_or_phrases(
     assert len(provider.requests) == 1
 
 
-@pytest.mark.ac("RQ-5.1")
+@pytest.mark.ac("RQ-5.1", "RQ-5.7")
 def test_find_a_fix_successful_submit_ticket_still_creates_exactly_one_ticket(
     requester, provider
 ):
@@ -385,7 +418,61 @@ def test_find_a_fix_successful_submit_ticket_still_creates_exactly_one_ticket(
     assert urlsplit(response.url).path == f"{LIST}{ticket.pk}/"
 
 
-@pytest.mark.ac("RQ-5.2")
+@pytest.mark.ac("RQ-5.7", "PLT-4.1", "PLT-4.4", "PLT-4.5")
+def test_find_a_fix_pending_script_is_fixed_across_hostile_draft_article_and_user(
+    requester, provider
+):
+    original = requester.b.get(NEW, secure=True)
+    fixed_script = pending_script(original)
+    attack = unquote(
+        "%3C%2Fscript%3E%3Cscript%3Ealert%28%27synthetic%27%29%3C%2Fscript%3E%22%26"
+    )
+    typed = {"Title": f"{attack} draft title", "Description": f"{attack} draft body"}
+    article_title, article_body = f"{attack} printer", f"{attack} article body"
+    username, phrase = f"{attack} user", f"{attack} provider phrase"
+    User.objects.filter(pk=requester.u.pk).update(username=username)
+    requester.u.refresh_from_db()
+    Article.objects.filter(pk=requester.own.pk).update(
+        title=article_title, body=article_body
+    )
+    requester.own.refresh_from_db()
+    reply(provider, ["printer", phrase])
+    response = send(requester, data=typed)
+    result(
+        response,
+        [requester.own],
+        title=typed["Title"],
+        description=typed["Description"],
+    )
+    assert pending_script(response) == fixed_script
+    assert pending_script(requester.b.get(NEW, secure=True)) == fixed_script
+    values = (*typed.values(), article_title, article_body, username, phrase, attack)
+    for value in values:
+        assert value not in fixed_script
+    assert html_escape(attack) in response.content.decode()
+    assert_common_layout(original)
+    assert Ticket.objects.count() == 0 and len(provider.requests) == 1
+
+
+@pytest.mark.ac("RQ-5.7")
+@pytest.mark.parametrize("field", ["Title", "Description"])
+def test_find_a_fix_invalid_submit_ticket_returns_ready_form(
+    requester, provider, field
+):
+    original = requester.b.get(NEW, secure=True)
+    typed = {**VALID, field: ""}
+    response = press(requester.b, original, SUBMIT, typed)
+    assert response.status_code == 200
+    ready_form(response)
+    page = Page(response)
+    expected = TITLE_ERROR if field == "Title" else DESCRIPTION_ERROR
+    assert expected in page.text
+    for label, value in typed.items():
+        assert page.form_with_button(SUBMIT).field(label).value == value
+    assert Ticket.objects.count() == 0 and provider.requests == []
+
+
+@pytest.mark.ac("RQ-5.2", "RQ-5.7")
 @pytest.mark.parametrize(
     ("field", "invalid"),
     [
@@ -428,6 +515,7 @@ def test_find_a_fix_invalid_field_uses_rq_1_4_before_ai(
     )
     assert response.status_code == 200
     security(response)
+    ready_form(response)
     page = Page(response)
     assert page.title == "New ticket" and page.h1s == ["New ticket"]
     assert (TITLE_ERROR in page.text) == (field == "Title")
@@ -516,7 +604,7 @@ def test_find_a_fix_valid_but_over_cap_draft_is_unavailable_not_invalid(
     assert events() == recorded(requester.u, "failure", FEATURE)
 
 
-@pytest.mark.ac("RQ-5.3", "RQ-5.4")
+@pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.7")
 @pytest.mark.parametrize(
     ("phrases", "expected", "message"),
     [
@@ -652,7 +740,7 @@ def test_find_a_fix_matching_is_limited_to_current_stored_workspace(
     assert requester.own.title not in page.text
 
 
-@pytest.mark.ac("RQ-5.4")
+@pytest.mark.ac("RQ-5.4", "RQ-5.7")
 @pytest.mark.parametrize(
     ("kind", "message", "calls", "attempt_count", "audit"),
     [
@@ -1005,11 +1093,14 @@ def test_find_a_fix_extra_inputs_cannot_choose_workspace_article_or_ticket(
     ],
 )
 def test_find_a_fix_adversarial_draft_and_reply_stay_data(requester, provider, encoded):
+    fixed_script = pending_script(requester.b.get(NEW, secure=True))
     attack = unquote(encoded)
     reply(provider, [attack, "<b>unsafe</b>"])
     response = send(requester, data={"Title": "Printer", "Description": attack})
     page = result(response, [], EMPTY, title="Printer", description=attack)
     body = response.content.decode()
+    assert pending_script(response) == fixed_script
+    body = body.replace(fixed_script, "", 1)
     form = page.form_with_button(SUBMIT)
     assert form.field("Title").value == "Printer"
     assert form.field("Description").value == display("Description", attack)
@@ -1034,6 +1125,7 @@ def test_find_a_fix_adversarial_draft_and_reply_stay_data(requester, provider, e
 def test_find_a_fix_submitted_values_and_article_titles_are_escaped(
     requester, provider, encoded
 ):
+    fixed_script = pending_script(requester.b.get(NEW, secure=True))
     attack = unquote(encoded)
     article = Article.objects.create(
         workspace=requester.u.workspace,
@@ -1049,6 +1141,8 @@ def test_find_a_fix_submitted_values_and_article_titles_are_escaped(
         description=attack,
     )
     text = response.content.decode()
+    assert pending_script(response) == fixed_script
+    text = text.replace(fixed_script, "", 1)
     assert attack in page.text
     assert attack not in text
     assert html_escape(attack) in text

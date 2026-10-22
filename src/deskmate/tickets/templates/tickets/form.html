@@ -1,10 +1,10 @@
 {% extends "deskmate/authorized.html" %}
 {% block content %}
-  <form method="post" action="{% url 'ticket-new' %}">
+  <form id="ticket-form" method="post" action="{% url 'ticket-new' %}">
     {% csrf_token %}
     {{ form.as_p }}
     <button type="submit">Submit ticket</button>
-    <button type="submit" formaction="{% url 'ticket-suggest-articles' %}">Suggest articles</button>
+    <button id="suggest-articles" type="submit" formaction="{% url 'ticket-suggest-articles' %}">Suggest articles</button>
   </form>
   {% if suggestions %}
     <h2>Suggested articles</h2>
@@ -17,4 +17,31 @@
     <p>{{ suggestion_message }}</p>
   {% endif %}
   <p><a href="{% url 'ticket-list' %}">Tickets</a></p>
+  <template id="article-suggestions-pending"><p>Suggesting articles...</p></template>
+  <script>
+    (function () {
+      var form = document.getElementById("ticket-form");
+      var button = document.getElementById("suggest-articles");
+      var template = document.getElementById("article-suggestions-pending");
+      var pending = null;
+      if (!form || !button || !template) { return; }
+      function clearPending() {
+        if (pending) {
+          pending.remove();
+          pending = null;
+        }
+        button.textContent = "Suggest articles";
+        button.disabled = false;
+      }
+      form.addEventListener("invalid", clearPending, true);
+      form.addEventListener("submit", function (event) {
+        clearPending();
+        if (event.submitter !== button) { return; }
+        pending = template.content.firstElementChild.cloneNode(true);
+        form.parentNode.insertBefore(pending, form.nextSibling);
+        button.textContent = "Suggesting...";
+        button.disabled = true;
+      });
+    })();
+  </script>
 {% endblock %}

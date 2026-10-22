@@ -142,6 +142,10 @@ Choose **New ticket**, enter **Title** and **Description**, then press **Submit 
 
 Before submitting, you can press **Suggest articles** on the same form. The draft's title and description are sent to SoC LLM, which suggests search phrases; articles in your workspace whose saved title or body contains one of those phrases appear under **Suggested articles**, earliest first, up to three titles linking to their reading pages. Article bodies and the phrases themselves are not shown, and matching is best effort rather than a verified solution. Deskmate does not save your draft or the suggestions, though it may count the request toward the AI limit and keep an audit record; the form keeps your draft so **Submit ticket** still works.
 
+While waiting, **Suggest articles** changes to **Suggesting...** and is disabled, and **Suggesting articles...** appears immediately below the form. Your field values, earlier suggestions, messages and validation errors stay visible, and **Submit ticket** remains enabled.
+
+Any returned form shows **Suggest articles** and **Submit ticket** enabled again, without the loading message. Submitting **Submit ticket**, or browser validation stopping submission, shows no suggestion loading feedback. If scripting is unavailable, both buttons submit normally without loading feedback.
+
 The suggestion result may show **No matching articles found.**, **Article suggestions are unavailable. Try again later.** or **AI limit reached. Try again later.**
 
 Tickets need not have unique titles: each valid submission creates a new ticket. Validation errors keep you on the form with your input and show the relevant message:
