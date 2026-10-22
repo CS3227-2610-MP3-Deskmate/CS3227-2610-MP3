@@ -70,6 +70,39 @@ While signed in, `/sign-in/` takes you to your role's page. While signed out, a 
 
 You are signed out 8 hours after signing in, however active you are. Closing your browser may also sign you out, but not if it reopens your previous tabs, so press **Sign out** on a shared computer.
 
+## Walkthrough: from a ticket to its reply
+
+This example follows one ticket through a new demo workspace, where *code* is its code; the screenshots show a workspace whose code is `zqemx7`. AI results can vary between attempts: **Suggest articles** and **Highlight key sentences** may give other articles or sentences, none, or **Article suggestions are unavailable. Try again later.**, **Key sentences are unavailable. Try again later.** or **AI limit reached. Try again later.** instead.
+
+1. On `/sign-in/`, press **Create demo workspace** and copy the passwords (see [Getting accounts](#getting-accounts)). Press **Sign in** and sign in as `requester1-`*code* to land on the **Requester** page.
+
+   ![The Requester page, showing the workspace code, the signed-in Requester, the Knowledge base and Tickets links and the Sign out button](images/walkthrough-1-requester-page.png)
+
+2. Choose **Tickets**, then **New ticket**. Enter the **Title** `Printer shows offline` and this **Description**:
+
+   ```text
+   My printer says it is offline and nothing prints.
+   I restarted it but the jobs are still stuck in the queue.
+   ```
+
+   Press **Suggest articles**. Here **Suggested articles** lists **Fix a printer that will not print**, which links to that article. Press **Submit ticket**; the new ticket opens under **Ticket**, showing **Open**. See [Tickets](#tickets) for how suggestions are found.
+
+   ![The New ticket form with the printer ticket's title and description, and Fix a printer that will not print under Suggested articles](images/walkthrough-2-suggested-articles.png)
+
+3. Press **Sign out**, then sign in as `support1-`*code* to land on the **Support Officer** page.
+
+   ![The Support Officer page, showing the workspace code, the signed-in Support Officer, the Tickets, Knowledge base, Reset Requester password and Create Requester account links and the Sign out button](images/walkthrough-3-support-officer-page.png)
+
+4. Choose **Tickets**, then **Printer shows offline**. Press **Highlight key sentences**; here both sentences of the description are highlighted.
+
+   ![The open printer ticket with both sentences of its description highlighted](images/walkthrough-4-highlighted-ticket.png)
+
+5. Choose **Resolve ticket**, enter a **Reply** such as `The print queue was stuck. I cleared it and set the printer back online; please try printing again.` and press **Resolve ticket**. The ticket now shows **Closed** and the reply under **Reply**.
+
+6. Press **Sign out**, sign in as `requester1-`*code* again, choose **Tickets**, then **Printer shows offline**. The Requester sees **Closed** and the same reply.
+
+   ![The closed printer ticket as the Requester sees it, with the Support Officer's answer under Reply](images/walkthrough-5-resolved-ticket.png)
+
 ## Creating a Requester account
 
 As a Support Officer, choose **Create Requester account** on your role's page. The form shows:
