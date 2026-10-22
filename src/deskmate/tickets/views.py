@@ -1,4 +1,4 @@
-"""Workspace ticket submission, reading, resolution and AI actions (RQ-1–5)."""
+"""Workspace ticket submission, reading, resolution and AI actions (RQ-1–6)."""
 
 import re
 from functools import wraps
@@ -51,6 +51,21 @@ _ARTICLE_SUGGESTION_SCHEMA = {
         }
     },
 }
+# RQ-6's signs 1-4, looked for in a prepared field, and sign 5, in a saved one.
+_SIGNS = (
+    re.compile(
+        r"\b(?:ignore|disregard|forget|override)\s+(?:(?:all|any|my|of|the|your)\s+)"
+        r"{0,3}(?:previous|prior|above|earlier|preceding)\s+"
+        r"(?:instructions?|prompts?|rules?)\b"
+    ),
+    re.compile(r"(?:^|\n)[ \t]*(?:system|assistant)[ \t]*:"),
+    re.compile(r"<\|[a-z0-9_]{1,40}\|>"),
+    re.compile("untrusted_text"),
+)
+_HIDDEN = re.compile(
+    r"[\u200b\u202a-\u202e\u2060-\u2064\u2066-\u2069\ufeff\U000e0001"
+    r"\U000e0020-\U000e007f]"
+)
 _SUGGESTIONS_UNAVAILABLE = "Article suggestions are unavailable. Try again later."
 _NO_MATCHING_ARTICLES = "No matching articles found."
 _AI_LIMIT_REACHED = "AI limit reached. Try again later."
@@ -96,16 +111,38 @@ def _ticket_id(value):
     return value
 
 
+def _possible_manipulation(title, description):
+    """Return whether a saved ticket title or description shows an RQ-6 sign.
+
+    The flag is a hint, not a verdict: the fixed signs can flag harmless text
+    and miss manipulation. Each field is checked on its own.
+    """
+    for field in (title, description):
+        prepared = llm_gateway.remove_guarded(field).casefold()
+        if _HIDDEN.search(field) or any(sign.search(prepared) for sign in _SIGNS):
+            return True
+    return False
+
+
 @require_GET
 @_ticket_role
 def ticket_list(request):
     """List only the current stored workspace's tickets in creation order."""
+    tickets = list(Ticket.objects.filter(workspace_id=request.user.workspace_id))
+    flagged = set()
+    if request.user.role == Role.SUPPORT_OFFICER:
+        flagged = {
+            ticket.pk
+            for ticket in tickets
+            if _possible_manipulation(ticket.title, ticket.description)
+        }
     return render(
         request,
         "tickets/list.html",
         {
             "title": "Tickets",
-            "tickets": Ticket.objects.filter(workspace_id=request.user.workspace_id),
+            "tickets": tickets,
+            "flagged_tickets": flagged,
             **_navigation(request.user.role),
         },
     )
@@ -266,10 +303,18 @@ def ticket_detail(request, ticket_id):
         pk=_ticket_id(ticket_id),
         workspace_id=request.user.workspace_id,
     )
+    flagged = request.user.role == Role.SUPPORT_OFFICER and _possible_manipulation(
+        ticket.title, ticket.description
+    )
     return render(
         request,
         "tickets/detail.html",
-        {"title": "Ticket", "ticket": ticket, **_navigation(request.user.role)},
+        {
+            "title": "Ticket",
+            "ticket": ticket,
+            "flagged": flagged,
+            **_navigation(request.user.role),
+        },
     )
 
 
@@ -322,6 +367,7 @@ def ticket_key_sentences(request, ticket_id):
         {
             "title": "Ticket",
             "ticket": ticket,
+            "flagged": _possible_manipulation(ticket.title, ticket.description),
             "description_fragments": fragments,
             "key_sentence_message": message,
             **_navigation(request.user.role),

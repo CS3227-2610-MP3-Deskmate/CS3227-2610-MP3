@@ -333,7 +333,7 @@ def test_key_sentences_admission_refusal_precedes_length_guard(c, provider):
     assert attempts() == 10 and provider.requests == [] and events() == []
 
 
-@pytest.mark.ac("RQ-4.2", "RQ-4.3", "RQ-4.6")
+@pytest.mark.ac("RQ-4.2", "RQ-4.3", "RQ-4.6", "RQ-6.6")
 @pytest.mark.parametrize(
     "encoded",
     [
@@ -359,7 +359,11 @@ def test_key_sentences_saved_attacks_remain_escaped_source_data(
     html = response.content.decode()
     assert html.count("<script") == 1 and "<script src" not in html
     script = html.split("<script>", 1)[1].split("</script>", 1)[0]
-    assert attack not in script and "<strong" not in html and "<img" not in html
+    assert attack not in script and "<img" not in html
+    # RQ-6's fixed marker is the only `<strong>` allowed; ticket text makes none.
+    strong = re.findall(r"<strong\b[^>]*>(.*?)</strong>", html, re.DOTALL)
+    assert html.count("<strong") == len(strong)
+    assert all(text == "Possible manipulation" for text in strong)
     assert events() == recorded(c.u, "success", "key_sentences")
     assert written_output.text() == ""
 

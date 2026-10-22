@@ -79,8 +79,10 @@
       vertical-align: top;
     }
     th { background: var(--canvas); }
-    /* Saved ticket, reply and article text is the paragraph after its heading. */
-    main > h2 + p {
+    /* Saved ticket, reply and article text is the paragraph after its heading,
+       or after the manipulation marker (a paragraph holding only a strong) there. */
+    main > h2 + p:not(:has(> strong:only-child)),
+    main > h2 + p:has(> strong:only-child) + p {
       padding: 0.75rem 1rem;
       background: var(--canvas);
       border: 1px solid var(--line);

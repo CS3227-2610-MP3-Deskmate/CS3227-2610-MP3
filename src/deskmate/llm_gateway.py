@@ -107,11 +107,12 @@ def _schema_ok(schema):
     return form == "string" or _schema_ok(schema["items"])
 
 
-def _guard(text):
-    """Return `text` without the removed code points; None if too long or empty."""
-    if len(text) > MAX_TEXT:
-        return None
-    kept = "".join(
+def remove_guarded(text):
+    """Return `text` without the code points the input guard removes.
+
+    This is only the guard's removal step, with no length or emptiness check.
+    """
+    return "".join(
         character
         for character in text
         if character in "\t\n"
@@ -120,7 +121,13 @@ def _guard(text):
             and ord(character) not in _IGNORABLE
         )
     )
-    return kept or None
+
+
+def _guard(text):
+    """Return `text` without the removed code points; None if too long or empty."""
+    if len(text) > MAX_TEXT:
+        return None
+    return remove_guarded(text) or None
 
 
 def _request(instructions, text):
