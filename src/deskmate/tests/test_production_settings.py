@@ -96,7 +96,8 @@ print(json.dumps(result))
         r"<(style|script|template)\b.*?</\1>", "", result["body"], flags=re.DOTALL
     )
     assert " ".join(strip_tags(visible).split()) == (
-        "Deskmate Deskmate Deskmate is under construction. Sign in"
+        "Deskmate Deskmate Deskmate is a service desk: Requesters raise tickets and "
+        "Support Officers resolve them. Sign in"
     )
 
 

@@ -1,10 +1,10 @@
 # User Guide
 
-Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, highlight a ticket's key sentences with SoC LLM, write and edit its knowledge-base articles, create Requester accounts and reset Requester passwords.
+Deskmate lets you create a demo workspace and sign in and out. Requesters submit tickets, press **Suggest articles** while writing one to see their workspace's articles that match search phrases suggested by SoC LLM, and read their workspace's knowledge-base articles. Support Officers read and resolve their workspace's tickets, highlight a ticket's key sentences with SoC LLM, see **Possible manipulation** on tickets whose saved text may try to steer Deskmate's AI features, write and edit their workspace's knowledge-base articles, create Requester accounts and reset Requester passwords.
 
-Its home page shows the heading **Deskmate**, this text and a **Sign in** link:
+Deskmate runs at [https://deskmate-prod.vercel.app/](https://deskmate-prod.vercel.app/). Its home page shows the heading **Deskmate**, this text and a **Sign in** link:
 
-> Deskmate is under construction.
+> Deskmate is a service desk: Requesters raise tickets and Support Officers resolve them.
 
 ## Getting accounts
 

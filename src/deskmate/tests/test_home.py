@@ -1,4 +1,4 @@
-"""PLT-1.1: the placeholder home page, whether or not the database answers."""
+"""PLT-1.1: the home page, whether or not the database answers."""
 
 import re
 from html.parser import HTMLParser
@@ -21,7 +21,7 @@ class _Links(HTMLParser):
             self.hrefs.append(dict(attrs).get("href"))
 
 
-def assert_placeholder_page(response):
+def assert_home_page(response):
     assert response.status_code == 200
     assert media_type(response) == "text/html"
     html = response.content.decode("utf-8")
@@ -34,19 +34,22 @@ def assert_placeholder_page(response):
     # All the page's visible text: the title, the heading, the sentence and the link.
     visible = re.sub(r"<(style|script|template)\b.*?</\1>", "", html, flags=re.DOTALL)
     text = " ".join(strip_tags(visible).split())
-    assert text == "Deskmate Deskmate Deskmate is under construction. Sign in"
+    assert text == (
+        "Deskmate Deskmate Deskmate is a service desk: Requesters raise tickets and "
+        "Support Officers resolve them. Sign in"
+    )
 
 
 @pytest.mark.ac("PLT-1.1")
 @pytest.mark.django_db
 def test_home_database_answers_returns_placeholder_page(client):
-    assert_placeholder_page(client.get("/"))
+    assert_home_page(client.get("/"))
 
 
 @pytest.mark.ac("PLT-1.1")
 @pytest.mark.usefixtures("database_refuses_connections")
 def test_home_database_refuses_connections_returns_placeholder_page(client):
-    assert_placeholder_page(client.get("/"))
+    assert_home_page(client.get("/"))
 
 
 @pytest.mark.ac("PLT-1.1")
@@ -57,4 +60,4 @@ def test_home_session_cookie_database_down_returns_placeholder_page(
     browser, _ = sign_in_as(make_account, REQUESTER)
     with database_outage():
         response = browser.get("/")
-    assert_placeholder_page(response)
+    assert_home_page(response)
