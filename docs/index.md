@@ -12,7 +12,7 @@ Deskmate is a service desk web app for teams to report and resolve support reque
 
 ## Get started
 
-Create a demo workspace to get accounts for both roles, then follow the [User Guide](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/UserGuide.md).
+Open [Deskmate](https://deskmate-prod.vercel.app/) and create a demo workspace to get accounts for both roles, then follow the [User Guide](https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/UserGuide.md).
 
 ## Project
 
