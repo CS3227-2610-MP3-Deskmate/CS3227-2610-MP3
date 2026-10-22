@@ -7,7 +7,7 @@ Deskmate is a service desk web app for teams to report and resolve support reque
 
 ## For both sides of support
 
-- **Requesters** submit tickets and read saved resolution replies and knowledge-base articles. While writing a ticket, they can ask SoC LLM to suggest matching articles.
+- **Requesters** submit tickets and read saved resolution replies and knowledge-base articles. While writing a ticket, they can press **Suggest articles** to see matching articles found from search phrases suggested by SoC LLM.
 - **Support Officers** resolve tickets, write and edit articles, and perform Requester password resets. They can ask SoC LLM to highlight a ticket's key sentences, and see a **Possible manipulation** hint on tickets whose text may try to steer the AI features.
 
 ## Get started
