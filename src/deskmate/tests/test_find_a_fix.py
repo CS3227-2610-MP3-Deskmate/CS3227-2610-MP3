@@ -25,6 +25,7 @@ from deskmate.tests import signing_in as auth
 from deskmate.tests import test_llm_gateway as gateway
 from deskmate.tests import test_llm_probe as probe
 from deskmate.tests.demo_workspaces import (
+    SAMPLE_ARTICLES,
     cookies_holding,
     records_holding,
     sessions_holding,
@@ -215,6 +216,20 @@ def requester(transactional_db, make_account, provider, clock):
 def reply(provider, phrases):
     """Make the fake provider return a phrase array as the model would."""
     provider.body = probe.provider_body(json.dumps({"phrases": phrases}))
+
+
+@pytest.fixture
+def article_reads(requester):
+    """Record article SELECTs after the Requester's saved fixtures exist."""
+    queries = []
+
+    def record(execute, sql, params, many, context):
+        if Article._meta.db_table in sql and sql.lstrip().upper().startswith("SELECT"):
+            queries.append(sql)
+        return execute(sql, params, many, context)
+
+    with connection.execute_wrapper(record):
+        yield queries
 
 
 def form_at(browser, path=NEW):
@@ -612,12 +627,16 @@ def test_find_a_fix_valid_but_over_cap_draft_is_unavailable_not_invalid(
         (["absent"], [], EMPTY),
         ([""], [], ERROR),
         (["Printer", ""], [], ERROR),
+        (["", "printer"], [], ERROR),
+        ([" ", "", "printer"], [], ERROR),
     ],
 )
 def test_find_a_fix_empty_selection_and_whole_reply_rejection(
-    requester, phrases, expected, message
+    requester, phrases, expected, message, article_reads
 ):
     article_result(requester, phrases, expected, message, articles=[requester.own])
+    if not phrases or message == ERROR:
+        assert article_reads == []
     assert events() == recorded(requester.u, "success", FEATURE)
 
 
@@ -628,12 +647,16 @@ def test_find_a_fix_empty_selection_and_whole_reply_rejection(
         ("printer", True),
         ("PAPER PATH", True),
         ("guide", True),
+        ("missing printer troubleshooting", True),
+        ("print", False),
+        ("rinter", False),
+        ("printerguide", False),
         ("missing", False),
         ("\u0130", False),
         ("\u200b", False),
     ],
 )
-def test_find_a_fix_casefolded_substring_matches_title_or_body_independently(
+def test_find_a_fix_retained_whole_words_match_title_or_body(
     requester, provider, phrase, matches
 ):
     reply(provider, [phrase])
@@ -643,6 +666,162 @@ def test_find_a_fix_casefolded_substring_matches_title_or_body_independently(
         None if matches else EMPTY,
         articles=[requester.own],
     )
+
+
+@pytest.mark.ac("RQ-5.2", "RQ-5.3", "RQ-5.6")
+@pytest.mark.parametrize(
+    "phrase", ["printer not printing", "printer wont print", "printer troubleshooting"]
+)
+def test_find_a_fix_reported_printer_draft_matches_saved_demo_article(
+    requester, provider, phrase
+):
+    requester.own.title, requester.own.body = SAMPLE_ARTICLES[0]
+    requester.own.save()
+    typed = {"Title": "issue", "Description": "i have printer that wont print, help"}
+    before = snapshot()
+    reply(provider, [phrase])
+    result(
+        send(requester, data=typed),
+        [requester.own],
+        title=typed["Title"],
+        description=typed["Description"],
+    )
+    assert snapshot() == before and Ticket.objects.count() == 0
+    assert len(provider.requests) == attempts() == 1
+    assert events() == recorded(requester.u, "success", FEATURE)
+    body = probe.request_body(provider.requests[0][0])
+    assert json.loads(body["messages"][1]["content"])["untrusted_text"] == (
+        "issue\n\ni have printer that wont print, help"
+    )
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "phrases",
+    [
+        pytest.param([" \t\r\n\u3000"], id="whitespace"),
+        pytest.param(["..._-'!?\u0301"], id="punctuation-and-mark"),
+        pytest.param(["a ab 12 \u00df \u0130"], id="short-folded-words"),
+        pytest.param(["not will wont help please"], id="discarded-words"),
+        pytest.param([" \t", "...", "an is to"], id="all-phrases-ignored"),
+    ],
+)
+def test_find_a_fix_nonempty_phrases_without_retained_words_read_no_article(
+    requester, phrases, article_reads
+):
+    article_result(requester, phrases, [], EMPTY)
+    assert article_reads == []
+    assert attempts() == len(requester.p.requests) == 1
+    assert events() == recorded(requester.u, "success", FEATURE)
+
+
+@pytest.mark.ac("RQ-5.3")
+def test_find_a_fix_all_fixed_stopwords_are_discarded_after_casefold(
+    requester, article_reads
+):
+    phrases = [
+        "AND ARE BUT CAN COULD FOR FROM HAS HAVE HELP HOW NOT PLEASE SHOULD THAT THE",
+        "THEIR THEM THERE THESE THEY THIS WAS WERE WHAT WHEN WHERE WHICH WILL WITH",
+        "WON WONT WOULD YOU YOUR",
+    ]
+    article_result(requester, phrases, [], EMPTY)
+    assert article_reads == []
+    assert events() == recorded(requester.u, "success", FEATURE)
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "phrase", ["about", "also", "into", "notebook", "wonted", "shoulder"]
+)
+def test_find_a_fix_filter_discards_only_exact_fixed_stopwords(requester, phrase):
+    article = Article.objects.create(
+        workspace=requester.u.workspace, title=f"A {phrase} reference", body="Details"
+    )
+    article_result(requester, [phrase], [article])
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "phrases",
+    [
+        [" ", "printer", "..."],
+        ["not will help", "printer", "an is to"],
+        ["not printer please"],
+    ],
+)
+def test_find_a_fix_ignored_phrases_do_not_block_useful_words(requester, phrases):
+    Article.objects.create(
+        workspace=requester.u.workspace,
+        title="Unrelated reference",
+        body="not will help; an is to; ...",
+    )
+    article_result(requester, phrases, [requester.own])
+    assert attempts() == len(requester.p.requests) == 1
+    assert events() == recorded(requester.u, "success", FEATURE)
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    ("phrase", "source", "matches"),
+    [
+        pytest.param("ab", "ab", False, id="below-minimum"),
+        pytest.param("abc", "abc", True, id="at-minimum"),
+        pytest.param("abcd", "abcd", True, id="above-minimum"),
+        pytest.param("a\u00df", "ass", True, id="fold-expands-to-minimum"),
+        pytest.param("\ufb03", "ffi", True, id="single-code-point-expands"),
+        pytest.param("abc", "\u0130abc", True, id="fold-before-source-boundaries"),
+        pytest.param("\u0130abc", "abc", True, id="fold-before-phrase-boundaries"),
+        pytest.param("stra\u00dfe", "STRASSE", True, id="unicode-casefold"),
+        pytest.param("123", "123", True, id="numeric-token"),
+        pytest.param("123", "0123", False, id="numeric-partial-token"),
+        pytest.param("a1b", "A1B", True, id="mixed-alphanumeric"),
+        pytest.param(
+            "\u4e2d\u6587\u5b57", "\u4e2d\u6587\u5b57", True, id="unicode-alphanumeric"
+        ),
+        pytest.param(
+            "\uff41\uff42\uff43", "abc", False, id="no-compatibility-normalisation"
+        ),
+    ],
+)
+def test_find_a_fix_folded_word_length_and_unicode_boundaries(
+    requester, phrase, source, matches
+):
+    article = Article.objects.create(
+        workspace=requester.u.workspace, title=source, body="Details"
+    )
+    article_result(
+        requester,
+        [phrase],
+        [article] if matches else [],
+        None if matches else EMPTY,
+    )
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize("boundary", [" ", "-", "_", "'", "!", "\u0301"])
+def test_find_a_fix_non_alphanumeric_boundaries_split_phrases_and_sources(
+    requester, boundary
+):
+    title_only = Article.objects.create(
+        workspace=requester.u.workspace, title="alpha", body="Details"
+    )
+    body_only = Article.objects.create(
+        workspace=requester.u.workspace, title="Reference", body="beta"
+    )
+    article_result(requester, [f"alpha{boundary}beta"], [title_only, body_only])
+    article_result(requester, [f"printer{boundary}missing"], [requester.own])
+
+
+@pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "source", ["alpha-beta", "alpha_beta", "alpha'beta", "alpha\u0301beta"]
+)
+def test_find_a_fix_source_boundaries_never_join_words(requester, source):
+    article = Article.objects.create(
+        workspace=requester.u.workspace, title=source, body="Details"
+    )
+    article_result(requester, ["alphabeta"], [], EMPTY, articles=[article])
+    article_result(requester, ["beta"], [article])
 
 
 @pytest.mark.ac("RQ-5.3")
@@ -663,6 +842,10 @@ def test_find_a_fix_casefolded_title_and_body_are_separate_sources(requester):
         [body_only, title_only],
         articles=[body_only, title_only],
     )
+    split_word = Article.objects.create(
+        workspace=requester.u.workspace, title="tone", body="arm"
+    )
+    article_result(requester, ["tonearm"], [], EMPTY, articles=[split_word])
 
 
 @pytest.mark.ac("RQ-5.3")
@@ -684,20 +867,32 @@ def test_find_a_fix_casefold_does_not_normalise_unicode(requester, phrase, match
 
 
 @pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "phrases",
+    [
+        ["printer", "printer", "paper"],
+        ["printer printer", "paper printer paper", "paper printer"],
+    ],
+)
 def test_find_a_fix_duplicate_phrases_and_multiple_matches_show_article_once(
     requester,
+    phrases,
 ):
     article_result(
         requester,
-        ["printer", "printer", "paper"],
+        phrases,
         [requester.own],
         articles=[requester.own],
     )
 
 
 @pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize(
+    "phrases", [["guide", "zulu", "alpha"], ["alpha", "guide", "zulu"]]
+)
 def test_find_a_fix_more_than_three_matches_use_earliest_stored_identity(
     requester,
+    phrases,
 ):
     articles = [requester.own]
     articles += [
@@ -711,7 +906,7 @@ def test_find_a_fix_more_than_three_matches_use_earliest_stored_identity(
     ]
     article_result(
         requester,
-        ["guide", "zulu", "alpha"],
+        phrases,
         articles[:3],
         articles=articles,
     )
@@ -731,7 +926,7 @@ def test_find_a_fix_matching_is_limited_to_current_stored_workspace(
     foreign_article = Article.objects.create(
         workspace=foreign, title="Foreign printer", body="Foreign body"
     )
-    page = article_result(requester, ["foreign printer"], [], EMPTY)
+    page = article_result(requester, ["foreign printer"], [requester.own])
     assert foreign_article.title not in page.text
     assert foreign_article.body not in page.text
     User.objects.filter(pk=requester.u.pk).update(workspace=foreign)
@@ -850,8 +1045,9 @@ def test_find_a_fix_reads_no_article_before_an_accepted_call(
 
 
 @pytest.mark.ac("RQ-5.3")
+@pytest.mark.parametrize("phrases", [["printer"], ["printer advice"]])
 def test_find_a_fix_article_read_is_paged_and_skipped_for_empty_phrases(
-    requester, provider
+    requester, provider, phrases
 ):
     for index in range(250):
         Article.objects.create(
@@ -859,6 +1055,9 @@ def test_find_a_fix_article_read_is_paged_and_skipped_for_empty_phrases(
             title=f"Unrelated {index}",
             body="Nothing here",
         )
+    last = Article.objects.create(
+        workspace=requester.u.workspace, title="Final printer reference", body="Details"
+    )
     queries = []
 
     def record(execute, sql, params, many, context):
@@ -873,10 +1072,33 @@ def test_find_a_fix_article_read_is_paged_and_skipped_for_empty_phrases(
     assert page.text.count(EMPTY) == 1
 
     with connection.execute_wrapper(record):
-        page = article_result(requester, ["printer"], [requester.own])
+        page = article_result(requester, phrases, [requester.own, last])
     assert 1 <= len(queries) <= 4
     assert all("LIMIT" in query.upper() for query in queries)
+    assert all("OFFSET" not in query.upper() for query in queries)
     assert page.text.count(HEADING) == 1
+
+
+@pytest.mark.ac("RQ-5.3")
+def test_find_a_fix_third_match_stops_before_another_article_page(
+    requester, article_reads
+):
+    first = [requester.own]
+    first += [
+        Article.objects.create(
+            workspace=requester.u.workspace, title=title, body="Printer instructions"
+        )
+        for title in ("Zulu reference", "Alpha reference")
+    ]
+    for index in range(250):
+        Article.objects.create(
+            workspace=requester.u.workspace,
+            title=f"Later printer {index}",
+            body="Details",
+        )
+    article_result(requester, ["printer"], first)
+    assert len(article_reads) == 1
+    assert "LIMIT" in article_reads[0].upper()
 
 
 @pytest.mark.ac("RQ-5.3", "RQ-5.4", "RQ-5.6")

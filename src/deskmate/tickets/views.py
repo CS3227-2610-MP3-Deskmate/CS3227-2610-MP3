@@ -141,18 +141,72 @@ def _new_ticket_page(request, form, suggestions=None, message=None):
 # How many articles one keyset page reads, so a large workspace is never
 # materialised in one query while matching stops as soon as three match.
 _ARTICLE_PAGE = 100
+_ARTICLE_PHRASE_STOPWORDS = {
+    "and",
+    "are",
+    "but",
+    "can",
+    "could",
+    "for",
+    "from",
+    "has",
+    "have",
+    "help",
+    "how",
+    "not",
+    "please",
+    "should",
+    "that",
+    "the",
+    "their",
+    "them",
+    "there",
+    "these",
+    "they",
+    "this",
+    "was",
+    "were",
+    "what",
+    "when",
+    "where",
+    "which",
+    "will",
+    "with",
+    "won",
+    "wont",
+    "would",
+    "you",
+    "your",
+}
+
+
+def _alphanumeric_words(text):
+    """Yield whole alphanumeric words after folding the complete input (RQ-5.3)."""
+    word = []
+    for character in text.casefold():
+        if character.isalnum():
+            word.append(character)
+        elif word:
+            yield "".join(word)
+            word.clear()
+    if word:
+        yield "".join(word)
 
 
 def _matching_articles(workspace_id, phrases):
-    """Return the earliest three workspace articles matching a phrase (RQ-5.3).
+    """Return the earliest three articles sharing a retained phrase word (RQ-5.3).
 
     Articles are read in ascending identity, one page at a time, and the read
-    stops as soon as three match. A phrase list that folds to nothing matches
+    stops as soon as three match. A phrase list with no retained words matches
     nothing and reads no article.
     """
-    folded = [phrase.casefold() for phrase in phrases]
-    folded = [phrase for phrase in folded if phrase]
-    if not folded:
+    retained_words = {
+        word
+        for phrase in phrases
+        for word in _alphanumeric_words(phrase)
+        if len(word) >= 3 and word not in _ARTICLE_PHRASE_STOPWORDS
+    }
+    if not retained_words:
         return []
     matches = []
     last_pk = None
@@ -164,8 +218,11 @@ def _matching_articles(workspace_id, phrases):
         if not articles:
             break
         for article in articles:
-            title, body = article.title.casefold(), article.body.casefold()
-            if any(phrase in title or phrase in body for phrase in folded):
+            if any(
+                word in retained_words
+                for source in (article.title, article.body)
+                for word in _alphanumeric_words(source)
+            ):
                 matches.append(article)
                 if len(matches) == 3:
                     break
