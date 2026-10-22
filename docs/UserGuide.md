@@ -174,7 +174,9 @@ The result is temporary: opening the ticket again from **Tickets** shows no high
 
 The result may show **No key sentences found.**, **Key sentences are unavailable. Try again later.** or **AI limit reached. Try again later.**
 
-See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) and [RQ-4](../workflow/specs/product/tickets.md#rq-4-highlight-a-tickets-key-sentences) for the complete rules and limits.
+As a Support Officer, you see **Possible manipulation** after a ticket's title in your list, and under its title on **Ticket**, including after **Highlight key sentences**, when its saved title or description contains wording or hidden characters that may try to steer Deskmate's AI features. It is only a hint: it can miss manipulation or flag harmless text, names no reason, and changes nothing else about the ticket. Requesters do not see it.
+
+See [RQ-2](../workflow/specs/product/tickets.md#rq-2-read-workspace-tickets-as-a-support-officer), [RQ-3](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply), [RQ-4](../workflow/specs/product/tickets.md#rq-4-highlight-a-tickets-key-sentences) and [RQ-6](../workflow/specs/product/tickets.md#rq-6-flag-tickets-with-possible-manipulation) for the complete rules and limits.
 
 ## Forbidden pages
 
