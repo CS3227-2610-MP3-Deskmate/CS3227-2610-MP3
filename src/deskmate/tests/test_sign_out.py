@@ -109,17 +109,19 @@ def test_sign_out_method_other_than_post_returns_405_empty_signs_no_one_out(
 
 
 # ACC-1.4: a sign-out that a database failure interrupts. Each failure point
-# is a statement on a table: loading the session, loading its stored account
-# and deleting the session.
+# is the `n`th statement of a kind on a table: loading the session, loading its
+# stored account and deleting the session. Django's session store reads the
+# session's row again just before deleting it, so that second read of the
+# session is part of deleting it.
 SESSION_TABLE = f'"{Session._meta.db_table}"'
 ACCOUNT_TABLE = f'"{get_user_model()._meta.db_table}"'
 FAILURE_POINTS = {
-    "session-read": ("SELECT", SESSION_TABLE),
-    "account-read": ("SELECT", ACCOUNT_TABLE),
-    "session-delete": ("DELETE", SESSION_TABLE),
+    "session-read": ("SELECT", SESSION_TABLE, 1),
+    "account-read": ("SELECT", ACCOUNT_TABLE, 1),
+    "session-delete-read": ("SELECT", SESSION_TABLE, 2),
+    "session-delete": ("DELETE", SESSION_TABLE, 1),
 }
 SYNTHETIC_ERROR = "Synthetic private sign-out failure"
-HIDDEN = {"the synthetic error": SYNTHETIC_ERROR}
 
 
 @pytest.fixture
@@ -139,9 +141,14 @@ def stored_session(key):
     return Session.objects.filter(session_key=key).values().first()
 
 
-def assert_interrupted_sign_out(response):
-    """Assert `response` is PLT-1.4's generic 500, with no redirect or cookie."""
-    assert_server_error(response, HIDDEN)
+def assert_interrupted_sign_out(response, cookie):
+    """Assert `response` is PLT-1.4's generic 500, with no redirect or cookie.
+
+    It must show neither the synthetic error nor `cookie`, the session cookie
+    the sign-out was sent with.
+    """
+    hidden = {"the synthetic error": SYNTHETIC_ERROR, "the session cookie": cookie}
+    assert_server_error(response, hidden)
     assert "Location" not in response
     assert not response.cookies, f"The 500 set cookies: {list(response.cookies)}"
 
@@ -169,21 +176,22 @@ def test_sign_out_failure_point_returns_500_no_cookie_keeps_session(
     form, cookie = sign_out_form(browser, role), session_cookie(browser)
     before = stored_session(cookie)
     assert before is not None
-    verb, table = FAILURE_POINTS[point]
-    attempts = []
+    verb, table, failing = FAILURE_POINTS[point]
+    matching = []
 
     def fail(execute, sql, params, many, context):
         if statement_is(sql, verb, table):
-            attempts.append(sql)
-            raise DatabaseError(SYNTHETIC_ERROR)
+            matching.append(sql)
+            if len(matching) == failing:
+                raise DatabaseError(SYNTHETIC_ERROR)
         return execute(sql, params, many, context)
 
     browser.raise_request_exception = False
     with connection.execute_wrapper(fail):
         response = form.submit(browser, button="Sign out")
-    assert_interrupted_sign_out(response)
-    # Nothing retries the failed operation.
-    assert len(attempts) == 1, attempts
+    assert_interrupted_sign_out(response, cookie)
+    # The failing statement was reached, and nothing retried it.
+    assert len(matching) == failing, matching
     assert stored_session(cookie) == before
     assert_still_signed_in_until_signed_out(browser, role, account, cookie)
 
@@ -200,7 +208,7 @@ def test_sign_out_database_outage_returns_500_no_cookie_keeps_session(
     browser.raise_request_exception = False
     with database_outage():
         response = form.submit(browser, button="Sign out")
-    assert_interrupted_sign_out(response)
+    assert_interrupted_sign_out(response, cookie)
     assert stored_session(cookie) == before
     assert_still_signed_in_until_signed_out(browser, role, account, cookie)
 
