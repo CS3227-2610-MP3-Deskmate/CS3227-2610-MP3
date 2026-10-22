@@ -91,6 +91,11 @@ def test_styling_every_common_page_has_the_same_inline_presentation(make_account
     for name, response in pages.items():
         page, style = assert_common_layout(response)
         assert page.title, name
+        scripts = re.findall(r"<script\b", response.content.decode(), re.IGNORECASE)
+        if name in {"support-ticket", "requester-ticket-new"}:
+            assert len(scripts) == 1, name
+        else:
+            assert not scripts, name
         styles.add(style)
     assert len(styles) == 1, "Common pages do not share one presentation."
 
