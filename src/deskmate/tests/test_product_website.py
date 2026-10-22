@@ -5,6 +5,8 @@ Content review must also reject planned-feature claims.
 import re
 import subprocess
 import textwrap
+from fnmatch import fnmatchcase
+from urllib.parse import urljoin
 
 import pytest
 
@@ -12,6 +14,8 @@ from deskmate.tests.helpers import REPO_ROOT
 from deskmate.tests.test_release_workflow import bash_executable
 
 REPOSITORY = "https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3"
+SITE = "https://cs3227-2610-mp3-deskmate.github.io/CS3227-2610-MP3/"
+MEMBERS = ("zheng-jj", "Whimsyturtle")
 
 
 def source(path):
@@ -68,10 +72,145 @@ def test_product_website_links_existing_guides_and_repository():
     assert (REPO_ROOT / "docs/DeveloperGuide.md").is_file()
 
 
-@pytest.mark.ac("PLT-7.3")
-def test_product_website_has_no_dependency_link_or_placeholder_for_reflections():
-    for path in ("docs/index.md", "docs/_config.yml", ".github/workflows/pages.yml"):
-        assert "reflection" not in source(path).lower()
+HIDDEN = re.compile(
+    r"""
+    <!--.*?-->                                      # HTML comment
+    | ^[ ]{0,3}(`{3,}|~{3,}).*?(?:^[ ]{0,3}\1|\Z)   # fenced code block
+    | ^(?:[ ]{4}|\t).*?$                            # indented code or nested block
+    | (`+).*?\2                                     # code span
+    """,
+    re.DOTALL | re.MULTILINE | re.VERBOSE,
+)
+
+
+def shown_link(markdown, text, target):
+    """First inline link outside comments and code whose text and target match.
+
+    Indented lines are dropped too, so a nested link reads as missing, never as shown.
+    """
+    return re.search(rf"(?<![!\\])\[({text})\]\(({target})\)", HIDDEN.sub("", markdown))
+
+
+def front_matter(page):
+    match = re.match(r"(?s)\A---\n(.*?)\n---[ \t]*(?:\n|\Z)(.*)", page)
+    assert match, "Missing front matter"
+    return match[1], match[2]
+
+
+def excluded(config):
+    block = re.search(r"(?m)^exclude:(.*)\n?((?:^[ \t]+-.*(?:\n|\Z))*)", config)
+    if not block:
+        return []
+    inline = block[1].strip()
+    items = inline.strip("[]").split(",") if inline else re.findall("-(.*)", block[2])
+    return [item.strip().strip("'\"") for item in items if item.strip()]
+
+
+def site_source():
+    build = job(source(".github/workflows/pages.yml"), "build")
+    match = re.search(r"(?mi)^\s*(?:INPUT_)?SOURCE:\s*['\"]?([^'\"\s]+)", build)
+    assert match, "Missing Pages build source"
+    return (REPO_ROOT / match[1]).resolve()
+
+
+@pytest.mark.ac("PLT-7.7")
+def test_product_website_landing_page_links_reflections_page_from_same_build():
+    index = source("docs/index.md")
+    link = shown_link(index, "Reflections", r"[^)\s]+")
+    assert link, "Landing page shows no Reflections link"
+    assert urljoin(SITE, link[2]) == f"{SITE}Reflections.html", link[2]
+    # Shown or hidden, no other link labelled Reflections may lead elsewhere.
+    rest = index.replace(link[0], "", 1)
+    others = re.findall(r"\[\s*Reflections\s*\]|>\s*Reflections\s*<", rest)
+    assert not others, others
+    assert site_source() == (REPO_ROOT / "docs").resolve()
+    config = source("docs/_config.yml")
+    # A site-wide or defaults permalink could move the page off Reflections.html.
+    assert "permalink" not in config
+    front, _ = front_matter(source("docs/Reflections.md"))
+    assert re.search(r"(?m)^layout:\s*default\s*$", front)
+    permalink = re.search(r"(?m)^permalink:\s*['\"]?(.*?)['\"]?\s*$", front)
+    assert not permalink or permalink[1] == "/Reflections.html", permalink
+    for item in excluded(config):
+        assert not fnmatchcase("Reflections.md", item), item
+        assert not "Reflections.md".startswith(item), item
+
+
+@pytest.mark.ac("PLT-7.8")
+def test_product_website_reflections_page_titles_and_links_each_member_once():
+    front, body = front_matter(source("docs/Reflections.md"))
+    assert re.search(r"(?m)^title:\s*(['\"]?)Reflections\1\s*$", front)
+    headings = re.findall(r"(?m)^ {0,3}#(?!#)[ \t]*(.*?)[ \t#]*$", body)
+    headings += re.findall(r"(?m)^ {0,3}(\S.*?)[ \t]*\n {0,3}=+[ \t]*$", body)
+    assert all(heading == "Reflections" for heading in headings), headings
+    for member in MEMBERS:
+        destination = f"{REPOSITORY}/blob/main/reflections/{member}/reflection.md"
+        assert shown_link(body, re.escape(member), re.escape(destination)), member
+        # Shown or hidden, nothing else may point at this member's reflection.
+        rest = body.replace(f"[{member}]({destination})", "", 1)
+        assert not re.search(rf"(?i)reflections/{re.escape(member)}\b", rest), member
+
+
+def assert_reflection_links_present(page, root):
+    # Presence only: a stub reflection is linked like any other (PLT-7.9).
+    documents = {
+        path.relative_to(root).as_posix()
+        for path in root.glob("reflections/*/reflection.md")
+        if path.is_file()
+    }
+    prefix = f"{REPOSITORY}/blob/main/"
+    shown = shown_link(page, r"[^\]]+", rf"{re.escape(prefix)}reflections/[^)\s]*")
+    assert shown, "Reflections page shows no reflection links"
+    # Every reflection path, shown or hidden, must be a document present here.
+    path = r"[^\s\"'<>()\[\]]*"
+    for target in re.findall(rf"(?i){path}reflections/{path}", page):
+        assert target.removeprefix(prefix) in documents, target
+
+
+@pytest.mark.ac("PLT-7.9")
+def test_product_website_publishes_no_reflection_and_links_present_documents():
+    site = site_source()
+    documents = list((REPO_ROOT / "reflections").rglob("*.md"))
+    assert documents, "No reflection documents in the repository"
+    for document in documents:
+        assert site not in document.resolve().parents, document
+    copies = {text for path in documents if (text := path.read_bytes()).strip()}
+    for path in site.rglob("*"):
+        relative = path.relative_to(site).as_posix()
+        named = re.search(r"(?i)(?:^|/)(?:reflections/|reflection\.md$)", relative)
+        assert not named, relative
+        copied = path.is_file() and path.read_bytes() in copies
+        assert not copied, relative
+    assert_reflection_links_present(source("docs/Reflections.md"), REPO_ROOT)
+
+
+@pytest.mark.ac("PLT-7.9")
+@pytest.mark.parametrize("stub", [True, False], ids=["empty-stub", "missing"])
+def test_product_website_reflection_link_check_accepts_stub_rejects_missing(
+    tmp_path, stub
+):
+    target = "reflections/example-member/reflection.md"
+    page = f"- [example-member]({REPOSITORY}/blob/main/{target})\n"
+    (tmp_path / target).parent.mkdir(parents=True)
+    if stub:
+        (tmp_path / target).write_text("", "utf-8")
+        assert_reflection_links_present(page, tmp_path)
+    else:
+        with pytest.raises(AssertionError):
+            assert_reflection_links_present(page, tmp_path)
+
+
+@pytest.mark.ac("PLT-7.7", "PLT-7.8", "PLT-7.9")
+@pytest.mark.parametrize(
+    "hidden",
+    ["<!-- {} -->", "`{}`", "```\n{}\n```", "~~~\n{}\n~~~", "Text\n\n    {}"],
+    ids=["comment", "code-span", "backtick-fence", "tilde-fence", "indented-code"],
+)
+def test_product_website_link_check_ignores_hidden_keeps_shown_links(hidden):
+    link = "[Reflections](Reflections.html)"
+    assert not shown_link(hidden.format(link), "Reflections", r"[^)\s]+")
+    page = f"{hidden.format('x')}\n\n- {link}\n"
+    assert shown_link(page, "Reflections", r"[^)\s]+")
 
 
 @pytest.mark.ac("PLT-7.4", "PLT-7.6")

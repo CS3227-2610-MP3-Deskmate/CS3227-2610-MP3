@@ -133,15 +133,17 @@ CI validation runs in GitHub Actions on every pull request and push to `main`, u
 | Setting | Value |
 | --- | --- |
 | Public URL | `https://cs3227-2610-mp3-deskmate.github.io/CS3227-2610-MP3/` |
-| Source | `docs/index.md` with `docs/_config.yml` |
+| Source | `docs/index.md` (the landing page) and `docs/Reflections.md` (the Reflections page) with `docs/_config.yml` |
 | Build | GitHub's official Jekyll Pages builder image, pinned by exact version and immutable digest, with `jekyll-theme-cayman`, kramdown Markdown and the theme's default layout; no app dependency or custom renderer |
 | Site URL / base path | `https://cs3227-2610-mp3-deskmate.github.io` / `/CS3227-2610-MP3` |
 | Guide destinations | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/docs/UserGuide.md` and the corresponding `DeveloperGuide.md` source URL |
 | Source destination | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3` |
+| Reflections destination | The site's own Reflections page at `https://cs3227-2610-mp3-deskmate.github.io/CS3227-2610-MP3/Reflections.html` |
+| Reflection destinations | `https://github.com/CS3227-2610-MP3-Deskmate/CS3227-2610-MP3/blob/main/reflections/<member>/reflection.md` for each member PLT-7.8 lists; `reflections/` is outside the site source, so these documents are not site pages |
 
 GitHub Actions builds pull requests and `main`; only successful same-repository `main`-push CI can publish its exact checked commit, after building that commit's site. One Pages concurrency group, separate from Vercel's, allows only one active publication job without cancelling it for a newer run; immediately before submitting deployment, that job rechecks current `main` and skips an outdated commit. The existing verify command stays unchanged. Build and deployment have separate jobs, with access under [Product website publication](SECURITY-SPEC.md#product-website-publication).
 
-Pages setup remains manual and unverified: operators select GitHub Actions as the repository's Pages source and confirm that the protected `production` environment admits only `main`, excluding tags and pull-request refs. Hosted checks must establish the public project URL, theme asset paths and guide links, successful main publication after CI, and refusal of PR publication. Local checks do not establish these settings or hosted behaviour.
+Pages setup remains manual and unverified: operators select GitHub Actions as the repository's Pages source and confirm that the protected `production` environment admits only `main`, excluding tags and pull-request refs. Hosted checks must establish the public project URL, theme asset paths, guide links, the Reflections page and its reflection links, successful main publication after CI, and refusal of PR publication. Local checks do not establish these settings or hosted behaviour.
 
 ## Release verification
 
