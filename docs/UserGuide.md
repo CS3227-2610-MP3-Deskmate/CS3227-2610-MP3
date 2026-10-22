@@ -104,7 +104,13 @@ On success, **Requester password reset** shows a table with **Username** and **P
 
 The Requester can sign in with the new password. Their old password no longer works, and their earlier sessions require sign-in on their next visit to a page that requires it. You stay signed in.
 
-Choose **Support Officer** to return to your role's page. Reopening the form shows no password; submitting again performs another reset.
+Choose **Support Officer** to return to your role's page. Reopening the form shows no password.
+
+If a reset fails or its response is lost, do not assume the old password still works. A database-rejected or rolled-back reset leaves the password and earlier sessions unchanged, but a reset saved before the response failed may have changed the password and invalidated those sessions.
+
+The missing password cannot be recovered. Reopen **Reset Requester password**, enter the **Username**, and press **Reset password** if another reset is needed; each permitted submission performs another reset.
+
+There is no automatic retry. See [ACC-4.7](../workflow/specs/product/accounts.md#acc-4-reset-a-requesters-password) for the failure rules.
 
 An invalid username or an account that is not a Requester in your workspace leaves you on the form with:
 
@@ -127,6 +133,12 @@ Validation errors keep you on the form with your input and show the relevant mes
 > Enter a valid body (1 to 10000 characters).
 >
 > An article with this title already exists.
+
+If **Save article** fails or its response is lost, reopen **Knowledge base** once pages load again. Select the article if present and inspect its saved **Title** and **Body** before using **New article** or saving edits again.
+
+A database-rejected or rolled-back save creates no article or leaves an existing article's title and body unchanged. A save completed before the connection failed may already be stored.
+
+Deskmate does not automatically retry or recover unsaved form contents. See [KB-1.8](../workflow/specs/product/knowledge-base.md#kb-1-write-and-edit-knowledge-base-articles) for the failure rules.
 
 ## Reading articles
 
@@ -154,6 +166,12 @@ Tickets need not have unique titles: each valid submission creates a new ticket.
 >
 > Enter a valid description (1 to 10000 characters).
 
+If **Submit ticket** fails or its response is lost, reopen **Tickets** once pages load again. Open matching entries and inspect their saved text before submitting again.
+
+A database-rejected or rolled-back submission creates no ticket, but a ticket saved before the connection failed may already exist.
+
+Deskmate does not automatically retry or recover unsaved form contents. See [RQ-1.8](../workflow/specs/product/tickets.md#rq-1-submit-a-ticket) for the failure rules.
+
 As a Support Officer, choose **Tickets** on your role's page. Your list shows every ticket in your workspace, earliest first, or **No tickets yet.** Choose a title to open **Ticket**, showing its saved title and description and its stored status, **Open** or **Closed**. Choose **Tickets** to return to your list, or **Support Officer** on the list to return to your role's page.
 
 Opening or refreshing ticket lists and detail pages changes no ticket.
@@ -167,6 +185,12 @@ A successful submission opens **Ticket**, showing **Closed** and the saved answe
 > Enter a valid reply (1 to 10000 characters).
 
 A closed ticket has no **Resolve ticket** link. Repeated submissions, including from an older open form, keep the first saved answer. There are no controls to edit the reply or reopen the ticket.
+
+If **Resolve ticket** fails or its response is lost, reopen the ticket from **Tickets** once pages load again. Check **Open** or **Closed** and any saved **Reply** before choosing **Resolve ticket** again for an open ticket.
+
+A database-rejected or rolled-back resolution leaves the status and reply unchanged. A resolution saved before the connection failed may already have closed the ticket and saved its reply.
+
+Deskmate does not automatically retry or recover an unsaved reply. See [RQ-3.8](../workflow/specs/product/tickets.md#rq-3-resolve-a-ticket-with-a-reply) for the failure rules.
 
 As a Support Officer, press **Highlight key sentences** on an **Open** or **Closed** ticket. Highlighting sends its description to SoC LLM to select up to three copied passages; matching occurrences may also be highlighted, while the complete original description stays visible. Selection is best effort.
 
